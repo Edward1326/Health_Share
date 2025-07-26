@@ -3,6 +3,7 @@ import 'package:health_share/services/auth_gate.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
   await Supabase.initialize(
     url: 'https://iqrlfiwtgdnmsxhyoiaw.supabase.co',
     anonKey:
@@ -15,9 +16,11 @@ void main() async {
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
-  // This widget is the root of your application.
   @override
   Widget build(BuildContext context) {
-    return const MaterialApp(home: AuthGate());
+    return const MaterialApp(
+      debugShowCheckedModeBanner: false, // ✅ This removes the DEBUG banner
+      home: AuthGate(),
+    );
   }
 }
