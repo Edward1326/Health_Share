@@ -9,23 +9,33 @@ class RegisterScreen extends StatefulWidget {
   State<RegisterScreen> createState() => _RegisterScreenState();
 }
 
+bool _isLoading = false;
+
 class _RegisterScreenState extends State<RegisterScreen> {
   final authService = AuthService();
 
   final _emailController = TextEditingController();
-  final _nameController = TextEditingController();
+  final _firstNameController = TextEditingController();
+  final _middleNameController = TextEditingController();
+  final _lastNameController = TextEditingController();
   final _phoneController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
 
   void register() async {
+    if (_isLoading) return;
+    setState(() => _isLoading = true);
+
     final email = _emailController.text.trim();
-    final name = _nameController.text.trim();
+    final firstName = _firstNameController.text.trim();
+    final middleName = _middleNameController.text.trim();
+    final lastName = _lastNameController.text.trim();
     final phone = _phoneController.text.trim();
     final password = _passwordController.text.trim();
     final confirmPassword = _confirmPasswordController.text.trim();
 
     if (password != confirmPassword) {
+      setState(() => _isLoading = false);
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('Passwords do not match')));
@@ -33,11 +43,37 @@ class _RegisterScreenState extends State<RegisterScreen> {
     }
 
     try {
-      await authService.signUpWithEmailPassword(email, password);
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Registration successful!')));
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const Center(child: CircularProgressIndicator()),
+      );
+
+      final response = await authService.signUpWithEmailPassword(
+        email,
+        password,
+        firstName,
+        middleName,
+        lastName,
+        phone,
+      );
+
+      Navigator.pop(context);
+      setState(() => _isLoading = false);
+
+      if (response.user != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Registration successful!')),
+        );
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const LoginScreen()),
+        );
+      }
     } catch (e) {
+      Navigator.popUntil(context, (route) => route.isFirst);
+      setState(() => _isLoading = false);
+
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text('Error: $e')));
@@ -70,7 +106,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
               ],
             ),
             const SizedBox(height: 16),
-
             const Center(child: Text('Or, Register with an Email')),
             const SizedBox(height: 24),
 
@@ -85,12 +120,34 @@ class _RegisterScreenState extends State<RegisterScreen> {
             ),
             const SizedBox(height: 16),
 
-            // Full Name
+            // First Name
             TextField(
-              controller: _nameController,
+              controller: _firstNameController,
               decoration: const InputDecoration(
                 prefixIcon: Icon(Icons.person_outline, color: Colors.teal),
-                hintText: 'Full Name',
+                hintText: 'First Name',
+                border: UnderlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // Middle Name
+            TextField(
+              controller: _middleNameController,
+              decoration: const InputDecoration(
+                prefixIcon: Icon(Icons.person_outline, color: Colors.teal),
+                hintText: 'Middle Name',
+                border: UnderlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // Last Name
+            TextField(
+              controller: _lastNameController,
+              decoration: const InputDecoration(
+                prefixIcon: Icon(Icons.person_outline, color: Colors.teal),
+                hintText: 'Last Name',
                 border: UnderlineInputBorder(),
               ),
             ),
@@ -134,7 +191,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
             // Signup Button
             ElevatedButton(
-              onPressed: register,
+              onPressed: _isLoading ? null : register,
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.teal,
                 shape: RoundedRectangleBorder(
