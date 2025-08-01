@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:health_share/screens/login/login.dart';
+import 'package:health_share/screens/navbar/navbar_main.dart';
+import 'package:health_share/services/auth_service.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -9,8 +12,10 @@ class ProfileScreen extends StatefulWidget {
 
 class _ProfileScreenState extends State<ProfileScreen>
     with TickerProviderStateMixin {
+  final AuthService _authService = AuthService();
   late AnimationController _fadeController;
   late Animation<double> _fadeAnimation;
+  int _selectedIndex = 3;
 
   final TextEditingController _nameController = TextEditingController(
     text: 'John Doe',
@@ -58,10 +63,7 @@ class _ProfileScreenState extends State<ProfileScreen>
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        leading: IconButton(
-          icon: Icon(Icons.arrow_back_ios, color: Colors.grey[800]),
-          onPressed: () => Navigator.pop(context),
-        ),
+        automaticallyImplyLeading: false, // This removes the back button
         title: Text(
           'Profile',
           style: TextStyle(
@@ -79,8 +81,8 @@ class _ProfileScreenState extends State<ProfileScreen>
             },
             child: Text(
               _isEditing ? 'Save' : 'Edit',
-              style: TextStyle(
-                color: const Color(0xFF667EEA),
+              style: const TextStyle(
+                color: Color(0xFF667EEA),
                 fontWeight: FontWeight.w600,
                 fontSize: 16,
               ),
@@ -169,6 +171,10 @@ class _ProfileScreenState extends State<ProfileScreen>
             ],
           ),
         ),
+      ),
+      bottomNavigationBar: MainNavBar(
+        selectedIndex: _selectedIndex,
+        onItemTapped: (index) => setState(() => _selectedIndex = index),
       ),
     );
   }
@@ -462,9 +468,27 @@ class _ProfileScreenState extends State<ProfileScreen>
               child: Text('Cancel', style: TextStyle(color: Colors.grey[600])),
             ),
             ElevatedButton(
-              onPressed: () {
-                Navigator.pop(context);
-                // Perform logout
+              onPressed: () async {
+                try {
+                  await _authService.signOut();
+                  if (mounted) {
+                    Navigator.of(context).pushAndRemoveUntil(
+                      MaterialPageRoute(
+                        builder: (context) => const LoginScreen(),
+                      ),
+                      (route) => false, // This removes all previous routes
+                    );
+                  }
+                } catch (e) {
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Error signing out: $e'),
+                        backgroundColor: Colors.red,
+                      ),
+                    );
+                  }
+                }
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.red,
