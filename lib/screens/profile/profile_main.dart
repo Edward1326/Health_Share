@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:health_share/screens/login/login.dart';
 import 'package:health_share/screens/navbar/navbar_main.dart';
+import 'package:health_share/services/auth_gate.dart';
 import 'package:health_share/services/auth_service.dart';
 
 class ProfileScreen extends StatefulWidget {
@@ -15,7 +15,7 @@ class _ProfileScreenState extends State<ProfileScreen>
   final AuthService _authService = AuthService();
   late AnimationController _fadeController;
   late Animation<double> _fadeAnimation;
-  int _selectedIndex = 3;
+  int _selectedIndex = 4;
 
   final TextEditingController _nameController = TextEditingController(
     text: 'John Doe',
@@ -472,11 +472,10 @@ class _ProfileScreenState extends State<ProfileScreen>
                 try {
                   await _authService.signOut();
                   if (mounted) {
+                    // Clear navigation stack and rebuild from root
                     Navigator.of(context).pushAndRemoveUntil(
-                      MaterialPageRoute(
-                        builder: (context) => const LoginScreen(),
-                      ),
-                      (route) => false, // This removes all previous routes
+                      MaterialPageRoute(builder: (context) => const AuthGate()),
+                      (route) => false,
                     );
                   }
                 } catch (e) {

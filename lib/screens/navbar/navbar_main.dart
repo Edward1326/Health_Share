@@ -14,7 +14,13 @@ class MainNavBar extends StatelessWidget {
     if (index != selectedIndex) {
       onItemTapped(index);
 
-      final routes = {0: '/home', 1: '/files', 2: '/groups', 3: '/profile'};
+      final routes = {
+        0: '/home',
+        1: '/files',
+        2: '/groups',
+        3: '/organizations', // Add this route
+        4: '/profile',
+      };
 
       if (routes.containsKey(index)) {
         Navigator.pushReplacementNamed(context, routes[index]!);
@@ -64,10 +70,17 @@ class MainNavBar extends StatelessWidget {
               ),
               _buildNavItem(
                 context: context,
+                icon: Icons.apartment_outlined,
+                activeIcon: Icons.apartment,
+                label: 'Organizations',
+                index: 3,
+              ),
+              _buildNavItem(
+                context: context,
                 icon: Icons.person_outline,
                 activeIcon: Icons.person,
                 label: 'Profile',
-                index: 3,
+                index: 4,
               ),
             ],
           ),

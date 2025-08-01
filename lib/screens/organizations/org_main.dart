@@ -1,19 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:health_share/screens/navbar/navbar_main.dart';
+import 'package:health_share/screens/organizations/org_details.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-class GroupsScreen extends StatefulWidget {
-  const GroupsScreen({super.key});
+class OrgScreen extends StatefulWidget {
+  const OrgScreen({super.key});
 
   @override
-  State<GroupsScreen> createState() => _GroupsScreenState();
+  State<OrgScreen> createState() => _OrgScreenState();
 }
 
-class _GroupsScreenState extends State<GroupsScreen>
-    with TickerProviderStateMixin {
+class _OrgScreenState extends State<OrgScreen> with TickerProviderStateMixin {
   late AnimationController _fadeController;
   late Animation<double> _fadeAnimation;
-  int _selectedIndex = 2;
+  int _selectedIndex = 3;
 
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
@@ -74,7 +74,7 @@ class _GroupsScreenState extends State<GroupsScreen>
         elevation: 0,
         automaticallyImplyLeading: false,
         title: Text(
-          'Groups',
+          'Organizations', // Changed from 'Groups'
           style: TextStyle(
             color: Colors.grey[800],
             fontWeight: FontWeight.w600,
@@ -95,13 +95,7 @@ class _GroupsScreenState extends State<GroupsScreen>
           children: [
             Padding(
               padding: const EdgeInsets.all(20.0),
-              child: Column(
-                children: [
-                  _buildSearchBar(),
-                  const SizedBox(height: 16),
-                  _buildCreateGroupButton(),
-                ],
-              ),
+              child: _buildSearchBar(), // Only the search bar remains
             ),
             Expanded(
               child:
@@ -171,38 +165,6 @@ class _GroupsScreenState extends State<GroupsScreen>
     );
   }
 
-  Widget _buildCreateGroupButton() {
-    return SizedBox(
-      width: double.infinity,
-      child: ElevatedButton(
-        onPressed: () {
-          _showCreateGroupDialog();
-        },
-        style: ElevatedButton.styleFrom(
-          backgroundColor: const Color(0xFF667EEA),
-          foregroundColor: Colors.white,
-          elevation: 0,
-          padding: const EdgeInsets.symmetric(vertical: 16),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-          shadowColor: const Color(0xFF667EEA).withOpacity(0.3),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.add, size: 20),
-            const SizedBox(width: 8),
-            const Text(
-              'Create a Group',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   Widget _buildOrganizationsList() {
     final filteredOrgs = _filteredOrganizations;
     if (filteredOrgs.isEmpty) {
@@ -226,7 +188,14 @@ class _GroupsScreenState extends State<GroupsScreen>
       color: Colors.transparent,
       child: InkWell(
         onTap: () {
-          // Navigate to organization details
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder:
+                  (context) =>
+                      OrgDetailsScreen(orgName: org['name'] ?? 'No Name'),
+            ),
+          );
         },
         borderRadius: BorderRadius.circular(16),
         child: Container(
@@ -304,85 +273,6 @@ class _GroupsScreenState extends State<GroupsScreen>
           ],
         ),
       ),
-    );
-  }
-
-  void _showCreateGroupDialog() {
-    final TextEditingController nameController = TextEditingController();
-    final TextEditingController descriptionController = TextEditingController();
-
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
-          title: const Text('Create New Organization'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: nameController,
-                decoration: InputDecoration(
-                  labelText: 'Organization Name',
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: descriptionController,
-                maxLines: 3,
-                decoration: InputDecoration(
-                  labelText: 'Description',
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: Text('Cancel', style: TextStyle(color: Colors.grey[600])),
-            ),
-            ElevatedButton(
-              onPressed: () async {
-                if (nameController.text.isNotEmpty &&
-                    descriptionController.text.isNotEmpty) {
-                  Navigator.pop(context);
-                  // Insert new organization into Supabase
-                  await Supabase.instance.client.from('Organization').insert({
-                    'name': nameController.text,
-                    'description': descriptionController.text,
-                  });
-                  // Refresh list
-                  _fetchOrganizations();
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(
-                        'Organization "${nameController.text}" created!',
-                      ),
-                      backgroundColor: const Color(0xFF667EEA),
-                    ),
-                  );
-                }
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF667EEA),
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-              ),
-              child: const Text('Create'),
-            ),
-          ],
-        );
-      },
     );
   }
 }
