@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:health_share/screens/navbar/navbar_main.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -12,7 +13,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   late AnimationController _slideController;
   late Animation<double> _fadeAnimation;
   late Animation<Offset> _slideAnimation;
-  int _currentIndex = 0;
+  int _selectedIndex = 0;
 
   @override
   void initState() {
@@ -89,42 +90,12 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                             ),
                           ],
                         ),
-                        Container(
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(14),
-                            border: Border.all(
-                              color: Colors.grey.withOpacity(0.1),
-                            ),
-                          ),
-                          child: IconButton(
-                            icon: Icon(
-                              Icons.notifications_outlined,
-                              color: Colors.grey[700],
-                            ),
-                            onPressed: () {
-                              // Show notifications
-                            },
-                          ),
+                        _buildIconButton(
+                          icon: Icons.settings_outlined,
+                          onTap: () {
+                            Navigator.pushNamed(context, '/settings');
+                          },
                         ),
-                      ],
-                    ),
-                  ),
-                ),
-
-                // Quick Actions Section
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 20.0),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _buildSectionHeader(
-                          'Quick Actions',
-                          Icons.flash_on_outlined,
-                        ),
-                        const SizedBox(height: 16),
-                        _buildQuickActionsGrid(),
                       ],
                     ),
                   ),
@@ -137,7 +108,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const SizedBox(height: 24),
+                        const SizedBox(height: 8),
                         _buildSectionHeader(
                           'Recent Folders',
                           Icons.folder_outlined,
@@ -168,235 +139,43 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   ),
                 ),
 
-                // Add some bottom padding for navbar
+                // Add padding for bottom navigation
                 const SliverToBoxAdapter(child: SizedBox(height: 100)),
               ],
             ),
           ),
         ),
       ),
-      bottomNavigationBar: _buildBottomNavigationBar(),
+      bottomNavigationBar: MainNavBar(
+        selectedIndex: _selectedIndex,
+        onItemTapped: (index) => setState(() => _selectedIndex = index),
+      ),
     );
   }
 
-  Widget _buildQuickActionsGrid() {
-    return Row(
-      children: [
-        Expanded(
-          child: _buildQuickActionCard(
-            title: 'Browse Files',
-            subtitle: 'View all files',
-            icon: Icons.folder_open_outlined,
-            color: const Color(0xFF667EEA),
-            onTap: () {
-              // Navigate to FileScreen
-              Navigator.pushNamed(context, '/files');
-            },
-          ),
-        ),
-        const SizedBox(width: 16),
-        Expanded(
-          child: _buildQuickActionCard(
-            title: 'Open Folder',
-            subtitle: 'Access folders',
-            icon: Icons.folder_outlined,
-            color: const Color(0xFF11998E),
-            onTap: () {
-              // Navigate to FolderScreen
-              Navigator.pushNamed(context, '/folder');
-            },
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildQuickActionCard({
-    required String title,
-    required String subtitle,
+  Widget _buildIconButton({
     required IconData icon,
-    required Color color,
     required VoidCallback onTap,
   }) {
     return Material(
       color: Colors.white,
-      borderRadius: BorderRadius.circular(16),
+      borderRadius: BorderRadius.circular(14),
       elevation: 0,
-      shadowColor: Colors.black.withOpacity(0.05),
+      shadowColor: Colors.black.withOpacity(0.1),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(14),
         child: Container(
+          width: 48,
+          height: 48,
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: Colors.grey.withOpacity(0.08)),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: Colors.grey.withOpacity(0.1)),
           ),
-          padding: const EdgeInsets.all(20.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                width: 48,
-                height: 48,
-                decoration: BoxDecoration(
-                  color: color.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: Icon(icon, color: color, size: 24),
-              ),
-              const SizedBox(height: 16),
-              Text(
-                title,
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.grey[800],
-                  letterSpacing: -0.2,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                subtitle,
-                style: TextStyle(
-                  fontSize: 13,
-                  color: Colors.grey[500],
-                  fontWeight: FontWeight.w400,
-                ),
-              ),
-            ],
-          ),
+          child: Icon(icon, color: Colors.grey[700], size: 22),
         ),
       ),
     );
-  }
-
-  Widget _buildBottomNavigationBar() {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 20,
-            offset: const Offset(0, -5),
-          ),
-        ],
-      ),
-      child: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              _buildNavItem(
-                icon: Icons.home_outlined,
-                activeIcon: Icons.home,
-                label: 'Home',
-                index: 0,
-                onTap: () => _onNavTap(0),
-              ),
-              _buildNavItem(
-                icon: Icons.folder_outlined,
-                activeIcon: Icons.folder,
-                label: 'Files',
-                index: 1,
-                onTap: () => _onNavTap(1),
-              ),
-              _buildNavItem(
-                icon: Icons.group_outlined,
-                activeIcon: Icons.group,
-                label: 'Groups',
-                index: 2,
-                onTap: () => _onNavTap(2),
-              ),
-              _buildNavItem(
-                icon: Icons.person_outline,
-                activeIcon: Icons.person,
-                label: 'Profile',
-                index: 3,
-                onTap: () => _onNavTap(3),
-              ),
-              _buildNavItem(
-                icon: Icons.settings_outlined,
-                activeIcon: Icons.settings,
-                label: 'Settings',
-                index: 4,
-                onTap: () => _onNavTap(4),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildNavItem({
-    required IconData icon,
-    required IconData activeIcon,
-    required String label,
-    required int index,
-    required VoidCallback onTap,
-  }) {
-    final isActive = _currentIndex == index;
-
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        decoration: BoxDecoration(
-          color:
-              isActive
-                  ? const Color(0xFF667EEA).withOpacity(0.1)
-                  : Colors.transparent,
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              isActive ? activeIcon : icon,
-              color: isActive ? const Color(0xFF667EEA) : Colors.grey[600],
-              size: 24,
-            ),
-            const SizedBox(height: 4),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: isActive ? FontWeight.w600 : FontWeight.w400,
-                color: isActive ? const Color(0xFF667EEA) : Colors.grey[600],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _onNavTap(int index) {
-    setState(() {
-      _currentIndex = index;
-    });
-
-    switch (index) {
-      case 0:
-        // Already on home, do nothing
-        break;
-      case 1:
-        Navigator.pushNamed(context, '/files');
-        break;
-      case 2:
-        // Navigate to groups (you can implement this later)
-        break;
-      case 3:
-        Navigator.pushNamed(context, '/profile');
-        break;
-      case 4:
-        Navigator.pushNamed(context, '/settings');
-        break;
-    }
   }
 
   Widget _buildSectionHeader(String title, IconData icon) {
@@ -484,8 +263,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       shadowColor: Colors.black.withOpacity(0.05),
       child: InkWell(
         onTap: () {
-          // Navigate to specific folder
-          Navigator.pushNamed(context, '/folder');
+          // Navigate to folder
         },
         borderRadius: BorderRadius.circular(16),
         child: Container(
@@ -569,7 +347,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         shadowColor: Colors.black.withOpacity(0.05),
         child: InkWell(
           onTap: () {
-            // Navigate to groups (implement later)
+            // Navigate to group
           },
           borderRadius: BorderRadius.circular(16),
           child: Container(
