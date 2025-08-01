@@ -1,16 +1,18 @@
 import 'package:flutter/material.dart';
-import 'package:health_share/screens/files/files.dart';
+import 'package:health_share/screens/files/files_main.dart';
 import 'package:health_share/screens/files/folder.dart';
+import 'package:health_share/screens/groups/groups_main.dart';
 import 'package:health_share/screens/home/home.dart';
 import 'package:health_share/screens/login/login.dart';
-import 'package:health_share/screens/profile/profile.dart';
-import 'package:health_share/screens/settings/settings.dart';
+import 'package:health_share/screens/profile/profile_main.dart';
+import 'package:health_share/screens/settings/settings_main.dart';
 
 final Map<String, WidgetBuilder> appRoutes = {
   '/home': (context) => const HomeScreen(),
   '/login': (context) => const LoginScreen(),
   '/profile': (context) => const ProfileScreen(),
   '/settings': (context) => const SettingsScreen(),
-  '/files': (context) => const FileScreen(),
+  '/files': (context) => const FilesScreen(),
   '/folder': (context) => const FolderScreen(),
+  '/groups': (context) => const GroupsScreen(),
 };
