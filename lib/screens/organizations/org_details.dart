@@ -1,9 +1,44 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class OrgDetailsScreen extends StatelessWidget {
+  final String orgId;
   final String orgName;
 
-  const OrgDetailsScreen({super.key, required this.orgName});
+  const OrgDetailsScreen({
+    super.key,
+    required this.orgId,
+    required this.orgName,
+  });
+
+  Future<void> _joinOrganization(BuildContext context) async {
+    final supabase = Supabase.instance.client;
+    final user = supabase.auth.currentUser;
+    if (user == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('You must be logged in to join.')),
+      );
+      return;
+    }
+
+    try {
+      // Insert into Patient table with status 'pending'
+      await supabase.from('Patient').insert({
+        'user_id': user.id,
+        'organization_id': orgId,
+        'joined_at': DateTime.now().toIso8601String(),
+        'status': 'pending',
+      });
+
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Join request sent!')));
+    } catch (e) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Failed to join: $e')));
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -33,12 +68,7 @@ class OrgDetailsScreen extends StatelessWidget {
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
-                onPressed: () {
-                  // TODO: Implement join logic
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Join request sent!')),
-                  );
-                },
+                onPressed: () => _joinOrganization(context),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF667EEA),
                   foregroundColor: Colors.white,

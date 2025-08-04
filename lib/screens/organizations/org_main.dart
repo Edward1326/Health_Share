@@ -192,8 +192,10 @@ class _OrgScreenState extends State<OrgScreen> with TickerProviderStateMixin {
             context,
             MaterialPageRoute(
               builder:
-                  (context) =>
-                      OrgDetailsScreen(orgName: org['name'] ?? 'No Name'),
+                  (context) => OrgDetailsScreen(
+                    orgId: org['id'],
+                    orgName: org['name'] ?? 'No Name',
+                  ),
             ),
           );
         },
