@@ -1,4 +1,7 @@
 import 'dart:convert';
+import 'dart:io';
+import 'dart:typed_data';
+import 'package:health_share/services/file_preview.dart';
 import 'package:http/http.dart' as http;
 import 'package:encrypt/encrypt.dart' as encrypt;
 import 'package:basic_utils/basic_utils.dart';
@@ -7,6 +10,10 @@ import 'package:flutter/material.dart';
 import 'package:health_share/screens/navbar/navbar_main.dart';
 import 'package:health_share/services/aes_helper.dart';
 import 'package:health_share/services/file_picker_service.dart';
+import 'package:health_share/functions/upload_file.dart';
+import 'package:health_share/functions/decrypt_view_file.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:open_file/open_file.dart';
 
 class FilesScreen extends StatefulWidget {
   const FilesScreen({super.key});
@@ -19,6 +26,7 @@ class _FilesScreenState extends State<FilesScreen> {
   int _selectedIndex = 1;
   Set<int> _selectedFiles = {}; // Track selected files
   bool _isSelectionMode = false;
+  bool _isLoading = true; // Add loading state
 
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
@@ -28,27 +36,145 @@ class _FilesScreenState extends State<FilesScreen> {
   String _sortBy = 'dateDesc'; // Options: dateDesc, dateAsc, nameAsc, nameDesc
 
   // List of available file types for filter
-  final List<String> _fileTypes = ['All', 'PDF', 'Image', 'Document'];
-
-  List<FileItem> items = [
-    FileItem(
-      name: 'medical_report.pdf',
-      type: 'PDF',
-      size: '2.4 MB',
-      icon: Icons.picture_as_pdf,
-      color: const Color(0xFFE53E3E),
-      dateAdded: DateTime.now(),
-    ),
-    FileItem(
-      name: 'xray_result.jpg',
-      type: 'Image',
-      size: '1.8 MB',
-      icon: Icons.image,
-      color: const Color(0xFF11998E),
-      dateAdded: DateTime.now().subtract(const Duration(days: 1)),
-    ),
-    // Add more sample files as needed
+  final List<String> _fileTypes = [
+    'All',
+    'PDF',
+    'IMAGE',
+    'DOCUMENT',
+    'TXT',
+    'DOC',
+    'DOCX',
   ];
+
+  // Replace static items with real data from Supabase
+  List<FileItem> items = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadFiles();
+  }
+
+  /// Load files from Supabase
+  Future<void> _loadFiles() async {
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final supabase = Supabase.instance.client;
+      final user = supabase.auth.currentUser;
+
+      if (user == null) {
+        setState(() {
+          _isLoading = false;
+        });
+        return;
+      }
+
+      final fileData = await DecryptAndViewFileService.fetchUserFiles(user.id);
+
+      final loadedItems =
+          fileData.map((file) {
+            return FileItem(
+              id: file['id'] as String, // Changed from int to String
+              name: file['filename'] ?? 'Unknown file',
+              type: file['file_type'] ?? 'UNKNOWN',
+              size: _formatFileSize(file['file_size'] ?? 0),
+              icon: _getFileIcon(file['file_type'] ?? 'UNKNOWN'),
+              color: _getFileColor(file['file_type'] ?? 'UNKNOWN'),
+              dateAdded:
+                  DateTime.tryParse(file['uploaded_at'] ?? '') ??
+                  DateTime.now(),
+              ipfsCid: file['ipfs_cid'] ?? '',
+              category: file['category'] ?? 'General',
+            );
+          }).toList();
+
+      setState(() {
+        items = loadedItems;
+        _isLoading = false;
+      });
+
+      print('Loaded ${items.length} files from database');
+    } catch (e) {
+      print('Error loading files: $e');
+      setState(() {
+        _isLoading = false;
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error loading files: $e')));
+      }
+    }
+  }
+
+  /// Format file size in human readable format
+  String _formatFileSize(int bytes) {
+    if (bytes < 1024) return '$bytes B';
+    if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
+    if (bytes < 1024 * 1024 * 1024)
+      return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
+    return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(1)} GB';
+  }
+
+  /// Get appropriate icon for file type
+  IconData _getFileIcon(String fileType) {
+    switch (fileType.toUpperCase()) {
+      case 'PDF':
+        return Icons.picture_as_pdf;
+      case 'JPG':
+      case 'JPEG':
+      case 'PNG':
+      case 'GIF':
+      case 'IMAGE':
+        return Icons.image;
+      case 'DOC':
+      case 'DOCX':
+      case 'DOCUMENT':
+        return Icons.description;
+      case 'TXT':
+        return Icons.text_snippet;
+      case 'XLS':
+      case 'XLSX':
+        return Icons.table_chart;
+      case 'PPT':
+      case 'PPTX':
+        return Icons.slideshow;
+      default:
+        return Icons.insert_drive_file;
+    }
+  }
+
+  /// Get appropriate color for file type
+  Color _getFileColor(String fileType) {
+    switch (fileType.toUpperCase()) {
+      case 'PDF':
+        return const Color(0xFFE53E3E);
+      case 'JPG':
+      case 'JPEG':
+      case 'PNG':
+      case 'GIF':
+      case 'IMAGE':
+        return const Color(0xFF11998E);
+      case 'DOC':
+      case 'DOCX':
+      case 'DOCUMENT':
+        return const Color(0xFF2B6CB0);
+      case 'TXT':
+        return const Color(0xFF38A169);
+      case 'XLS':
+      case 'XLSX':
+        return const Color(0xFF22C35E);
+      case 'PPT':
+      case 'PPTX':
+        return const Color(0xFFE53E3E);
+      default:
+        return const Color(0xFF718096);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -83,6 +209,11 @@ class _FilesScreenState extends State<FilesScreen> {
             ),
           ] else ...[
             IconButton(
+              icon: const Icon(Icons.refresh),
+              onPressed: _loadFiles,
+              color: Colors.grey[700],
+            ),
+            IconButton(
               icon: const Icon(Icons.upload),
               onPressed: _uploadFile,
               color: Colors.grey[700],
@@ -90,14 +221,18 @@ class _FilesScreenState extends State<FilesScreen> {
           ],
         ],
       ),
-      body: Column(
-        children: [
-          _buildSearchAndFilterBar(),
-          Expanded(
-            child: items.isEmpty ? _buildEmptyState() : _buildFilesList(),
-          ),
-        ],
-      ),
+      body:
+          _isLoading
+              ? const Center(child: CircularProgressIndicator())
+              : Column(
+                children: [
+                  _buildSearchAndFilterBar(),
+                  Expanded(
+                    child:
+                        items.isEmpty ? _buildEmptyState() : _buildFilesList(),
+                  ),
+                ],
+              ),
       bottomNavigationBar: MainNavBar(
         selectedIndex: _selectedIndex,
         onItemTapped: (index) => setState(() => _selectedIndex = index),
@@ -199,6 +334,19 @@ class _FilesScreenState extends State<FilesScreen> {
                                   color: Colors.grey[500],
                                 ),
                               ),
+                              const SizedBox(width: 8),
+                              Text(
+                                '•',
+                                style: TextStyle(color: Colors.grey[500]),
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                item.category,
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: Colors.grey[500],
+                                ),
+                              ),
                             ],
                           ),
                         ],
@@ -273,170 +421,108 @@ class _FilesScreenState extends State<FilesScreen> {
   }
 
   void _uploadFile() async {
-    // 1. Pick a file
-    final file = await FilePickerService.pickFile();
-    if (file == null) return;
+    final success = await UploadFileService.uploadFile(context);
 
-    final fileBytes = await file.readAsBytes();
-    final fileName = file.path.split('/').last;
-    final fileType = fileName.split('.').last.toUpperCase();
-
-    // 2. Generate a random AES key and IV for this file
-    final aesKey = encrypt.Key.fromSecureRandom(32); // 32 bytes for AES-256
-    final aesIv = encrypt.IV.fromSecureRandom(16); // 16 bytes for AES CBC
-
-    // 3. Encrypt the file - Fix: Use proper hex strings
-    final aesHelper = AESHelper(aesKey.base16, aesIv.base16);
-    final encryptedBytes = aesHelper.encryptData(fileBytes);
-
-    // 4. Get current user and their RSA public key from Supabase
-    final supabase = Supabase.instance.client;
-    final user = supabase.auth.currentUser;
-    if (user == null) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('User not logged in!')));
-      }
-      return;
-    }
-
-    try {
-      final userData =
-          await supabase
-              .from('User')
-              .select('rsa_public_key, id')
-              .eq('id', user.id)
-              .single();
-      final rsaPublicKeyPem = userData['rsa_public_key'] as String;
-      final rsaPublicKey = CryptoUtils.rsaPublicKeyFromPem(rsaPublicKeyPem);
-
-      // 5. Encrypt the AES key with RSA - Fix: Use proper types
-      final aesKeyBase64 = base64Encode(
-        aesKey.bytes,
-      ); // Convert to String first
-      final rsaEncryptedBytes = CryptoUtils.rsaEncrypt(
-        aesKeyBase64,
-        rsaPublicKey,
-      );
-      final encryptedAesKeyString = base64Encode(
-        utf8.encode(rsaEncryptedBytes),
-      );
-
-      // 6. Upload encrypted file to IPFS
-      final url = Uri.parse('https://api.pinata.cloud/pinning/pinFileToIPFS');
-      const String jwt =
-          'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySW5mb3JtYXRpb24iOnsiaWQiOiI1MjNmNzlmZC0xZjVmLTQ4NzUtOTQwMS01MDcyMDE3NmMyYjYiLCJlbWFpbCI6ImVkd2FyZC5xdWlhbnpvbi5yQGdtYWlsLmNvbSIsImVtYWlsX3ZlcmlmaWVkIjp0cnVlLCJwaW5fcG9saWN5Ijp7InJlZ2lvbnMiOlt7ImRlc2lyZWRSZXBsaWNhdGlvbkNvdW50IjoxLCJpZCI6IkZSQTEifSx7ImRlc2lyZWRSZXBsaWNhdGlvbkNvdW50IjoxLCJpZCI6Ik5ZQzEifV0sInZlcnNpb24iOjF9LCJtZmFfZW5hYmxlZCI6ZmFsc2UsInN0YXR1cyI6IkFDVElWRSJ9LCJhdXRoZW50aWNhdGlvblR5cGUiOiJzY29wZWRLZXkiLCJzY29wZWRLZXlLZXkiOiI5NmM3NGQxNTY4YzBlNDE4MGQ5MiIsInNjb3BlZEtleVNlY3JldCI6IjQ2MDIxYzNkYThmZDIzZDJmY2E4ZmYzNThjMGI3NmE2ODYxMzRhOWMzNDNiOTFmODY3MmIyMzhlYjE2N2FkODkiLCJleHAiOjE3ODU2ODIyMzl9.1VpMdmG4CaQ-eNxNVesfiy-P6J7p9IGLtjD9q1r5mkg'; // 🔐 Replace with your new valid JWT token
-
-      final request =
-          http.MultipartRequest('POST', url)
-            ..headers['Authorization'] = 'Bearer $jwt'
-            ..files.add(
-              http.MultipartFile.fromBytes(
-                'file',
-                encryptedBytes,
-                filename: 'encrypted.aes',
-              ),
-            );
-
-      final streamedResponse = await request.send();
-      final response = await http.Response.fromStream(streamedResponse);
-
-      if (response.statusCode != 200) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Failed to upload to Pinata: ${response.body}'),
-            ),
-          );
-        }
-        return;
-      }
-
-      final ipfsJson = jsonDecode(response.body);
-      final ipfsCid =
-          ipfsJson['IpfsHash'] as String; // 👈 This is your CID from Pinata
-
-      print('Upload successful. CID: $ipfsCid');
-
-      // 7. Insert file metadata into Supabase
-      final fileInsert =
-          await supabase
-              .from('Files')
-              .insert({
-                'filename': fileName,
-                'category': 'General',
-                'file_type': fileType,
-                'uploaded_at': DateTime.now().toIso8601String(),
-                'file_size': fileBytes.length,
-                'ipfs_cid':
-                    ipfsCid, // ✅ Now ipfsCid is properly defined in scope
-                'uploaded_by': user.id,
-              })
-              .select()
-              .single();
-      final fileId = fileInsert['id'];
-      print('File inserted with ID: $fileId');
-
-      // 8. Insert encrypted AES key into File_keys
-      print('Attempting to insert file key with:');
-      print('  fileId: $fileId (type: ${fileId.runtimeType})');
-      print('  userId: ${user.id} (type: ${user.id.runtimeType})');
-      print('  recipient_type: user');
-      print('  aes_key_encrypted length: ${encryptedAesKeyString.length}');
-
-      try {
-        final insertData = {
-          'file_id': fileId,
-          'recipient_type': 'user',
-          'recipient_id': null,
-          'aes_key_encrypted': encryptedAesKeyString,
-        };
-        print('Insert data: $insertData');
-
-        final result =
-            await supabase.from('File_Keys').insert(insertData).select();
-        print('File key inserted successfully: $result');
-      } catch (fileKeyError) {
-        print('Error inserting file key: $fileKeyError');
-        print('Error type: ${fileKeyError.runtimeType}');
-
-        // Even if file key insertion fails, we can still show partial success
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                'File uploaded but key storage failed: $fileKeyError',
-              ),
-              backgroundColor: Colors.orange,
-            ),
-          );
-        }
-        return; // Exit early to avoid showing success message
-      }
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('File uploaded and encrypted successfully!'),
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Error uploading file: $e')));
-      }
+    // Refresh the file list if upload was successful
+    if (success) {
+      await _loadFiles(); // Reload files from database
     }
   }
 
   void _shareSelectedFiles() {
     // TODO: Implement file sharing
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('File sharing coming soon!')));
   }
 
-  void _previewFile(FileItem item) {
-    // TODO: Implement file preview
+  void _previewFile(FileItem item) async {
+    // Show loading dialog
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder:
+          (context) => AlertDialog(
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const CircularProgressIndicator(),
+                const SizedBox(height: 16),
+                Text('Decrypting ${item.name}...'),
+              ],
+            ),
+          ),
+    );
+
+    try {
+      final supabase = Supabase.instance.client;
+      final user = supabase.auth.currentUser;
+
+      if (user == null) {
+        Navigator.of(context).pop();
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('User not logged in')));
+        return;
+      }
+
+      print('Starting decryption for file: ${item.name}');
+      print('File ID: ${item.id}, IPFS CID: ${item.ipfsCid}');
+
+      // Decrypt and download file
+      final decryptedBytes =
+          await DecryptAndViewFileService.decryptFileFromIpfs(
+            cid: item.ipfsCid,
+            fileId: item.id,
+            userId: user.id,
+          );
+
+      Navigator.of(context).pop(); // Close loading dialog
+
+      if (decryptedBytes == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Failed to decrypt file'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return;
+      }
+
+      print(
+        'Successfully decrypted file. Size: ${decryptedBytes.length} bytes',
+      );
+
+      // Verify decrypted data is not empty
+      if (decryptedBytes.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Decrypted file is empty'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+        return;
+      }
+
+      // Use enhanced preview service
+      await EnhancedFilePreviewService.previewFile(
+        context,
+        item.name,
+        decryptedBytes,
+      );
+    } catch (e, stackTrace) {
+      Navigator.of(context).pop(); // Close loading dialog
+      print('Error in _previewFile: $e');
+      print('Stack trace: $stackTrace');
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error opening file: ${e.toString()}'),
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 5),
+        ),
+      );
+    }
   }
 
   void _enableSelectionMode(int index) {
@@ -460,7 +546,6 @@ class _FilesScreenState extends State<FilesScreen> {
   }
 
   String _formatDate(DateTime date) {
-    // Simple date formatting
     return '${date.day}/${date.month}/${date.year}';
   }
 
@@ -483,7 +568,12 @@ class _FilesScreenState extends State<FilesScreen> {
     // Apply file type filter
     if (_selectedFileType != 'All') {
       filtered =
-          filtered.where((file) => file.type == _selectedFileType).toList();
+          filtered
+              .where(
+                (file) =>
+                    file.type.toUpperCase() == _selectedFileType.toUpperCase(),
+              )
+              .toList();
     }
 
     // Apply sorting
@@ -505,7 +595,6 @@ class _FilesScreenState extends State<FilesScreen> {
     return filtered;
   }
 
-  // Add this widget between AppBar and FilesList
   Widget _buildSearchAndFilterBar() {
     return Container(
       padding: const EdgeInsets.all(20),
@@ -581,7 +670,7 @@ class _FilesScreenState extends State<FilesScreen> {
                   child: DropdownButtonHideUnderline(
                     child: DropdownButton<String>(
                       value: _sortBy,
-                      items: [
+                      items: const [
                         DropdownMenuItem(
                           value: 'dateDesc',
                           child: Text('Newest First'),
@@ -625,19 +714,25 @@ class _FilesScreenState extends State<FilesScreen> {
 }
 
 class FileItem {
+  final String id; // Changed from int to String
   final String name;
   final String type;
   final String size;
   final IconData icon;
   final Color color;
   final DateTime dateAdded;
+  final String ipfsCid;
+  final String category;
 
   FileItem({
+    required this.id,
     required this.name,
     required this.type,
     required this.size,
     required this.icon,
     required this.color,
     required this.dateAdded,
+    required this.ipfsCid,
+    required this.category,
   });
 }
