@@ -1,10 +1,15 @@
+// app_routes.dart
 import 'package:flutter/material.dart';
 import 'package:health_share/screens/files/files_main.dart';
 import 'package:health_share/screens/files/folder.dart';
 import 'package:health_share/screens/groups/groups_main.dart';
+import 'package:health_share/screens/groups/group_details.dart';
+import 'package:health_share/screens/groups/group_files.dart';
+import 'package:health_share/screens/groups/group_invitations.dart';
 import 'package:health_share/screens/home/home.dart';
 import 'package:health_share/screens/login/login.dart';
 import 'package:health_share/screens/organizations/org_main.dart';
+import 'package:health_share/screens/organizations/org_details.dart';
 import 'package:health_share/screens/profile/profile_main.dart';
 import 'package:health_share/screens/settings/settings_main.dart';
 

@@ -1,3 +1,4 @@
+// auth_gate.dart
 import 'package:flutter/material.dart';
 import 'package:health_share/screens/home/home.dart';
 import 'package:health_share/screens/login/login.dart';

@@ -1,9 +1,12 @@
+// upload_file.dart
 import 'dart:convert';
+import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 import 'package:encrypt/encrypt.dart' as encrypt;
 import 'package:basic_utils/basic_utils.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:health_share/services/aes_helper.dart';
 import 'package:health_share/services/file_picker_service.dart';
 
@@ -16,13 +19,57 @@ class UploadFileService {
   /// Returns true if successful, false otherwise
   static Future<bool> uploadFile(BuildContext context) async {
     try {
+      // Show initial loading dialog
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder:
+            (context) => AlertDialog(
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const CircularProgressIndicator(),
+                  const SizedBox(height: 16),
+                  const Text('Selecting file...'),
+                ],
+              ),
+            ),
+      );
+
       // 1. Pick a file
       final file = await FilePickerService.pickFile();
-      if (file == null) return false;
+      if (file == null) {
+        Navigator.of(context).pop(); // Close loading dialog
+        return false;
+      }
+
+      // Update loading dialog
+      Navigator.of(context).pop();
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder:
+            (context) => AlertDialog(
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const CircularProgressIndicator(),
+                  const SizedBox(height: 16),
+                  const Text('Processing file...'),
+                ],
+              ),
+            ),
+      );
 
       final fileBytes = await file.readAsBytes();
-      final fileName = file.path.split('/').last;
-      final fileType = fileName.split('.').last.toUpperCase();
+
+      // Fix: Web-compatible filename extraction
+      final String fileName = _getFileNameFromPath(file.path);
+      final String fileType = _getFileTypeFromName(fileName);
+
+      print(
+        'Processing file: $fileName, Size: ${fileBytes.length} bytes, Type: $fileType',
+      );
 
       // 2. Generate a random AES key and nonce for GCM mode
       final aesKey = encrypt.Key.fromSecureRandom(32); // 32 bytes for AES-256
@@ -38,6 +85,7 @@ class UploadFileService {
       final supabase = Supabase.instance.client;
       final user = supabase.auth.currentUser;
       if (user == null) {
+        Navigator.of(context).pop(); // Close loading dialog
         if (context.mounted) {
           ScaffoldMessenger.of(
             context,
@@ -68,9 +116,28 @@ class UploadFileService {
         utf8.encode(rsaEncryptedBytes),
       );
 
+      // Update loading dialog for IPFS upload
+      Navigator.of(context).pop();
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder:
+            (context) => AlertDialog(
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const CircularProgressIndicator(),
+                  const SizedBox(height: 16),
+                  const Text('Uploading to IPFS...'),
+                ],
+              ),
+            ),
+      );
+
       // 7. Upload encrypted file to IPFS via Pinata
-      final ipfsCid = await _uploadToPinata(encryptedBytes);
+      final ipfsCid = await _uploadToPinata(encryptedBytes, fileName);
       if (ipfsCid == null) {
+        Navigator.of(context).pop(); // Close loading dialog
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Failed to upload to IPFS')),
@@ -80,6 +147,24 @@ class UploadFileService {
       }
 
       print('Upload successful. CID: $ipfsCid');
+
+      // Update loading dialog for database operations
+      Navigator.of(context).pop();
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder:
+            (context) => AlertDialog(
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const CircularProgressIndicator(),
+                  const SizedBox(height: 16),
+                  const Text('Saving metadata...'),
+                ],
+              ),
+            ),
+      );
 
       // 8. Insert file metadata into Supabase
       final fileInsert =
@@ -109,6 +194,8 @@ class UploadFileService {
         userId: user.id,
       );
 
+      Navigator.of(context).pop(); // Close loading dialog
+
       if (!success) {
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -124,19 +211,28 @@ class UploadFileService {
       // Success message
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('File uploaded and encrypted successfully!'),
+          SnackBar(
+            content: Text('$fileName uploaded and encrypted successfully!'),
+            backgroundColor: Colors.green,
           ),
         );
       }
       return true;
     } catch (e, stackTrace) {
+      // Close any open loading dialogs
+      if (Navigator.canPop(context)) {
+        Navigator.of(context).pop();
+      }
+
       print('Error uploading file: $e');
       print('Stack trace: $stackTrace');
       if (context.mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Error uploading file: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error uploading file: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
       }
       return false;
     }
@@ -144,9 +240,19 @@ class UploadFileService {
 
   /// Uploads encrypted file bytes to Pinata IPFS
   /// Returns the IPFS CID if successful, null otherwise
-  static Future<String?> _uploadToPinata(List<int> encryptedBytes) async {
+  /// Fixed: Added filename parameter for better naming
+  static Future<String?> _uploadToPinata(
+    List<int> encryptedBytes, [
+    String? originalFileName,
+  ]) async {
     try {
       final url = Uri.parse('https://api.pinata.cloud/pinning/pinFileToIPFS');
+
+      // Use original filename if provided, otherwise use default
+      final filename =
+          originalFileName != null
+              ? 'encrypted_${originalFileName}.aes'
+              : 'encrypted.aes';
 
       final request =
           http.MultipartRequest('POST', url)
@@ -155,7 +261,7 @@ class UploadFileService {
               http.MultipartFile.fromBytes(
                 'file',
                 encryptedBytes,
-                filename: 'encrypted.aes',
+                filename: filename,
               ),
             );
 
@@ -210,6 +316,47 @@ class UploadFileService {
       print('Error type: ${fileKeyError.runtimeType}');
       print('Stack trace: $stackTrace');
       return false;
+    }
+  }
+
+  /// Helper method to get file name from path (web-compatible)
+  /// Fixed: This prevents the "Unsupported operation: _Namespace" error
+  static String _getFileNameFromPath(String path) {
+    try {
+      // Handle different path formats for web and mobile
+      if (kIsWeb) {
+        // On web, path might be just the filename or a blob URL
+        if (path.contains('/')) {
+          return path.split('/').last;
+        } else if (path.contains('\\')) {
+          return path.split('\\').last;
+        } else {
+          // If no separators, assume it's already the filename
+          return path;
+        }
+      } else {
+        // On mobile/desktop, use standard path splitting
+        return path.split('/').last;
+      }
+    } catch (e) {
+      print('Error extracting filename from path: $e');
+      // Fallback: return a default filename with timestamp
+      return 'file_${DateTime.now().millisecondsSinceEpoch}';
+    }
+  }
+
+  /// Helper method to get file type from filename
+  /// Fixed: Added null safety and better error handling
+  static String _getFileTypeFromName(String fileName) {
+    try {
+      final parts = fileName.split('.');
+      if (parts.length > 1) {
+        return parts.last.toUpperCase();
+      }
+      return 'UNKNOWN';
+    } catch (e) {
+      print('Error extracting file type from filename: $e');
+      return 'UNKNOWN';
     }
   }
 }

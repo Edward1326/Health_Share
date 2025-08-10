@@ -1,3 +1,4 @@
+// auth_service.dart
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:rsa_encrypt/rsa_encrypt.dart';
 import 'package:basic_utils/basic_utils.dart';
