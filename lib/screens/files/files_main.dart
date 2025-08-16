@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
-import 'package:health_share/services/file_preview.dart';
+import 'package:health_share/services/files_services/file_preview.dart';
 import 'package:http/http.dart' as http;
 import 'package:encrypt/encrypt.dart' as encrypt;
 import 'package:basic_utils/basic_utils.dart';
@@ -9,9 +9,9 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter/material.dart';
 import 'package:health_share/screens/navbar/navbar_main.dart';
 import 'package:health_share/services/aes_helper.dart';
-import 'package:health_share/services/file_picker_service.dart';
-import 'package:health_share/functions/upload_file.dart';
-import 'package:health_share/functions/decrypt_view_file.dart';
+import 'package:health_share/services/files_services/file_picker_service.dart';
+import 'package:health_share/functions/files_functions/upload_file.dart';
+import 'package:health_share/functions/files_functions/decrypt_view_file.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:open_file/open_file.dart';
 

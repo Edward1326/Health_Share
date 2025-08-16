@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:health_share/screens/navbar/navbar_main.dart';
-import 'package:health_share/services/auth_gate.dart';
-import 'package:health_share/services/auth_service.dart';
+import 'package:health_share/screens/profile/edit_profile.dart';
+import 'package:health_share/services/auth_services/auth_gate.dart';
+import 'package:health_share/services/auth_services/auth_service.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -13,25 +15,16 @@ class ProfileScreen extends StatefulWidget {
 class _ProfileScreenState extends State<ProfileScreen>
     with TickerProviderStateMixin {
   final AuthService _authService = AuthService();
+  final SupabaseClient _supabase = Supabase.instance.client;
+
   late AnimationController _fadeController;
   late Animation<double> _fadeAnimation;
   int _selectedIndex = 4;
 
-  final TextEditingController _nameController = TextEditingController(
-    text: 'John Doe',
-  );
-  final TextEditingController _emailController = TextEditingController(
-    text: 'john.doe@example.com',
-  );
-  final TextEditingController _phoneController = TextEditingController(
-    text: '+1 234 567 8900',
-  );
-  final TextEditingController _bioController = TextEditingController(
-    text:
-        'Software Developer passionate about creating beautiful user experiences.',
-  );
-
-  bool _isEditing = false;
+  // User data
+  Map<String, dynamic>? _userData;
+  bool _isLoading = true;
+  String? _errorMessage;
 
   @override
   void initState() {
@@ -43,17 +36,64 @@ class _ProfileScreenState extends State<ProfileScreen>
     _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
       CurvedAnimation(parent: _fadeController, curve: Curves.easeInOut),
     );
-    _fadeController.forward();
+    _loadUserData();
+  }
+
+  Future<void> _loadUserData() async {
+    try {
+      setState(() {
+        _isLoading = true;
+        _errorMessage = null;
+      });
+
+      final user = _supabase.auth.currentUser;
+      if (user == null) {
+        throw Exception('No authenticated user found');
+      }
+
+      final response =
+          await _supabase
+              .from('Person')
+              .select('*')
+              .eq('auth_user_id', user.id)
+              .single();
+
+      setState(() {
+        _userData = response;
+        _isLoading = false;
+      });
+
+      _fadeController.forward();
+    } catch (e) {
+      setState(() {
+        _errorMessage = 'Error loading profile: $e';
+        _isLoading = false;
+      });
+    }
   }
 
   @override
   void dispose() {
     _fadeController.dispose();
-    _nameController.dispose();
-    _emailController.dispose();
-    _phoneController.dispose();
-    _bioController.dispose();
     super.dispose();
+  }
+
+  String _getFullName() {
+    if (_userData == null) return 'Loading...';
+
+    final firstName = _userData!['first_name'] ?? '';
+    final middleName = _userData!['middle_name'] ?? '';
+    final lastName = _userData!['last_name'] ?? '';
+
+    return [
+      firstName,
+      middleName,
+      lastName,
+    ].where((name) => name.isNotEmpty).join(' ');
+  }
+
+  String _getUserEmail() {
+    return _supabase.auth.currentUser?.email ?? 'No email';
   }
 
   @override
@@ -63,7 +103,7 @@ class _ProfileScreenState extends State<ProfileScreen>
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        automaticallyImplyLeading: false, // This removes the back button
+        automaticallyImplyLeading: false,
         title: Text(
           'Profile',
           style: TextStyle(
@@ -73,108 +113,168 @@ class _ProfileScreenState extends State<ProfileScreen>
           ),
         ),
         actions: [
-          TextButton(
-            onPressed: () {
-              setState(() {
-                _isEditing = !_isEditing;
-              });
-            },
-            child: Text(
-              _isEditing ? 'Save' : 'Edit',
-              style: const TextStyle(
-                color: Color(0xFF667EEA),
-                fontWeight: FontWeight.w600,
-                fontSize: 16,
+          if (_userData != null)
+            TextButton(
+              onPressed: () async {
+                final result = await Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder:
+                        (context) => EditProfileScreen(userData: _userData!),
+                  ),
+                );
+
+                if (result == true) {
+                  _loadUserData(); // Reload data after edit
+                }
+              },
+              child: const Text(
+                'Edit',
+                style: TextStyle(
+                  color: Color(0xFF667EEA),
+                  fontWeight: FontWeight.w600,
+                  fontSize: 16,
+                ),
               ),
             ),
-          ),
           const SizedBox(width: 8),
         ],
       ),
-      body: FadeTransition(
-        opacity: _fadeAnimation,
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(20.0),
-          child: Column(
-            children: [
-              // Profile Picture Section
-              _buildProfilePictureSection(),
-              const SizedBox(height: 32),
-
-              // Personal Information Section
-              _buildSectionCard(
-                title: 'Personal Information',
-                icon: Icons.person_outline,
-                children: [
-                  _buildTextField(
-                    'Full Name',
-                    _nameController,
-                    Icons.person_outline,
-                  ),
-                  const SizedBox(height: 16),
-                  _buildTextField(
-                    'Email',
-                    _emailController,
-                    Icons.email_outlined,
-                  ),
-                  const SizedBox(height: 16),
-                  _buildTextField(
-                    'Phone',
-                    _phoneController,
-                    Icons.phone_outlined,
-                  ),
-                  const SizedBox(height: 16),
-                  _buildTextField(
-                    'Bio',
-                    _bioController,
-                    Icons.info_outline,
-                    maxLines: 3,
-                  ),
-                ],
-              ),
-
-              const SizedBox(height: 24),
-
-              // Account Actions Section
-              _buildSectionCard(
-                title: 'Account Actions',
-                icon: Icons.settings_outlined,
-                children: [
-                  _buildActionButton(
-                    title: 'Change Password',
-                    subtitle: 'Update your account password',
-                    icon: Icons.lock_outline,
-                    color: const Color(0xFF667EEA),
-                    onTap: () {
-                      // Navigate to change password
-                    },
-                  ),
-                  const SizedBox(height: 12),
-                  _buildActionButton(
-                    title: 'Privacy Settings',
-                    subtitle: 'Manage your privacy preferences',
-                    icon: Icons.privacy_tip_outlined,
-                    color: const Color(0xFF11998E),
-                    onTap: () {
-                      // Navigate to privacy settings
-                    },
-                  ),
-                ],
-              ),
-
-              const SizedBox(height: 32),
-
-              // Logout Button
-              _buildLogoutButton(),
-
-              const SizedBox(height: 20),
-            ],
-          ),
-        ),
-      ),
+      body: _buildBody(),
       bottomNavigationBar: MainNavBar(
         selectedIndex: _selectedIndex,
         onItemTapped: (index) => setState(() => _selectedIndex = index),
+      ),
+    );
+  }
+
+  Widget _buildBody() {
+    if (_isLoading) {
+      return const Center(
+        child: CircularProgressIndicator(color: Color(0xFF667EEA)),
+      );
+    }
+
+    if (_errorMessage != null) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.error_outline, size: 64, color: Colors.red[300]),
+            const SizedBox(height: 16),
+            Text(
+              _errorMessage!,
+              style: TextStyle(color: Colors.red[600]),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 16),
+            ElevatedButton(
+              onPressed: _loadUserData,
+              child: const Text('Retry'),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return FadeTransition(
+      opacity: _fadeAnimation,
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(20.0),
+        child: Column(
+          children: [
+            // Profile Picture Section
+            _buildProfilePictureSection(),
+            const SizedBox(height: 32),
+
+            // Personal Information Section
+            _buildSectionCard(
+              title: 'Personal Information',
+              icon: Icons.person_outline,
+              children: [
+                _buildInfoRow('Full Name', _getFullName()),
+                const SizedBox(height: 12),
+                _buildInfoRow('Email', _getUserEmail()),
+                const SizedBox(height: 12),
+                _buildInfoRow(
+                  'Contact Number',
+                  _userData!['contact_number'] ?? 'Not provided',
+                ),
+                const SizedBox(height: 12),
+                _buildInfoRow(
+                  'Address',
+                  _userData!['address'] ?? 'Not provided',
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 24),
+
+            // Medical Information Section
+            _buildSectionCard(
+              title: 'Medical Information',
+              icon: Icons.medical_information_outlined,
+              children: [
+                _buildInfoRow(
+                  'Blood Type',
+                  _userData!['blood_type'] ?? 'Not provided',
+                ),
+                const SizedBox(height: 12),
+                _buildInfoRow('Sex', _userData!['sex'] ?? 'Not provided'),
+                const SizedBox(height: 12),
+                _buildArrayInfoRow('Allergies', _userData!['allergies']),
+                const SizedBox(height: 12),
+                _buildArrayInfoRow(
+                  'Medical Conditions',
+                  _userData!['medical_conditions'],
+                ),
+                const SizedBox(height: 12),
+                _buildArrayInfoRow(
+                  'Current Medications',
+                  _userData!['current_medications'],
+                ),
+                const SizedBox(height: 12),
+                _buildArrayInfoRow('Disabilities', _userData!['disabilities']),
+              ],
+            ),
+
+            const SizedBox(height: 24),
+
+            // Account Actions Section
+            _buildSectionCard(
+              title: 'Account Actions',
+              icon: Icons.settings_outlined,
+              children: [
+                _buildActionButton(
+                  title: 'Change Password',
+                  subtitle: 'Update your account password',
+                  icon: Icons.lock_outline,
+                  color: const Color(0xFF667EEA),
+                  onTap: () {
+                    // Navigate to change password
+                  },
+                ),
+                const SizedBox(height: 12),
+                _buildActionButton(
+                  title: 'Privacy Settings',
+                  subtitle: 'Manage your privacy preferences',
+                  icon: Icons.privacy_tip_outlined,
+                  color: const Color(0xFF11998E),
+                  onTap: () {
+                    // Navigate to privacy settings
+                  },
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 32),
+
+            // Logout Button
+            _buildLogoutButton(),
+
+            const SizedBox(height: 20),
+          ],
+        ),
       ),
     );
   }
@@ -204,42 +304,11 @@ class _ProfileScreenState extends State<ProfileScreen>
               ),
               child: const Icon(Icons.person, color: Colors.white, size: 60),
             ),
-            if (_isEditing)
-              Positioned(
-                bottom: 0,
-                right: 0,
-                child: Container(
-                  width: 36,
-                  height: 36,
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    shape: BoxShape.circle,
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.1),
-                        blurRadius: 8,
-                        offset: const Offset(0, 2),
-                      ),
-                    ],
-                  ),
-                  child: IconButton(
-                    padding: EdgeInsets.zero,
-                    icon: Icon(
-                      Icons.camera_alt,
-                      color: Colors.grey[600],
-                      size: 18,
-                    ),
-                    onPressed: () {
-                      // Change profile picture
-                    },
-                  ),
-                ),
-              ),
           ],
         ),
         const SizedBox(height: 16),
         Text(
-          _nameController.text,
+          _getFullName(),
           style: TextStyle(
             fontSize: 24,
             fontWeight: FontWeight.bold,
@@ -248,7 +317,7 @@ class _ProfileScreenState extends State<ProfileScreen>
         ),
         const SizedBox(height: 4),
         Text(
-          _emailController.text,
+          _getUserEmail(),
           style: TextStyle(fontSize: 16, color: Colors.grey[600]),
         ),
       ],
@@ -308,57 +377,38 @@ class _ProfileScreenState extends State<ProfileScreen>
     );
   }
 
-  Widget _buildTextField(
-    String label,
-    TextEditingController controller,
-    IconData icon, {
-    int maxLines = 1,
-  }) {
-    return Column(
+  Widget _buildInfoRow(String label, String value) {
+    return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.w500,
-            color: Colors.grey[700],
+        SizedBox(
+          width: 120,
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w500,
+              color: Colors.grey[600],
+            ),
           ),
         ),
-        const SizedBox(height: 8),
-        TextFormField(
-          controller: controller,
-          enabled: _isEditing,
-          maxLines: maxLines,
-          decoration: InputDecoration(
-            prefixIcon: Icon(icon, color: Colors.grey[400], size: 20),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: Colors.grey.withOpacity(0.2)),
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: Colors.grey.withOpacity(0.2)),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: Color(0xFF667EEA), width: 2),
-            ),
-            disabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: Colors.grey.withOpacity(0.1)),
-            ),
-            filled: true,
-            fillColor:
-                _isEditing ? Colors.white : Colors.grey.withOpacity(0.05),
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 16,
-              vertical: 16,
-            ),
+        Expanded(
+          child: Text(
+            value,
+            style: TextStyle(fontSize: 14, color: Colors.grey[800]),
           ),
         ),
       ],
     );
+  }
+
+  Widget _buildArrayInfoRow(String label, List<dynamic>? values) {
+    final displayValue =
+        (values != null && values.isNotEmpty)
+            ? values.join(', ')
+            : 'Not provided';
+
+    return _buildInfoRow(label, displayValue);
   }
 
   Widget _buildActionButton({
@@ -437,12 +487,12 @@ class _ProfileScreenState extends State<ProfileScreen>
             side: BorderSide(color: Colors.red.withOpacity(0.2)),
           ),
         ),
-        child: Row(
+        child: const Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(Icons.logout, size: 20),
-            const SizedBox(width: 8),
-            const Text(
+            Icon(Icons.logout, size: 20),
+            SizedBox(width: 8),
+            Text(
               'Logout',
               style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
             ),
@@ -472,7 +522,6 @@ class _ProfileScreenState extends State<ProfileScreen>
                 try {
                   await _authService.signOut();
                   if (mounted) {
-                    // Clear navigation stack and rebuild from root
                     Navigator.of(context).pushAndRemoveUntil(
                       MaterialPageRoute(builder: (context) => const AuthGate()),
                       (route) => false,
