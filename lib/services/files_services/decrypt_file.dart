@@ -4,8 +4,9 @@ import 'package:http/http.dart' as http;
 import 'package:basic_utils/basic_utils.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:health_share/services/aes_helper.dart';
+import 'package:health_share/services/crypto_utils.dart';
 
-class DecryptAndViewFileService {
+class DecryptFileService {
   static Future<Uint8List?> decryptFileFromIpfs({
     required String cid,
     required String fileId,
@@ -33,13 +34,14 @@ class DecryptAndViewFileService {
               .single();
 
       final rsaPrivateKeyPem = userData['rsa_private_key'] as String;
+      final rsaPrivateKey = CryptoUtils.rsaPrivateKeyFromPem(rsaPrivateKeyPem);
       print('Retrieved RSA private key from user data');
 
-      // 3. Get encrypted AES key and nonce from Supabase
+      // 3. Get encrypted AES key+nonce JSON from Supabase
       final fileKeyRecord =
           await supabase
               .from('File_Keys')
-              .select('aes_key_encrypted, nonce_hex')
+              .select('aes_key_encrypted')
               .eq('file_id', fileId)
               .eq('recipient_type', 'user')
               .maybeSingle();
@@ -49,51 +51,33 @@ class DecryptAndViewFileService {
         return null;
       }
 
-      final encryptedAesKeyBase64 =
-          fileKeyRecord['aes_key_encrypted'] as String;
-      print('Retrieved encrypted AES key from database');
+      final encryptedKeyPackage = fileKeyRecord['aes_key_encrypted'] as String;
+      print('Retrieved encrypted AES key package from database');
 
-      // 4. Decrypt AES key with RSA private key
-      final rsaEncryptedBytes = base64Decode(encryptedAesKeyBase64);
-      final rsaEncryptedText = utf8.decode(rsaEncryptedBytes);
-      final rsaPrivateKey = CryptoUtils.rsaPrivateKeyFromPem(rsaPrivateKeyPem);
-      final decryptedAesKeyBase64 = CryptoUtils.rsaDecrypt(
-        rsaEncryptedText,
+      // 4. Decrypt AES key package (Base64 → JSON string)
+      final decryptedJson = CryptoUtils.rsaDecrypt(
+        encryptedKeyPackage,
         rsaPrivateKey,
       );
-      final decryptedAesKeyBytes = base64Decode(decryptedAesKeyBase64);
+      final keyData = jsonDecode(decryptedJson);
 
-      print('Successfully decrypted AES key with RSA');
+      final aesKeyHex = keyData['key'] as String;
+      final nonceHex = keyData['nonce'] as String;
 
-      // 5. Convert AES key bytes to hex string
-      final aesKeyHex =
-          decryptedAesKeyBytes
-              .map((b) => b.toRadixString(16).padLeft(2, '0'))
-              .join();
+      print('Successfully decrypted AES key and nonce');
 
-      // 6. Get nonce from database
-      String nonceHex;
-      if (fileKeyRecord['nonce_hex'] != null) {
-        nonceHex = fileKeyRecord['nonce_hex'] as String;
-        print('Retrieved nonce from database: $nonceHex');
-      } else {
-        print('Error: nonce_hex not found in database for file_id: $fileId');
-        return null;
-      }
-
-      // 7. Create AESHelper with GCM mode and decrypt file
+      // 5. Create AESHelper with GCM mode and decrypt file
       final aesHelper = AESHelper(aesKeyHex, nonceHex);
       final decryptedBytes = aesHelper.decryptData(encryptedBytes);
 
       print(
         'Successfully decrypted file. Size: ${decryptedBytes.length} bytes',
       );
-      print("Decrypted file size: ${decryptedBytes.length}");
 
       return decryptedBytes;
-    } catch (e) {
+    } catch (e, st) {
       print('Error during decryption flow: $e');
-      print('Stack trace: ${StackTrace.current}');
+      print(st);
       return null;
     }
   }

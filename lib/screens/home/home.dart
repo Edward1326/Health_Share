@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:health_share/screens/navbar/navbar_main.dart';
+import 'package:health_share/components/navbar_main.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});

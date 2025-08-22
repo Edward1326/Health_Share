@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:health_share/screens/navbar/navbar_main.dart';
+import 'package:health_share/components/navbar_main.dart';
 import 'package:health_share/screens/organizations/org_details.dart';
+import 'package:health_share/screens/organizations/your_org.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class OrgScreen extends StatefulWidget {
@@ -954,16 +955,31 @@ class _OrgScreenState extends State<OrgScreen> with TickerProviderStateMixin {
       color: Colors.transparent,
       child: InkWell(
         onTap: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder:
-                  (context) => OrgDetailsScreen(
-                    orgId: org['id'],
-                    orgName: org['name'] ?? 'No Name',
-                  ),
-            ),
-          );
+          if (isJoined) {
+            // Navigate to YourOrgDetailsScreen for joined organizations
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder:
+                    (context) => YourOrgDetailsScreen(
+                      orgId: org['id'],
+                      orgName: org['name'] ?? 'No Name',
+                    ),
+              ),
+            );
+          } else {
+            // Navigate to regular OrgDetailsScreen for all organizations
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder:
+                    (context) => OrgDetailsScreen(
+                      orgId: org['id'],
+                      orgName: org['name'] ?? 'No Name',
+                    ),
+              ),
+            );
+          }
         },
         borderRadius: BorderRadius.circular(20),
         child: Container(
@@ -1066,7 +1082,7 @@ class _OrgScreenState extends State<OrgScreen> with TickerProviderStateMixin {
         ),
       ),
     );
-  }
+  } // This closing brace was missing!
 
   Widget _buildEmptyState() {
     final isJoinedTab = _selectedTab == 1;

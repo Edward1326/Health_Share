@@ -1,7 +1,7 @@
 import 'dart:convert';
+import 'package:health_share/services/crypto_utils.dart';
 import 'package:http/http.dart' as http;
 import 'package:encrypt/encrypt.dart' as encrypt;
-import 'package:basic_utils/basic_utils.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter/material.dart';
 import 'package:health_share/services/aes_helper.dart';
@@ -9,7 +9,7 @@ import 'package:health_share/services/files_services/file_picker_service.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 class UploadFileService {
-  // Pinata JWT token - consider moving this to environment variables
+  // Pinata JWT token (store securely in .env)
   static final String _pinataJWT = dotenv.env['PINATA_JWT'] ?? '';
 
   /// Uploads a file with encryption and stores metadata in Supabase
@@ -24,17 +24,15 @@ class UploadFileService {
       final fileName = file.path.split('/').last;
       final fileType = fileName.split('.').last.toUpperCase();
 
-      // 2. Generate a random AES key and nonce for GCM mode
-      final aesKey = encrypt.Key.fromSecureRandom(32); // 32 bytes for AES-256
-      final aesNonce = encrypt.IV.fromSecureRandom(
-        12,
-      ); // 12 bytes for GCM nonce (96 bits)
+      // 2. Generate AES key + nonce
+      final aesKey = encrypt.Key.fromSecureRandom(32); // 32 bytes = AES-256
+      final aesNonce = encrypt.IV.fromSecureRandom(12); // 96-bit nonce
 
-      // 3. Encrypt the file using GCM mode
+      // 3. Encrypt file
       final aesHelper = AESHelper(aesKey.base16, aesNonce.base16);
       final encryptedBytes = aesHelper.encryptData(fileBytes);
 
-      // 4. Get current user and their RSA public key from Supabase
+      // 4. Get current user
       final supabase = Supabase.instance.client;
       final user = supabase.auth.currentUser;
       if (user == null) {
@@ -46,30 +44,29 @@ class UploadFileService {
         return false;
       }
 
-      // 5. Fetch user data and RSA public key
+      // 5. Fetch user RSA public key
       final userData =
           await supabase
               .from('User')
               .select('rsa_public_key, id')
               .eq('id', user.id)
               .single();
-      final rsaPublicKeyPem = userData['rsa_public_key'] as String;
-      final rsaPublicKey = CryptoUtils.rsaPublicKeyFromPem(rsaPublicKeyPem);
 
-      // 6. Encrypt the AES key with RSA
-      final aesKeyBase64 = base64Encode(
-        aesKey.bytes,
-      ); // Convert to String first
-      final rsaEncryptedBytes = CryptoUtils.rsaEncrypt(
-        aesKeyBase64,
+      final rsaPublicKeyPem = userData['rsa_public_key'] as String;
+      final rsaPublicKey = MyCryptoUtils.rsaPublicKeyFromPem(rsaPublicKeyPem);
+
+      // 6. Build JSON with AES key + nonce
+      final keyData = {'key': aesKey.base16, 'nonce': aesNonce.base16};
+      final keyDataJson = jsonEncode(keyData);
+
+      // 7. Encrypt JSON with RSA -> already Base64 string
+      final encryptedKeyPackage = MyCryptoUtils.rsaEncrypt(
+        keyDataJson,
         rsaPublicKey,
       );
-      final encryptedAesKeyString = base64Encode(
-        utf8.encode(rsaEncryptedBytes),
-      );
 
-      // 7. Upload encrypted file to IPFS via Pinata
-      final ipfsCid = await _uploadToPinata(encryptedBytes);
+      // 8. Upload encrypted file to Pinata with original filename
+      final ipfsCid = await _uploadToPinata(encryptedBytes, fileName);
       if (ipfsCid == null) {
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -78,10 +75,9 @@ class UploadFileService {
         }
         return false;
       }
-
       print('Upload successful. CID: $ipfsCid');
 
-      // 8. Insert file metadata into Supabase
+      // 9. Insert file metadata into Supabase
       final fileInsert =
           await supabase
               .from('Files')
@@ -97,16 +93,13 @@ class UploadFileService {
               .select()
               .single();
 
-      // Ensure fileId is treated as String (UUID)
       final String fileId = fileInsert['id'].toString();
       print('File inserted with ID: $fileId');
 
-      // 9. Insert encrypted AES key and nonce into File_keys
+      // 10. Insert encrypted key package into File_Keys
       final success = await _storeFileKey(
-        fileId: fileId, // Now explicitly String
-        encryptedAesKey: encryptedAesKeyString,
-        nonceHex: aesNonce.base16, // Store nonce as hex
-        userId: user.id,
+        fileId: fileId,
+        encryptedKeyPackage: encryptedKeyPackage,
       );
 
       if (!success) {
@@ -121,7 +114,6 @@ class UploadFileService {
         return false;
       }
 
-      // Success message
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -142,9 +134,11 @@ class UploadFileService {
     }
   }
 
-  /// Uploads encrypted file bytes to Pinata IPFS
-  /// Returns the IPFS CID if successful, null otherwise
-  static Future<String?> _uploadToPinata(List<int> encryptedBytes) async {
+  /// Uploads encrypted file to Pinata with original filename
+  static Future<String?> _uploadToPinata(
+    List<int> encryptedBytes,
+    String fileName,
+  ) async {
     try {
       final url = Uri.parse('https://api.pinata.cloud/pinning/pinFileToIPFS');
 
@@ -155,7 +149,8 @@ class UploadFileService {
               http.MultipartFile.fromBytes(
                 'file',
                 encryptedBytes,
-                filename: 'encrypted.aes',
+                filename:
+                    fileName, // Use the original filename instead of 'encrypted.aes'
               ),
             );
 
@@ -175,39 +170,27 @@ class UploadFileService {
     }
   }
 
-  /// Stores the encrypted AES key and nonce in the File_Keys table
-  /// Returns true if successful, false otherwise
+  /// Stores RSA-encrypted AES package in File_Keys
   static Future<bool> _storeFileKey({
-    required String fileId, // Changed from dynamic to String
-    required String encryptedAesKey,
-    required String nonceHex,
-    required String userId,
+    required String fileId,
+    required String encryptedKeyPackage,
   }) async {
     try {
-      print('Attempting to insert file key with:');
-      print('  fileId: $fileId (type: ${fileId.runtimeType})');
-      print('  userId: $userId (type: ${userId.runtimeType})');
-      print('  recipient_type: user');
-      print('  aes_key_encrypted length: ${encryptedAesKey.length}');
-      print('  nonce_hex length: ${nonceHex.length}');
+      final supabase = Supabase.instance.client;
 
       final insertData = {
-        'file_id': fileId, // Now guaranteed to be String
+        'file_id': fileId,
         'recipient_type': 'user',
         'recipient_id': null,
-        'aes_key_encrypted': encryptedAesKey,
-        'nonce_hex': nonceHex, // Store the nonce in hex format
+        'aes_key_encrypted': encryptedKeyPackage,
       };
-      print('Insert data: $insertData');
 
-      final supabase = Supabase.instance.client;
       final result =
           await supabase.from('File_Keys').insert(insertData).select();
       print('File key inserted successfully: $result');
       return true;
     } catch (fileKeyError, stackTrace) {
       print('Error inserting file key: $fileKeyError');
-      print('Error type: ${fileKeyError.runtimeType}');
       print('Stack trace: $stackTrace');
       return false;
     }

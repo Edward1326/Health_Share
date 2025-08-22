@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:health_share/screens/navbar/navbar_main.dart';
+import 'package:health_share/components/navbar_main.dart';
 import 'package:health_share/screens/profile/edit_profile.dart';
 import 'package:health_share/services/auth_services/auth_gate.dart';
 import 'package:health_share/services/auth_services/auth_service.dart';
