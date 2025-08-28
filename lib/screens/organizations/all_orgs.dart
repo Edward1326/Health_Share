@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:health_share/components/navbar_main.dart';
 import 'package:health_share/screens/organizations/org_details.dart';
-import 'package:health_share/screens/organizations/your_org.dart';
+import 'package:health_share/screens/organizations/org_doctors.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class OrgScreen extends StatefulWidget {
@@ -39,7 +39,13 @@ class _OrgScreenState extends State<OrgScreen> with TickerProviderStateMixin {
       CurvedAnimation(parent: _fadeController, curve: Curves.easeInOut),
     );
     _fadeController.forward();
-    _fetchAllData();
+    _fetchInitialData();
+  }
+
+  Future<void> _fetchInitialData() async {
+    setState(() => _isLoading = true);
+    await Future.wait([_fetchAllOrganizations(), _fetchInvitations()]);
+    setState(() => _isLoading = false);
   }
 
   Future<void> _fetchAllData() async {
@@ -83,85 +89,64 @@ class _OrgScreenState extends State<OrgScreen> with TickerProviderStateMixin {
 
     try {
       print(
-        'DEBUG: Starting fetchJoinedOrganizations for user: ${currentUser.id}',
+        'DEBUG: Starting fetchJoinedOrganizations for user: ${currentUser.email}',
       );
 
-      // Use the user ID directly instead of getting patient ID first
-      final userId = currentUser.id;
-      print('DEBUG: Using user ID: $userId');
+      // Get user's database ID
+      final userResponse =
+          await Supabase.instance.client
+              .from('User')
+              .select('id')
+              .eq('email', currentUser.email!)
+              .single();
 
-      // Get doctor-user assignments for this user (patient_id refers to User.id)
-      final assignmentResponse = await Supabase.instance.client
-          .from('Doctor_User_Assignment')
-          .select('doctor_id, status')
-          .eq('patient_id', userId)
-          .eq('status', 'active');
+      final userId = userResponse['id'];
+      print('DEBUG: User database ID: $userId');
 
-      print('DEBUG: Assignment response: $assignmentResponse');
+      // Get organizations where this user is an accepted patient
+      final patientResponse = await Supabase.instance.client
+          .from('Patient')
+          .select('organization_id')
+          .eq('user_id', userId)
+          .eq('status', 'accepted');
 
-      if (assignmentResponse.isEmpty) {
-        print('DEBUG: No active assignments found for user');
+      print('DEBUG: Patient response: $patientResponse');
+
+      if (patientResponse.isEmpty) {
+        print('DEBUG: No accepted patient records found');
         setState(() => _joinedOrganizations = []);
         return;
       }
 
-      // Extract doctor IDs
-      final doctorIds =
-          assignmentResponse
-              .map((assignment) => assignment['doctor_id'])
-              .toList();
-
-      print('DEBUG: Doctor IDs: $doctorIds');
-
-      // Get organization IDs from Organization_User table where position is Doctor
-      final doctorResponse = await Supabase.instance.client
-          .from('Organization_User')
-          .select('organization_id, position, id')
-          .inFilter('id', doctorIds)
-          .eq('position', 'Doctor');
-
-      print('DEBUG: Doctor response: $doctorResponse');
-
-      if (doctorResponse.isEmpty) {
-        print('DEBUG: No doctors found in Organization_User table');
-        setState(() => _joinedOrganizations = []);
-        return;
-      }
-
-      // Extract unique organization IDs
+      // Extract organization IDs directly
       final orgIds =
-          doctorResponse
-              .map((doctor) => doctor['organization_id'])
+          patientResponse
+              .map((patient) => patient['organization_id'])
               .where((id) => id != null)
               .toSet()
               .toList();
 
       print('DEBUG: Organization IDs: $orgIds');
 
-      if (orgIds.isEmpty) {
-        print('DEBUG: No organization IDs found');
-        setState(() => _joinedOrganizations = []);
-        return;
-      }
-
-      // Get organization details for those IDs
+      // Get organization details
       final orgResponse = await Supabase.instance.client
           .from('Organization')
           .select('*')
           .inFilter('id', orgIds)
           .order('name', ascending: true);
 
-      print('DEBUG: Final organization response: $orgResponse');
+      print('DEBUG: Organizations: $orgResponse');
 
       setState(() {
         _joinedOrganizations = List<Map<String, dynamic>>.from(orgResponse);
       });
 
       print(
-        'DEBUG: Successfully set ${_joinedOrganizations.length} joined organizations',
+        'DEBUG: Successfully loaded ${_joinedOrganizations.length} joined organizations',
       );
-    } catch (e) {
+    } catch (e, stackTrace) {
       print('DEBUG: Error in _fetchJoinedOrganizations: $e');
+      print('DEBUG: Stack trace: $stackTrace');
       setState(() => _joinedOrganizations = []);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -784,6 +769,10 @@ class _OrgScreenState extends State<OrgScreen> with TickerProviderStateMixin {
                               _searchController.clear();
                               _searchQuery = '';
                             });
+                            // Lazy load joined organizations if not already loaded
+                            if (_joinedOrganizations.isEmpty) {
+                              _fetchJoinedOrganizations();
+                            }
                           }
                         },
                         child: AnimatedContainer(
@@ -961,7 +950,7 @@ class _OrgScreenState extends State<OrgScreen> with TickerProviderStateMixin {
               context,
               MaterialPageRoute(
                 builder:
-                    (context) => YourOrgDetailsScreen(
+                    (context) => DoctorsScreen(
                       orgId: org['id'],
                       orgName: org['name'] ?? 'No Name',
                     ),

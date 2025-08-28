@@ -55,7 +55,7 @@ class DecryptFileService {
       print('Retrieved encrypted AES key package from database');
 
       // 4. Decrypt AES key package (Base64 → JSON string)
-      final decryptedJson = CryptoUtils.rsaDecrypt(
+      final decryptedJson = MyCryptoUtils.rsaDecrypt(
         encryptedKeyPackage,
         rsaPrivateKey,
       );

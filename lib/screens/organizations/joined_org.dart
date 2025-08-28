@@ -35,23 +35,29 @@ class _JoinedOrgScreenState extends State<JoinedOrgScreen>
   }
 
   Future<void> _fetchJoinedOrganizations() async {
+    print('DEBUG: ===== USING NEW SIMPLIFIED CODE =====');
     setState(() => _isLoading = true);
 
     final currentUser = Supabase.instance.client.auth.currentUser;
     if (currentUser == null) {
+      print('DEBUG: No current user found');
       setState(() => _isLoading = false);
       return;
     }
 
+    print('DEBUG: Current user ID: ${currentUser.id}');
+
     try {
-      // First get the patient records where user is accepted
+      // Step 1: Find Patient records for current user
       final patientResponse = await Supabase.instance.client
           .from('Patient')
-          .select('organization_id')
-          .eq('user_id', currentUser.id)
-          .eq('status', 'accepted');
+          .select('id, user_id, organization_id, status')
+          .eq('user_id', currentUser.id);
+
+      print('DEBUG: Patient records: $patientResponse');
 
       if (patientResponse.isEmpty) {
+        print('DEBUG: No patient records found');
         setState(() {
           _joinedOrganizations = [];
           _isLoading = false;
@@ -59,22 +65,47 @@ class _JoinedOrgScreenState extends State<JoinedOrgScreen>
         return;
       }
 
-      // Extract organization IDs
+      // Step 2: Extract organization IDs from Patient records
       final orgIds =
-          patientResponse.map((patient) => patient['organization_id']).toList();
+          patientResponse
+              .map((patient) => patient['organization_id'])
+              .where((id) => id != null)
+              .toSet()
+              .toList();
 
-      // Get organization details for those IDs
+      print('DEBUG: Organization IDs from Patient table: $orgIds');
+
+      if (orgIds.isEmpty) {
+        print('DEBUG: No organization IDs found');
+        setState(() {
+          _joinedOrganizations = [];
+          _isLoading = false;
+        });
+        return;
+      }
+
+      // Step 3: Get organization details
+      print('DEBUG: Querying Organization table with IDs: $orgIds');
+
       final orgResponse = await Supabase.instance.client
           .from('Organization')
           .select('*')
-          .inFilter('id', orgIds)
-          .order('name', ascending: true);
+          .inFilter('id', orgIds);
+
+      print('DEBUG: Organization query result: $orgResponse');
+      print('DEBUG: Organization count found: ${orgResponse.length}');
 
       setState(() {
         _joinedOrganizations = List<Map<String, dynamic>>.from(orgResponse);
         _isLoading = false;
       });
-    } catch (e) {
+
+      print(
+        'DEBUG: Final organizations set in state: ${_joinedOrganizations.length}',
+      );
+    } catch (e, stackTrace) {
+      print('DEBUG: Error occurred: $e');
+      print('DEBUG: Stack trace: $stackTrace');
       setState(() => _isLoading = false);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -125,9 +156,23 @@ class _JoinedOrgScreenState extends State<JoinedOrgScreen>
           ),
         ),
         actions: [
-          IconButton(
-            onPressed: _fetchJoinedOrganizations,
-            icon: Icon(Icons.refresh, color: Colors.grey[600]),
+          Container(
+            margin: const EdgeInsets.only(right: 8),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.1),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: IconButton(
+              onPressed: _fetchJoinedOrganizations,
+              icon: Icon(Icons.refresh, color: Colors.grey[600], size: 22),
+            ),
           ),
           const SizedBox(width: 8),
         ],
@@ -157,12 +202,11 @@ class _JoinedOrgScreenState extends State<JoinedOrgScreen>
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.grey.withOpacity(0.08)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.02),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
           ),
         ],
       ),
@@ -175,7 +219,7 @@ class _JoinedOrgScreenState extends State<JoinedOrgScreen>
         },
         decoration: InputDecoration(
           hintText: 'Search your organizations...',
-          hintStyle: TextStyle(color: Colors.grey[500]),
+          hintStyle: TextStyle(color: Colors.grey[500], fontSize: 16),
           prefixIcon: Icon(Icons.search, color: Colors.grey[400], size: 22),
           suffixIcon:
               _searchQuery.isNotEmpty
@@ -196,8 +240,8 @@ class _JoinedOrgScreenState extends State<JoinedOrgScreen>
           filled: true,
           fillColor: Colors.white,
           contentPadding: const EdgeInsets.symmetric(
-            horizontal: 16,
-            vertical: 16,
+            horizontal: 20,
+            vertical: 18,
           ),
         ),
       ),
@@ -238,31 +282,34 @@ class _JoinedOrgScreenState extends State<JoinedOrgScreen>
             ),
           );
         },
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(20),
         child: Container(
           decoration: BoxDecoration(
             color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: Colors.grey.withOpacity(0.08)),
+            borderRadius: BorderRadius.circular(20),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.02),
-                blurRadius: 8,
-                offset: const Offset(0, 2),
+                color: Colors.black.withOpacity(0.05),
+                blurRadius: 15,
+                offset: const Offset(0, 5),
               ),
             ],
           ),
           child: Padding(
-            padding: const EdgeInsets.all(20.0),
+            padding: const EdgeInsets.all(24.0),
             child: Row(
               children: [
-                // Organization status indicator
+                // Organization icon
                 Container(
-                  width: 12,
-                  height: 12,
+                  padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: Colors.green,
-                    shape: BoxShape.circle,
+                    color: Colors.green[50],
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Icon(
+                    Icons.check_circle,
+                    color: Colors.green[600],
+                    size: 24,
                   ),
                 ),
                 const SizedBox(width: 16),
@@ -277,19 +324,19 @@ class _JoinedOrgScreenState extends State<JoinedOrgScreen>
                               org['name'] ?? 'No Name',
                               style: TextStyle(
                                 fontSize: 18,
-                                fontWeight: FontWeight.w600,
+                                fontWeight: FontWeight.bold,
                                 color: Colors.grey[800],
                               ),
                             ),
                           ),
                           Container(
                             padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 4,
+                              horizontal: 12,
+                              vertical: 6,
                             ),
                             decoration: BoxDecoration(
-                              color: Colors.green.withOpacity(0.1),
-                              borderRadius: BorderRadius.circular(12),
+                              color: Colors.green[100],
+                              borderRadius: BorderRadius.circular(20),
                             ),
                             child: Text(
                               'Joined',
@@ -302,10 +349,14 @@ class _JoinedOrgScreenState extends State<JoinedOrgScreen>
                           ),
                         ],
                       ),
-                      const SizedBox(height: 4),
+                      const SizedBox(height: 8),
                       Text(
-                        org['description'] ?? '',
-                        style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+                        org['description'] ?? 'No description available',
+                        style: TextStyle(
+                          fontSize: 15,
+                          color: Colors.grey[600],
+                          height: 1.4,
+                        ),
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -313,10 +364,17 @@ class _JoinedOrgScreenState extends State<JoinedOrgScreen>
                   ),
                 ),
                 const SizedBox(width: 12),
-                Icon(
-                  Icons.arrow_forward_ios,
-                  color: Colors.grey[400],
-                  size: 16,
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.grey[100],
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(
+                    Icons.arrow_forward_ios,
+                    color: Colors.grey[400],
+                    size: 16,
+                  ),
                 ),
               ],
             ),
@@ -334,48 +392,63 @@ class _JoinedOrgScreenState extends State<JoinedOrgScreen>
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Container(
-              width: 80,
-              height: 80,
+              padding: const EdgeInsets.all(24),
               decoration: BoxDecoration(
-                color: Colors.grey.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(20),
+                color: Colors.grey[100],
+                borderRadius: BorderRadius.circular(24),
               ),
               child: Icon(
                 Icons.business_outlined,
                 color: Colors.grey[400],
-                size: 40,
+                size: 48,
               ),
             ),
             const SizedBox(height: 24),
             Text(
               'No organizations joined yet',
               style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.w600,
+                fontSize: 22,
+                fontWeight: FontWeight.bold,
                 color: Colors.grey[700],
               ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Accept invitations from organizations to see them here',
-              style: TextStyle(fontSize: 16, color: Colors.grey[600]),
               textAlign: TextAlign.center,
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 12),
+            Text(
+              'Accept invitations from organizations to see them here',
+              style: TextStyle(
+                fontSize: 16,
+                color: Colors.grey[600],
+                height: 1.5,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 32),
             ElevatedButton(
               onPressed: () => Navigator.pop(context),
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.blue[600],
                 foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(
-                  horizontal: 24,
-                  vertical: 12,
+                  horizontal: 32,
+                  vertical: 16,
                 ),
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(16),
                 ),
+                elevation: 0,
               ),
-              child: const Text('View All Organizations'),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.explore, size: 20),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Explore Organizations',
+                    style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
+                  ),
+                ],
+              ),
             ),
           ],
         ),

@@ -4,9 +4,9 @@ import 'package:http/http.dart' as http;
 import 'package:basic_utils/basic_utils.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:health_share/services/aes_helper.dart';
+import 'package:health_share/services/crypto_utils.dart';
 
 class OrgFileService {
-  /// Enhanced decryption with better error handling and data validation
   static Future<Uint8List?> _decryptWithKeysRobust({
     required Uint8List encryptedBytes,
     required String encryptedAesKeyBase64,
@@ -28,7 +28,6 @@ class OrgFileService {
           'WARNING: Encrypted file is suspiciously small (${encryptedBytes.length} bytes)',
         );
         print('This might indicate an IPFS upload issue');
-        // Don't return null here - let's try to decrypt anyway in case it's a test file
       }
 
       // Validate base64 format of encrypted AES key
@@ -41,88 +40,140 @@ class OrgFileService {
       print('Nonce: $nonceHex');
       print('RSA private key length: ${rsaPrivateKeyPem.length}');
 
-      // Try to decode the base64 first
-      Uint8List rsaEncryptedBytes;
-      try {
-        rsaEncryptedBytes = base64Decode(encryptedAesKeyBase64);
-        print(
-          'Successfully decoded base64 AES key. Bytes length: ${rsaEncryptedBytes.length}',
-        );
-      } catch (e) {
-        print('ERROR: Failed to decode base64 AES key: $e');
-        return null;
-      }
-
-      // Convert bytes to text for RSA decryption
-      String rsaEncryptedText;
-      try {
-        rsaEncryptedText = utf8.decode(rsaEncryptedBytes);
-        print('Successfully converted bytes to UTF-8 text');
-      } catch (e) {
-        print('ERROR: Failed to convert bytes to UTF-8: $e');
-        // Try alternative: treat the base64 string directly as the encrypted text
-        print('Attempting direct base64 string as encrypted text...');
-        rsaEncryptedText = encryptedAesKeyBase64;
-      }
-
       // Parse RSA private key
       RSAPrivateKey rsaPrivateKey;
       try {
-        rsaPrivateKey = CryptoUtils.rsaPrivateKeyFromPem(rsaPrivateKeyPem);
+        rsaPrivateKey = MyCryptoUtils.rsaPrivateKeyFromPem(rsaPrivateKeyPem);
         print('Successfully parsed RSA private key');
       } catch (e) {
         print('ERROR: Failed to parse RSA private key: $e');
         return null;
       }
 
-      // Decrypt AES key with RSA
-      String decryptedAesKeyBase64;
+      // UPDATED APPROACH: Handle RSA decryption properly with your MyCryptoUtils
+      String decryptedKeyJson;
+
       try {
-        decryptedAesKeyBase64 = CryptoUtils.rsaDecrypt(
-          rsaEncryptedText,
+        // Method 1: Direct decryption (your rsaDecrypt expects base64 string)
+        print('Attempting Method 1: Direct rsaDecrypt with base64 string...');
+
+        decryptedKeyJson = MyCryptoUtils.rsaDecrypt(
+          encryptedAesKeyBase64,
           rsaPrivateKey,
         );
-        print('Successfully decrypted AES key with RSA');
-      } catch (e) {
-        print('ERROR: RSA decryption failed: $e');
-        return null;
-      }
-
-      // Decode the decrypted AES key
-      Uint8List decryptedAesKeyBytes;
-      try {
-        decryptedAesKeyBytes = base64Decode(decryptedAesKeyBase64);
+        print('Method 1 successful: Direct decryption worked');
+      } catch (e1) {
+        print('Method 1 failed: $e1');
         print(
-          'Successfully decoded decrypted AES key. Length: ${decryptedAesKeyBytes.length}',
+          'This suggests the stored encrypted key format might be incompatible',
         );
-      } catch (e) {
-        print('ERROR: Failed to decode decrypted AES key: $e');
+
+        // Let's analyze the encrypted key format
+        print('Encrypted key analysis:');
+        print('  Length: ${encryptedAesKeyBase64.length}');
+        print('  Is valid base64: ${_isValidBase64(encryptedAesKeyBase64)}');
+
+        try {
+          final decoded = base64Decode(encryptedAesKeyBase64);
+          print('  Decoded byte length: ${decoded.length}');
+          print(
+            '  First 10 bytes: ${decoded.take(10).map((b) => '0x${b.toRadixString(16).padLeft(2, '0')}').join(' ')}',
+          );
+        } catch (decodeError) {
+          print('  Base64 decode failed: $decodeError');
+        }
+
+        // The error might be due to key format or encryption mismatch
+        // Let's check if this is a padding or format issue
+        print('ERROR: RSA decryption failed with your crypto implementation');
+        print('This might indicate:');
+        print(
+          '1. The encrypted key was created with a different RSA implementation',
+        );
+        print('2. Key size mismatch between encryption and decryption');
+        print('3. Different padding schemes used');
+        print('4. The stored encrypted key is corrupted');
+
         return null;
       }
 
-      // Convert AES key bytes to hex string
-      final aesKeyHex =
-          decryptedAesKeyBytes
-              .map((b) => b.toRadixString(16).padLeft(2, '0'))
-              .join();
+      print('Successfully decrypted key package');
+      print('Decrypted content length: ${decryptedKeyJson.length}');
+      print(
+        'First 100 chars: ${decryptedKeyJson.length > 100 ? decryptedKeyJson.substring(0, 100) : decryptedKeyJson}',
+      );
 
-      print('AES key hex length: ${aesKeyHex.length}');
-      print('Expected AES key length: 64 characters (32 bytes)');
+      // Try to parse as JSON (new format matching doctor's upload)
+      String aesKeyHex;
+      String actualNonceHex;
 
+      try {
+        final keyData = jsonDecode(decryptedKeyJson);
+
+        if (keyData is Map<String, dynamic> &&
+            keyData.containsKey('key') &&
+            keyData.containsKey('nonce')) {
+          aesKeyHex = keyData['key'] as String;
+          actualNonceHex = keyData['nonce'] as String;
+
+          print('Successfully parsed JSON key package (new format)');
+          print('AES key length: ${aesKeyHex.length} chars');
+          print('Nonce from package: $actualNonceHex');
+        } else {
+          throw FormatException(
+            'JSON does not contain required key/nonce fields',
+          );
+        }
+      } catch (jsonError) {
+        print('Not new JSON format, trying old format: $jsonError');
+
+        // Old format fallback: decrypted result is base64-encoded AES key
+        try {
+          final decryptedAesKeyBytes = base64Decode(decryptedKeyJson);
+          aesKeyHex =
+              decryptedAesKeyBytes
+                  .map((b) => b.toRadixString(16).padLeft(2, '0'))
+                  .join();
+          actualNonceHex = nonceHex; // Use the provided nonce
+
+          print('Successfully processed old format key');
+          print('AES key hex length: ${aesKeyHex.length}');
+        } catch (oldFormatError) {
+          print(
+            'ERROR: Failed to process decrypted key in any format: $oldFormatError',
+          );
+          print('Decrypted content: $decryptedKeyJson');
+          return null;
+        }
+      }
+
+      // Validate AES key length (should be 64 hex chars = 32 bytes = 256 bits)
       if (aesKeyHex.length != 64) {
-        print('WARNING: AES key length is not 32 bytes (256 bits)');
+        print(
+          'WARNING: AES key length is not 32 bytes (256 bits): ${aesKeyHex.length} chars',
+        );
+        // Don't return null here, try to proceed anyway
       }
 
-      // Validate nonce hex format
-      if (!_isValidHex(nonceHex)) {
-        print('ERROR: Nonce is not valid hex format: $nonceHex');
+      // Validate nonce hex format (should be 24 hex chars = 12 bytes for GCM)
+      if (!_isValidHex(actualNonceHex)) {
+        print('ERROR: Nonce is not valid hex format: $actualNonceHex');
         return null;
       }
 
-      print('Creating AESHelper with key and nonce...');
+      if (actualNonceHex.length != 24) {
+        print(
+          'WARNING: Nonce length is not 12 bytes: ${actualNonceHex.length} chars',
+        );
+        // Don't return null here, try to proceed anyway
+      }
+
+      print('Final AES key (hex): $aesKeyHex');
+      print('Final nonce (hex): $actualNonceHex');
+      print('Creating AESHelper with validated key and nonce...');
 
       // Create AESHelper and decrypt file
-      final aesHelper = AESHelper(aesKeyHex, nonceHex);
+      final aesHelper = AESHelper(aesKeyHex, actualNonceHex);
 
       print('Attempting AES decryption of ${encryptedBytes.length} bytes...');
       final decryptedBytes = aesHelper.decryptData(encryptedBytes);
@@ -135,10 +186,246 @@ class OrgFileService {
         return null;
       }
 
+      // Additional validation: check if file starts with known file signatures
+      _validateFileFormat(decryptedBytes);
+
       return decryptedBytes;
     } catch (e, stackTrace) {
       print('ERROR in _decryptWithKeysRobust ($debugContext): $e');
       print('Stack trace: $stackTrace');
+      return null;
+    }
+  }
+
+  /// Validate decrypted file format
+  static void _validateFileFormat(Uint8List bytes) {
+    if (bytes.length < 8) {
+      print('File too small for format validation');
+      return;
+    }
+
+    // Check common file signatures
+    final header = bytes.take(8).toList();
+
+    if (header[0] == 0x25 &&
+        header[1] == 0x50 &&
+        header[2] == 0x44 &&
+        header[3] == 0x46) {
+      print('✓ Detected PDF file format');
+    } else if (header[0] == 0xFF && header[1] == 0xD8 && header[2] == 0xFF) {
+      print('✓ Detected JPEG file format');
+    } else if (header[0] == 0x89 &&
+        header[1] == 0x50 &&
+        header[2] == 0x4E &&
+        header[3] == 0x47) {
+      print('✓ Detected PNG file format');
+    } else if (header[0] == 0x50 && header[1] == 0x4B) {
+      print('✓ Detected ZIP-based format (DOCX, etc.)');
+    } else {
+      print(
+        '? Unknown file format, first 8 bytes: ${header.map((b) => '0x${b.toRadixString(16).padLeft(2, '0')}').join(' ')}',
+      );
+    }
+  }
+
+  /// Enhanced user decryption with better error handling
+  static Future<Uint8List?> _tryUserDecryptionRobust(
+    String fileId,
+    String userId,
+    Uint8List encryptedBytes,
+  ) async {
+    try {
+      final supabase = Supabase.instance.client;
+
+      print('=== Attempting User Decryption ===');
+      print('File ID: $fileId');
+      print('User ID: $userId');
+
+      // Get user's File_Keys entry
+      final userFileKey =
+          await supabase
+              .from('File_Keys')
+              .select('aes_key_encrypted, nonce_hex')
+              .eq('file_id', fileId)
+              .eq('recipient_type', 'user')
+              .eq('recipient_id', userId)
+              .maybeSingle();
+
+      if (userFileKey == null) {
+        print('No user-specific File_Keys entry found');
+        return null;
+      }
+
+      final encryptedAesKey = userFileKey['aes_key_encrypted'];
+      final nonceHex = userFileKey['nonce_hex'];
+
+      if (encryptedAesKey == null || encryptedAesKey.isEmpty) {
+        print('ERROR: Encrypted AES key is null or empty');
+        return null;
+      }
+
+      // Get user's RSA private key
+      final userData =
+          await supabase
+              .from('User')
+              .select('rsa_private_key')
+              .eq('id', userId)
+              .single();
+
+      final userRsaPrivateKeyPem = userData['rsa_private_key'] as String?;
+
+      if (userRsaPrivateKeyPem == null || userRsaPrivateKeyPem.isEmpty) {
+        print('ERROR: User RSA private key is null or empty');
+        return null;
+      }
+
+      return await _decryptWithKeysRobust(
+        encryptedBytes: encryptedBytes,
+        encryptedAesKeyBase64: encryptedAesKey,
+        rsaPrivateKeyPem: userRsaPrivateKeyPem,
+        nonceHex: nonceHex,
+        debugContext: 'User Decryption',
+      );
+    } catch (e) {
+      print('User decryption failed: $e');
+      return null;
+    }
+  }
+
+  /// Try organization decryption with robust error handling
+  static Future<Uint8List?> _tryOrganizationDecryptionRobust(
+    String fileId,
+    String orgId,
+    Uint8List encryptedBytes,
+  ) async {
+    try {
+      final supabase = Supabase.instance.client;
+
+      print('=== Attempting Organization Decryption ===');
+
+      // Get organization's File_Keys entry
+      final orgFileKey =
+          await supabase
+              .from('File_Keys')
+              .select('aes_key_encrypted, nonce_hex')
+              .eq('file_id', fileId)
+              .eq('recipient_type', 'organization')
+              .eq('recipient_id', orgId)
+              .maybeSingle();
+
+      if (orgFileKey == null) {
+        print('No organization-specific File_Keys entry found');
+        return null;
+      }
+
+      print('Found organization File_Keys entry');
+
+      final encryptedAesKey = orgFileKey['aes_key_encrypted'];
+      final nonceHex = orgFileKey['nonce_hex'];
+
+      if (encryptedAesKey == null || encryptedAesKey.isEmpty) {
+        print('ERROR: Organization encrypted AES key is null or empty');
+        return null;
+      }
+
+      // Get organization's RSA private key
+      final orgData =
+          await supabase
+              .from('Organization')
+              .select('rsa_private_key')
+              .eq('id', orgId)
+              .single();
+
+      final orgRsaPrivateKeyPem = orgData['rsa_private_key'] as String?;
+
+      if (orgRsaPrivateKeyPem == null || orgRsaPrivateKeyPem.isEmpty) {
+        print('ERROR: Organization RSA private key is null or empty');
+        return null;
+      }
+
+      return await _decryptWithKeysRobust(
+        encryptedBytes: encryptedBytes,
+        encryptedAesKeyBase64: encryptedAesKey,
+        rsaPrivateKeyPem: orgRsaPrivateKeyPem,
+        nonceHex: nonceHex,
+        debugContext: 'Organization Decryption',
+      );
+    } catch (e) {
+      print('Organization decryption failed: $e');
+      return null;
+    }
+  }
+
+  /// Try doctor owner decryption with robust error handling
+  static Future<Uint8List?> _tryDoctorOwnerDecryptionRobust(
+    String fileId,
+    Uint8List encryptedBytes,
+  ) async {
+    try {
+      final supabase = Supabase.instance.client;
+
+      print('=== Attempting Doctor Owner Decryption ===');
+
+      // Get file owner (doctor) ID
+      final fileData =
+          await supabase
+              .from('Files')
+              .select('uploaded_by')
+              .eq('id', fileId)
+              .single();
+
+      final doctorUserId = fileData['uploaded_by'];
+      print('Doctor/Owner User ID: $doctorUserId');
+
+      // Get doctor's File_Keys entry
+      final doctorFileKey =
+          await supabase
+              .from('File_Keys')
+              .select('aes_key_encrypted, nonce_hex')
+              .eq('file_id', fileId)
+              .eq('recipient_type', 'user')
+              .eq('recipient_id', doctorUserId)
+              .maybeSingle();
+
+      if (doctorFileKey == null) {
+        print('No doctor owner File_Keys entry found');
+        return null;
+      }
+
+      print('Found doctor File_Keys entry');
+
+      final encryptedAesKey = doctorFileKey['aes_key_encrypted'];
+      final nonceHex = doctorFileKey['nonce_hex'];
+
+      if (encryptedAesKey == null || encryptedAesKey.isEmpty) {
+        print('ERROR: Doctor encrypted AES key is null or empty');
+        return null;
+      }
+
+      // Get doctor's RSA private key
+      final doctorData =
+          await supabase
+              .from('User')
+              .select('rsa_private_key')
+              .eq('id', doctorUserId)
+              .single();
+
+      final doctorRsaPrivateKeyPem = doctorData['rsa_private_key'] as String?;
+
+      if (doctorRsaPrivateKeyPem == null || doctorRsaPrivateKeyPem.isEmpty) {
+        print('ERROR: Doctor RSA private key is null or empty');
+        return null;
+      }
+
+      return await _decryptWithKeysRobust(
+        encryptedBytes: encryptedBytes,
+        encryptedAesKeyBase64: encryptedAesKey,
+        rsaPrivateKeyPem: doctorRsaPrivateKeyPem,
+        nonceHex: nonceHex,
+        debugContext: 'Doctor Owner Decryption',
+      );
+    } catch (e) {
+      print('Doctor owner decryption failed: $e');
       return null;
     }
   }
@@ -182,76 +469,6 @@ class OrgFileService {
     }
   }
 
-  /// Enhanced user decryption with better error handling
-  static Future<Uint8List?> _tryUserDecryptionRobust(
-    String fileId,
-    String userId,
-    Uint8List encryptedBytes,
-  ) async {
-    try {
-      final supabase = Supabase.instance.client;
-
-      print('=== Attempting User Decryption ===');
-      print('File ID: $fileId');
-      print('User ID: $userId');
-
-      // Get user's File_Keys entry
-      final userFileKey =
-          await supabase
-              .from('File_Keys')
-              .select('aes_key_encrypted, nonce_hex')
-              .eq('file_id', fileId)
-              .eq('recipient_type', 'user')
-              .eq('recipient_id', userId)
-              .maybeSingle();
-
-      if (userFileKey == null) {
-        print('No user-specific File_Keys entry found');
-        return null;
-      }
-
-      final encryptedAesKey = userFileKey['aes_key_encrypted'];
-      final nonceHex = userFileKey['nonce_hex'];
-
-      if (encryptedAesKey == null || encryptedAesKey.isEmpty) {
-        print('ERROR: Encrypted AES key is null or empty');
-        return null;
-      }
-
-      if (nonceHex == null || nonceHex.isEmpty) {
-        print('ERROR: Nonce is null or empty');
-        return null;
-      }
-
-      // Get user's RSA private key
-      final userData =
-          await supabase
-              .from('User')
-              .select('rsa_private_key')
-              .eq('id', userId)
-              .single();
-
-      final userRsaPrivateKeyPem = userData['rsa_private_key'] as String?;
-
-      if (userRsaPrivateKeyPem == null || userRsaPrivateKeyPem.isEmpty) {
-        print('ERROR: User RSA private key is null or empty');
-        return null;
-      }
-
-      return await _decryptWithKeysRobust(
-        encryptedBytes: encryptedBytes,
-        encryptedAesKeyBase64: encryptedAesKey,
-        rsaPrivateKeyPem: userRsaPrivateKeyPem,
-        nonceHex: nonceHex,
-        debugContext: 'User Decryption',
-      );
-    } catch (e) {
-      print('User decryption failed: $e');
-      return null;
-    }
-  }
-
-  /// Enhanced decryption method with comprehensive fallback strategies
   /// Enhanced decryption method with comprehensive diagnostics
   static Future<Uint8List?> decryptOrgSharedFileEnhanced({
     required String fileId,
@@ -276,12 +493,6 @@ class OrgFileService {
       }
 
       print('Downloaded file size: ${encryptedBytes.length} bytes');
-
-      // Check if file is suspiciously small
-      if (encryptedBytes.length < 100) {
-        print('WARNING: File is very small (${encryptedBytes.length} bytes)');
-        print('This might indicate an IPFS upload issue or test file');
-      }
 
       // Step 2: Run diagnostics on available keys
       await _diagnoseFileKeys(fileId, orgId, userId);
@@ -388,452 +599,6 @@ class OrgFileService {
     }
   }
 
-  /// Try organization decryption with robust error handling
-  static Future<Uint8List?> _tryOrganizationDecryptionRobust(
-    String fileId,
-    String orgId,
-    Uint8List encryptedBytes,
-  ) async {
-    try {
-      final supabase = Supabase.instance.client;
-
-      print('=== Attempting Organization Decryption ===');
-
-      // Get organization's File_Keys entry
-      final orgFileKey =
-          await supabase
-              .from('File_Keys')
-              .select('aes_key_encrypted, nonce_hex')
-              .eq('file_id', fileId)
-              .eq('recipient_type', 'organization')
-              .eq('recipient_id', orgId)
-              .maybeSingle();
-
-      if (orgFileKey == null) {
-        print('No organization-specific File_Keys entry found');
-        return null;
-      }
-
-      print(
-        'Found organization File_Keys entry created at: ${orgFileKey['created_at']}',
-      );
-
-      final encryptedAesKey = orgFileKey['aes_key_encrypted'];
-      final nonceHex = orgFileKey['nonce_hex'];
-
-      if (encryptedAesKey == null || encryptedAesKey.isEmpty) {
-        print('ERROR: Organization encrypted AES key is null or empty');
-        return null;
-      }
-
-      // Get organization's RSA private key
-      final orgData =
-          await supabase
-              .from('Organization')
-              .select('rsa_private_key')
-              .eq('id', orgId)
-              .single();
-
-      final orgRsaPrivateKeyPem = orgData['rsa_private_key'] as String?;
-
-      if (orgRsaPrivateKeyPem == null || orgRsaPrivateKeyPem.isEmpty) {
-        print('ERROR: Organization RSA private key is null or empty');
-        return null;
-      }
-
-      return await _decryptWithKeysRobust(
-        encryptedBytes: encryptedBytes,
-        encryptedAesKeyBase64: encryptedAesKey,
-        rsaPrivateKeyPem: orgRsaPrivateKeyPem,
-        nonceHex: nonceHex,
-        debugContext: 'Organization Decryption',
-      );
-    } catch (e) {
-      print('Organization decryption failed: $e');
-      return null;
-    }
-  }
-
-  /// Try doctor owner decryption with robust error handling
-  static Future<Uint8List?> _tryDoctorOwnerDecryptionRobust(
-    String fileId,
-    Uint8List encryptedBytes,
-  ) async {
-    try {
-      final supabase = Supabase.instance.client;
-
-      print('=== Attempting Doctor Owner Decryption ===');
-
-      // Get file owner (doctor) ID
-      final fileData =
-          await supabase
-              .from('Files')
-              .select('uploaded_by')
-              .eq('id', fileId)
-              .single();
-
-      final doctorUserId = fileData['uploaded_by'];
-      print('Doctor/Owner User ID: $doctorUserId');
-
-      // Get doctor's File_Keys entry
-      final doctorFileKey =
-          await supabase
-              .from('File_Keys')
-              .select('aes_key_encrypted, nonce_hex')
-              .eq('file_id', fileId)
-              .eq('recipient_type', 'user')
-              .eq('recipient_id', doctorUserId)
-              .maybeSingle();
-
-      if (doctorFileKey == null) {
-        print('No doctor owner File_Keys entry found');
-        return null;
-      }
-
-      print(
-        'Found doctor File_Keys entry created at: ${doctorFileKey['created_at']}',
-      );
-
-      final encryptedAesKey = doctorFileKey['aes_key_encrypted'];
-      final nonceHex = doctorFileKey['nonce_hex'];
-
-      if (encryptedAesKey == null || encryptedAesKey.isEmpty) {
-        print('ERROR: Doctor encrypted AES key is null or empty');
-        return null;
-      }
-
-      // Get doctor's RSA private key
-      final doctorData =
-          await supabase
-              .from('User')
-              .select('rsa_private_key')
-              .eq('id', doctorUserId)
-              .single();
-
-      final doctorRsaPrivateKeyPem = doctorData['rsa_private_key'] as String?;
-
-      if (doctorRsaPrivateKeyPem == null || doctorRsaPrivateKeyPem.isEmpty) {
-        print('ERROR: Doctor RSA private key is null or empty');
-        return null;
-      }
-
-      return await _decryptWithKeysRobust(
-        encryptedBytes: encryptedBytes,
-        encryptedAesKeyBase64: encryptedAesKey,
-        rsaPrivateKeyPem: doctorRsaPrivateKeyPem,
-        nonceHex: nonceHex,
-        debugContext: 'Doctor Owner Decryption',
-      );
-    } catch (e) {
-      print('Doctor owner decryption failed: $e');
-      return null;
-    }
-  }
-
-  /// Strategy 1: Try user-specific decryption
-  static Future<Uint8List?> _tryUserDecryption(
-    String fileId,
-    String userId,
-    Uint8List encryptedBytes,
-  ) async {
-    try {
-      final supabase = Supabase.instance.client;
-
-      // Get user's File_Keys entry
-      final userFileKey =
-          await supabase
-              .from('File_Keys')
-              .select('aes_key_encrypted, nonce_hex')
-              .eq('file_id', fileId)
-              .eq('recipient_type', 'user')
-              .eq('recipient_id', userId)
-              .maybeSingle();
-
-      if (userFileKey == null || userFileKey['aes_key_encrypted'] == null) {
-        print('No user-specific File_Keys entry found');
-        return null;
-      }
-
-      // Get user's RSA private key
-      final userData =
-          await supabase
-              .from('User')
-              .select('rsa_private_key')
-              .eq('id', userId)
-              .single();
-
-      final userRsaPrivateKeyPem = userData['rsa_private_key'] as String;
-
-      return await _decryptWithKeys(
-        encryptedBytes: encryptedBytes,
-        encryptedAesKeyBase64: userFileKey['aes_key_encrypted'],
-        rsaPrivateKeyPem: userRsaPrivateKeyPem,
-        nonceHex: userFileKey['nonce_hex'],
-      );
-    } catch (e) {
-      print('User decryption failed: $e');
-      return null;
-    }
-  }
-
-  /// Strategy 2: Try organization decryption
-  static Future<Uint8List?> _tryOrganizationDecryption(
-    String fileId,
-    String orgId,
-    Uint8List encryptedBytes,
-  ) async {
-    try {
-      final supabase = Supabase.instance.client;
-
-      // Get organization's File_Keys entry
-      final orgFileKey =
-          await supabase
-              .from('File_Keys')
-              .select('aes_key_encrypted, nonce_hex')
-              .eq('file_id', fileId)
-              .eq('recipient_type', 'organization')
-              .eq('recipient_id', orgId)
-              .maybeSingle();
-
-      if (orgFileKey == null || orgFileKey['aes_key_encrypted'] == null) {
-        print('No organization-specific File_Keys entry found');
-        return null;
-      }
-
-      // Get organization's RSA private key
-      final orgData =
-          await supabase
-              .from('Organization')
-              .select('rsa_private_key')
-              .eq('id', orgId)
-              .single();
-
-      final orgRsaPrivateKeyPem = orgData['rsa_private_key'] as String;
-
-      return await _decryptWithKeys(
-        encryptedBytes: encryptedBytes,
-        encryptedAesKeyBase64: orgFileKey['aes_key_encrypted'],
-        rsaPrivateKeyPem: orgRsaPrivateKeyPem,
-        nonceHex: orgFileKey['nonce_hex'],
-      );
-    } catch (e) {
-      print('Organization decryption failed: $e');
-      return null;
-    }
-  }
-
-  /// Strategy 3: Try doctor owner decryption (fallback)
-  static Future<Uint8List?> _tryDoctorOwnerDecryption(
-    String fileId,
-    Uint8List encryptedBytes,
-  ) async {
-    try {
-      final supabase = Supabase.instance.client;
-
-      // Get file owner (doctor) ID
-      final fileData =
-          await supabase
-              .from('Files')
-              .select('uploaded_by')
-              .eq('id', fileId)
-              .single();
-
-      final doctorUserId = fileData['uploaded_by'];
-      print('Trying doctor owner decryption for user: $doctorUserId');
-
-      // Get doctor's File_Keys entry
-      final doctorFileKey =
-          await supabase
-              .from('File_Keys')
-              .select('aes_key_encrypted, nonce_hex')
-              .eq('file_id', fileId)
-              .eq('recipient_type', 'user')
-              .eq('recipient_id', doctorUserId)
-              .maybeSingle();
-
-      if (doctorFileKey == null || doctorFileKey['aes_key_encrypted'] == null) {
-        print('No doctor owner File_Keys entry found');
-        return null;
-      }
-
-      // Get doctor's RSA private key
-      final doctorData =
-          await supabase
-              .from('User')
-              .select('rsa_private_key')
-              .eq('id', doctorUserId)
-              .single();
-
-      final doctorRsaPrivateKeyPem = doctorData['rsa_private_key'] as String;
-
-      return await _decryptWithKeys(
-        encryptedBytes: encryptedBytes,
-        encryptedAesKeyBase64: doctorFileKey['aes_key_encrypted'],
-        rsaPrivateKeyPem: doctorRsaPrivateKeyPem,
-        nonceHex: doctorFileKey['nonce_hex'],
-      );
-    } catch (e) {
-      print('Doctor owner decryption failed: $e');
-      return null;
-    }
-  }
-
-  /// Common decryption logic using RSA private key and AES
-  static Future<Uint8List?> _decryptWithKeys({
-    required Uint8List encryptedBytes,
-    required String encryptedAesKeyBase64,
-    required String rsaPrivateKeyPem,
-    required String? nonceHex,
-  }) async {
-    try {
-      if (nonceHex == null) {
-        print('Nonce is null, cannot decrypt');
-        return null;
-      }
-
-      // Decrypt AES key with RSA private key
-      final rsaEncryptedBytes = base64Decode(encryptedAesKeyBase64);
-      final rsaEncryptedText = utf8.decode(rsaEncryptedBytes);
-      final rsaPrivateKey = CryptoUtils.rsaPrivateKeyFromPem(rsaPrivateKeyPem);
-      final decryptedAesKeyBase64 = CryptoUtils.rsaDecrypt(
-        rsaEncryptedText,
-        rsaPrivateKey,
-      );
-      final decryptedAesKeyBytes = base64Decode(decryptedAesKeyBase64);
-
-      // Convert AES key bytes to hex string
-      final aesKeyHex =
-          decryptedAesKeyBytes
-              .map((b) => b.toRadixString(16).padLeft(2, '0'))
-              .join();
-
-      print('Successfully decrypted AES key with RSA private key');
-
-      // Create AESHelper and decrypt file
-      final aesHelper = AESHelper(aesKeyHex, nonceHex);
-      final decryptedBytes = aesHelper.decryptData(encryptedBytes);
-
-      print(
-        'Successfully decrypted file. Size: ${decryptedBytes.length} bytes',
-      );
-      return decryptedBytes;
-    } catch (e) {
-      print('Error in _decryptWithKeys: $e');
-      return null;
-    }
-  }
-
-  /// Strategy 4: Create missing patient keys
-  static Future<bool> _createMissingPatientKeys(
-    String fileId,
-    String orgId,
-    String patientId,
-  ) async {
-    try {
-      final supabase = Supabase.instance.client;
-
-      print('Attempting to create missing patient keys...');
-
-      // Check if patient already has keys
-      final existingKey =
-          await supabase
-              .from('File_Keys')
-              .select('id')
-              .eq('file_id', fileId)
-              .eq('recipient_type', 'user')
-              .eq('recipient_id', patientId)
-              .maybeSingle();
-
-      if (existingKey != null) {
-        print('Patient already has keys for this file');
-        return false;
-      }
-
-      // Get file owner (doctor) and their keys
-      final fileData =
-          await supabase
-              .from('Files')
-              .select('uploaded_by')
-              .eq('id', fileId)
-              .single();
-
-      final doctorUserId = fileData['uploaded_by'];
-
-      // Get doctor's File_Keys entry to get the original AES key
-      final doctorFileKey =
-          await supabase
-              .from('File_Keys')
-              .select('aes_key_encrypted, nonce_hex')
-              .eq('file_id', fileId)
-              .eq('recipient_type', 'user')
-              .eq('recipient_id', doctorUserId)
-              .maybeSingle();
-
-      if (doctorFileKey == null) {
-        print('No doctor keys found to derive patient keys from');
-        return false;
-      }
-
-      // Get doctor's RSA private key to decrypt the AES key
-      final doctorData =
-          await supabase
-              .from('User')
-              .select('rsa_private_key')
-              .eq('id', doctorUserId)
-              .single();
-
-      // Get patient's RSA public key to encrypt for them
-      final patientData =
-          await supabase
-              .from('User')
-              .select('rsa_public_key')
-              .eq('id', patientId)
-              .single();
-
-      // Decrypt AES key using doctor's private key
-      final doctorRsaPrivateKeyPem = doctorData['rsa_private_key'] as String;
-      final rsaEncryptedBytes = base64Decode(
-        doctorFileKey['aes_key_encrypted'],
-      );
-      final rsaEncryptedText = utf8.decode(rsaEncryptedBytes);
-      final doctorRsaPrivateKey = CryptoUtils.rsaPrivateKeyFromPem(
-        doctorRsaPrivateKeyPem,
-      );
-      final decryptedAesKeyBase64 = CryptoUtils.rsaDecrypt(
-        rsaEncryptedText,
-        doctorRsaPrivateKey,
-      );
-
-      // Re-encrypt AES key with patient's public key
-      final patientRsaPublicKeyPem = patientData['rsa_public_key'] as String;
-      final patientRsaPublicKey = CryptoUtils.rsaPublicKeyFromPem(
-        patientRsaPublicKeyPem,
-      );
-      final encryptedAesKeyForPatient = CryptoUtils.rsaEncrypt(
-        decryptedAesKeyBase64,
-        patientRsaPublicKey,
-      );
-
-      // Store new File_Keys entry for patient
-      await supabase.from('File_Keys').insert({
-        'file_id': fileId,
-        'recipient_type': 'user',
-        'recipient_id': patientId,
-        'aes_key_encrypted': base64Encode(
-          utf8.encode(encryptedAesKeyForPatient),
-        ),
-        'nonce_hex': doctorFileKey['nonce_hex'],
-        'created_at': DateTime.now().toIso8601String(),
-      });
-
-      print('Successfully created missing patient keys for file: $fileId');
-      return true;
-    } catch (e) {
-      print('Error creating missing patient keys: $e');
-      return false;
-    }
-  }
-
   /// Downloads file from IPFS using CID
   static Future<Uint8List?> _downloadFromIPFS(String cid) async {
     try {
@@ -860,44 +625,464 @@ class OrgFileService {
     }
   }
 
-  // Keep all existing methods from the original OrgFileService...
-
-  /// Fetch all files shared with a specific organization
-  static Future<List<Map<String, dynamic>>> fetchOrgSharedFiles(
+  /// Fetch ALL files available to patient in a specific organization (both doctor and patient uploaded)
+  /// Fetch ALL files available to patient in a specific organization (both doctor and patient uploaded)
+  static Future<List<Map<String, dynamic>>> fetchAllOrgFilesForPatient(
     String orgId,
+    String patientId,
   ) async {
     try {
       final supabase = Supabase.instance.client;
 
-      final sharedFiles = await supabase
-          .from('File_Shares')
-          .select('''
-            *,
-            file:Files!inner(
-              id,
-              filename,
-              file_type,
-              file_size,
-              uploaded_at,
-              ipfs_cid,
-              category
-            ),
-            shared_by:User!shared_by_user_id(email)
-          ''')
-          .eq('shared_with_org_id', orgId)
-          .order('shared_at', ascending: false);
+      print('=== Fetching ALL Organization Files for Patient ===');
+      print('Organization ID: $orgId');
+      print('Patient ID: $patientId');
+
+      // Get user's assigned doctors to validate doctor-patient relationships
+      final assignmentsResponse = await supabase
+          .from('Doctor_User_Assignment')
+          .select('doctor_id')
+          .eq('patient_id', patientId)
+          .eq('status', 'active');
+
+      final doctorIds =
+          assignmentsResponse
+              .map((assignment) => assignment['doctor_id'] as String)
+              .toList();
+
+      print('Patient assigned to ${doctorIds.length} doctors: $doctorIds');
+
+      // Get all doctors in this organization
+      final orgDoctorsResponse = await supabase
+          .from('Organization_User')
+          .select('id, user_id')
+          .eq('organization_id', orgId)
+          .eq('position', 'Doctor');
+
+      final orgDoctorUserIds =
+          orgDoctorsResponse.map((doc) => doc['user_id'] as String).toList();
 
       print(
-        'Fetched ${sharedFiles.length} shared files for organization $orgId',
+        'Organization has ${orgDoctorUserIds.length} doctors: $orgDoctorUserIds',
       );
-      return sharedFiles;
-    } catch (e) {
-      print('Error fetching organization shared files: $e');
+
+      Set<String> seenFileIds = {};
+      List<Map<String, dynamic>> allFiles = [];
+
+      // Method 1: Get files where patient has direct access through File_Keys (patient uploaded files)
+      final patientAccessibleFiles = await supabase
+          .from('File_Keys')
+          .select('''
+        file_id,
+        Files!inner(
+          id,
+          filename,
+          file_type,
+          file_size,
+          uploaded_at,
+          ipfs_cid,
+          category,
+          uploaded_by,
+          User!uploaded_by(
+            id,
+            email,
+            rsa_public_key,
+            rsa_private_key,
+            Person!inner(first_name, middle_name, last_name)
+          )
+        )
+      ''')
+          .eq('recipient_type', 'user')
+          .eq('recipient_id', patientId);
+
+      print(
+        'Found ${patientAccessibleFiles.length} files with patient access keys',
+      );
+
+      // Process patient accessible files
+      for (final keyRecord in patientAccessibleFiles) {
+        final file = keyRecord['Files'];
+        final fileId = file['id'] as String;
+        final uploaderId = file['uploaded_by'] as String;
+
+        if (!seenFileIds.contains(fileId)) {
+          // Check if this file is relevant to the organization
+          bool isRelevantToOrg = false;
+          String uploaderType = 'unknown';
+          String uploaderRelation = 'unknown';
+
+          if (uploaderId == patientId) {
+            // Patient's own file - always relevant if patient is in org
+            isRelevantToOrg = true;
+            uploaderType = 'patient';
+            uploaderRelation = 'self';
+          } else if (orgDoctorUserIds.contains(uploaderId)) {
+            // File uploaded by doctor in this organization
+            isRelevantToOrg = true;
+            uploaderType = 'doctor';
+            uploaderRelation = 'assigned_doctor';
+          } else {
+            // File from someone else - check if it's shared through organization
+            final orgShare =
+                await supabase
+                    .from('File_Keys')
+                    .select('id')
+                    .eq('file_id', fileId)
+                    .eq('recipient_type', 'organization')
+                    .eq('recipient_id', orgId)
+                    .maybeSingle();
+
+            if (orgShare != null) {
+              isRelevantToOrg = true;
+              uploaderType = 'external';
+              uploaderRelation = 'shared_with_org';
+            }
+          }
+
+          if (isRelevantToOrg) {
+            seenFileIds.add(fileId);
+            allFiles.add({
+              'id': file['id'],
+              'filename': file['filename'],
+              'file_type': file['file_type'],
+              'file_size': file['file_size'],
+              'uploaded_at': file['uploaded_at'],
+              'ipfs_cid': file['ipfs_cid'],
+              'category': file['category'],
+              'uploaded_by': file['uploaded_by'],
+              'User': file['User'],
+              'access_method': 'patient_key',
+              'uploader_type': uploaderType,
+              'uploader_relation': uploaderRelation,
+            });
+          }
+        }
+      }
+
+      // Method 2: Get files from organization keys (typically doctor files shared with org)
+      final orgAccessibleFiles = await supabase
+          .from('File_Keys')
+          .select('''
+        file_id,
+        Files!inner(
+          id,
+          filename,
+          file_type,
+          file_size,
+          uploaded_at,
+          ipfs_cid,
+          category,
+          uploaded_by,
+          User!uploaded_by(
+            id,
+            email,
+            rsa_public_key,
+            rsa_private_key,
+            Person!inner(first_name, middle_name, last_name)
+          )
+        )
+      ''')
+          .eq('recipient_type', 'organization')
+          .eq('recipient_id', orgId);
+
+      print(
+        'Found ${orgAccessibleFiles.length} files with organization access keys',
+      );
+
+      // Process organization accessible files
+      for (final keyRecord in orgAccessibleFiles) {
+        final file = keyRecord['Files'];
+        final fileId = file['id'] as String;
+        final uploaderId = file['uploaded_by'] as String;
+
+        if (!seenFileIds.contains(fileId)) {
+          // For organization-shared files, check if patient should have access
+          bool hasAccess = false;
+          String uploaderType = 'unknown';
+          String uploaderRelation = 'unknown';
+
+          if (uploaderId == patientId) {
+            // Patient's own file shared with org
+            hasAccess = true;
+            uploaderType = 'patient';
+            uploaderRelation = 'self';
+          } else if (orgDoctorUserIds.contains(uploaderId)) {
+            // Check if this doctor is assigned to the patient
+            final doctorOrgUser = orgDoctorsResponse.firstWhere(
+              (doc) => doc['user_id'] == uploaderId,
+            );
+
+            if (doctorIds.contains(doctorOrgUser['id'])) {
+              hasAccess = true;
+              uploaderType = 'doctor';
+              uploaderRelation = 'assigned_doctor';
+            }
+          } else {
+            // File from external user shared with organization
+            // Patient can access if it's explicitly shared
+            final shareCheck =
+                await supabase
+                    .from('File_Shares')
+                    .select('id')
+                    .eq('file_id', fileId)
+                    .isFilter('revoked_at', null)
+                    .maybeSingle();
+
+            if (shareCheck != null) {
+              hasAccess = true;
+              uploaderType = 'external';
+              uploaderRelation = 'shared_with_org';
+            }
+          }
+
+          if (hasAccess) {
+            seenFileIds.add(fileId);
+            allFiles.add({
+              'id': file['id'],
+              'filename': file['filename'],
+              'file_type': file['file_type'],
+              'file_size': file['file_size'],
+              'uploaded_at': file['uploaded_at'],
+              'ipfs_cid': file['ipfs_cid'],
+              'category': file['category'],
+              'uploaded_by': file['uploaded_by'],
+              'User': file['User'],
+              'access_method': 'organization_key',
+              'uploader_type': uploaderType,
+              'uploader_relation': uploaderRelation,
+            });
+          }
+        }
+      }
+
+      // Method 3: ADDITIONAL - Get patient's own files that might be relevant to organization
+      // This catches any patient files that might have been shared with doctors in this org
+      final patientOwnFiles = await supabase
+          .from('Files')
+          .select('''
+        id,
+        filename,
+        file_type,
+        file_size,
+        uploaded_at,
+        ipfs_cid,
+        category,
+        uploaded_by,
+        User!uploaded_by(
+          id,
+          email,
+          rsa_public_key,
+          rsa_private_key,
+          Person!inner(first_name, middle_name, last_name)
+        )
+      ''')
+          .eq('uploaded_by', patientId);
+
+      print('Found ${patientOwnFiles.length} files uploaded by patient');
+
+      // Check which of patient's files have been shared with doctors in this org
+      for (final file in patientOwnFiles) {
+        final fileId = file['id'] as String;
+
+        if (!seenFileIds.contains(fileId)) {
+          // Check if this file has been shared with any doctor in this organization
+          final doctorShares = await supabase
+              .from('File_Shares')
+              .select('shared_with_doctor')
+              .eq('file_id', fileId)
+              .eq('shared_by_user_id', patientId)
+              .isFilter('revoked_at', null);
+
+          // Check if any of these shares are with doctors from this organization
+          bool hasOrgRelevantShare = false;
+          for (final share in doctorShares) {
+            final sharedWithDoctorId = share['shared_with_doctor'];
+            if (doctorIds.contains(sharedWithDoctorId)) {
+              hasOrgRelevantShare = true;
+              break;
+            }
+          }
+
+          // Also check if patient has File_Keys entry (indicating they can decrypt it)
+          final patientKey =
+              await supabase
+                  .from('File_Keys')
+                  .select('id')
+                  .eq('file_id', fileId)
+                  .eq('recipient_type', 'user')
+                  .eq('recipient_id', patientId)
+                  .maybeSingle();
+
+          if (hasOrgRelevantShare && patientKey != null) {
+            seenFileIds.add(fileId);
+            allFiles.add({
+              'id': file['id'],
+              'filename': file['filename'],
+              'file_type': file['file_type'],
+              'file_size': file['file_size'],
+              'uploaded_at': file['uploaded_at'],
+              'ipfs_cid': file['ipfs_cid'],
+              'category': file['category'],
+              'uploaded_by': file['uploaded_by'],
+              'User': file['User'],
+              'access_method': 'patient_shared',
+              'uploader_type': 'patient',
+              'uploader_relation': 'self',
+            });
+          }
+        }
+      }
+
+      // Sort by upload date (newest first)
+      allFiles.sort((a, b) {
+        final aDate =
+            DateTime.tryParse(a['uploaded_at'] ?? '') ?? DateTime(1970);
+        final bDate =
+            DateTime.tryParse(b['uploaded_at'] ?? '') ?? DateTime(1970);
+        return bDate.compareTo(aDate);
+      });
+
+      print('Final result: ${allFiles.length} files available to patient');
+
+      // Debug: Print file breakdown
+      int doctorFiles =
+          allFiles.where((f) => f['uploader_type'] == 'doctor').length;
+      int patientFiles =
+          allFiles.where((f) => f['uploader_type'] == 'patient').length;
+      int externalFiles =
+          allFiles.where((f) => f['uploader_type'] == 'external').length;
+
+      print('File breakdown:');
+      print('  - Doctor uploaded: $doctorFiles files');
+      print('  - Patient uploaded: $patientFiles files');
+      print('  - External shared: $externalFiles files');
+
+      // Debug: Print each file with details
+      for (final file in allFiles) {
+        print(
+          '  - ${file['filename']} (${file['uploader_type']} - ${file['access_method']})',
+        );
+      }
+
+      return allFiles;
+    } catch (e, stackTrace) {
+      print('Error fetching all org files for patient: $e');
+      print('Stack trace: $stackTrace');
       return [];
     }
   }
 
+  /// Helper method to get uploader information (doctor or patient in org)
+  static Future<Map<String, String>?> _getUploaderInfo(
+    String uploaderId,
+    String orgId,
+    String patientId,
+  ) async {
+    try {
+      final supabase = Supabase.instance.client;
+
+      // Check if uploader is the patient themselves
+      if (uploaderId == patientId) {
+        return {'type': 'patient', 'relation': 'self'};
+      }
+
+      // Check if uploader is a doctor in the organization
+      final doctorCheck =
+          await supabase
+              .from('Organization_User')
+              .select('id, position')
+              .eq('organization_id', orgId)
+              .eq('user_id', uploaderId)
+              .eq('position', 'Doctor')
+              .maybeSingle();
+
+      if (doctorCheck != null) {
+        return {'type': 'doctor', 'relation': 'assigned_doctor'};
+      }
+
+      // Check if uploader is a patient in the organization (through assignments)
+      final patientCheck =
+          await supabase
+              .from('Doctor_User_Assignment')
+              .select('patient_id')
+              .eq('patient_id', uploaderId)
+              .eq('status', 'active')
+              .maybeSingle();
+
+      if (patientCheck != null) {
+        return {
+          'type': 'patient',
+          'relation': uploaderId == patientId ? 'self' : 'other_patient',
+        };
+      }
+
+      return null;
+    } catch (e) {
+      print('Error getting uploader info: $e');
+      return null;
+    }
+  }
+
+  /// Helper method to check if patient has access to organization-shared file
+  static Future<bool> _hasPatientAccessToOrgFile(
+    String fileId,
+    String orgId,
+    String patientId,
+    List<String> assignedDoctorIds,
+  ) async {
+    try {
+      final supabase = Supabase.instance.client;
+
+      // Get file owner
+      final fileData =
+          await supabase
+              .from('Files')
+              .select('uploaded_by')
+              .eq('id', fileId)
+              .single();
+
+      final fileOwnerId = fileData['uploaded_by'];
+
+      // Case 1: Patient is the file owner
+      if (fileOwnerId == patientId) {
+        return true;
+      }
+
+      // Case 2: File owner is one of patient's assigned doctors
+      final doctorCheck =
+          await supabase
+              .from('Organization_User')
+              .select('id')
+              .eq('organization_id', orgId)
+              .eq('user_id', fileOwnerId)
+              .eq('position', 'Doctor')
+              .maybeSingle();
+
+      if (doctorCheck != null &&
+          assignedDoctorIds.contains(doctorCheck['id'])) {
+        return true;
+      }
+
+      // Case 3: File was explicitly shared with patient
+      final shareCheck =
+          await supabase
+              .from('File_Shares')
+              .select('id')
+              .eq('file_id', fileId)
+              .eq('shared_by_user_id', fileOwnerId)
+              .isFilter('revoked_at', null)
+              .maybeSingle();
+
+      return shareCheck != null;
+    } catch (e) {
+      print('Error checking patient access to org file: $e');
+      return false;
+    }
+  }
+
+  /// ORIGINAL METHODS - Keep for backward compatibility
   /// Fetch files uploaded by doctors in a specific organization for a patient
+  /// Fetch files shared with patient by doctors in a specific organization
   static Future<List<Map<String, dynamic>>> fetchDoctorFilesForPatient(
     String orgId,
     String patientId,
@@ -905,43 +1090,17 @@ class OrgFileService {
     try {
       final supabase = Supabase.instance.client;
 
-      // Get user's assigned doctors from this organization
-      final assignmentsResponse = await supabase
-          .from('Doctor_User_Assignment')
-          .select('doctor_id')
-          .eq('patient_id', patientId)
-          .eq('status', 'active');
+      print('=== Fetching Doctor Files for Patient ===');
+      print('Organization ID: $orgId');
+      print('Patient ID: $patientId');
 
-      if (assignmentsResponse.isEmpty) {
-        print('No active doctor assignments found for patient $patientId');
-        return [];
-      }
-
-      final doctorIds =
-          assignmentsResponse
-              .map((assignment) => assignment['doctor_id'])
-              .toList();
-
-      // Get doctor user IDs from Organization_User table
-      final doctorsResponse = await supabase
-          .from('Organization_User')
-          .select('user_id')
-          .inFilter('id', doctorIds)
-          .eq('organization_id', orgId)
-          .eq('position', 'Doctor');
-
-      if (doctorsResponse.isEmpty) {
-        print('No doctors found in organization $orgId');
-        return [];
-      }
-
-      final doctorUserIds =
-          doctorsResponse.map((doc) => doc['user_id']).toList();
-
-      // Get files uploaded by these doctors with User and Person fields
-      final filesResponse = await supabase
-          .from('Files')
+      // Method 1: Get files shared with patient directly
+      // Look for files where the patient has been given access through File_Keys
+      final patientSharedFiles = await supabase
+          .from('File_Keys')
           .select('''
+          file_id,
+          Files!inner(
             id,
             filename,
             file_type,
@@ -957,17 +1116,168 @@ class OrgFileService {
               rsa_private_key,
               Person!inner(first_name, middle_name, last_name)
             )
-          ''')
-          .inFilter('uploaded_by', doctorUserIds)
-          .order('uploaded_at', ascending: false);
+          )
+        ''')
+          .eq('recipient_type', 'user')
+          .eq('recipient_id', patientId);
 
       print(
-        'Fetched ${filesResponse.length} doctor files for patient from organization',
+        'Found ${patientSharedFiles.length} files with patient access keys',
       );
-      return filesResponse;
-    } catch (e) {
+
+      // Method 2: Also check File_Shares table for explicit doctor shares
+      final doctorShares = await supabase
+          .from('File_Shares')
+          .select('''
+          file_id,
+          shared_with_doctor,
+          shared_by_user_id,
+          shared_at,
+          Files!inner(
+            id,
+            filename,
+            file_type,
+            file_size,
+            uploaded_at,
+            ipfs_cid,
+            category,
+            uploaded_by,
+            User!uploaded_by(
+              id,
+              email,
+              rsa_public_key,
+              rsa_private_key,
+              Person!inner(first_name, middle_name, last_name)
+            )
+          )
+        ''')
+          .not('shared_with_doctor', 'is', null)
+          .isFilter('revoked_at', null);
+
+      print('Found ${doctorShares.length} doctor share records');
+
+      // Get user's assigned doctors to filter relevant shares
+      final assignmentsResponse = await supabase
+          .from('Doctor_User_Assignment')
+          .select('doctor_id')
+          .eq('patient_id', patientId)
+          .eq('status', 'active');
+
+      final doctorIds =
+          assignmentsResponse
+              .map((assignment) => assignment['doctor_id'])
+              .toList();
+
+      print('Patient assigned to ${doctorIds.length} doctors: $doctorIds');
+
+      // Combine results and filter for doctor-uploaded files
+      Set<String> seenFileIds = {};
+      List<Map<String, dynamic>> allFiles = [];
+
+      // Add files from patient keys (Method 1)
+      for (final keyRecord in patientSharedFiles) {
+        final file = keyRecord['Files'];
+        final fileId = file['id'] as String;
+
+        if (!seenFileIds.contains(fileId)) {
+          seenFileIds.add(fileId);
+
+          // Check if this file was uploaded by a doctor in the organization
+          final isFromDoctorInOrg = await _isFileFromDoctorInOrganization(
+            file['uploaded_by'],
+            orgId,
+          );
+
+          if (isFromDoctorInOrg) {
+            allFiles.add({
+              'id': file['id'],
+              'filename': file['filename'],
+              'file_type': file['file_type'],
+              'file_size': file['file_size'],
+              'uploaded_at': file['uploaded_at'],
+              'ipfs_cid': file['ipfs_cid'],
+              'category': file['category'],
+              'uploaded_by': file['uploaded_by'],
+              'User': file['User'],
+              'access_method': 'patient_key',
+            });
+          }
+        }
+      }
+
+      // Add files from doctor shares (Method 2)
+      for (final share in doctorShares) {
+        final file = share['Files'];
+        final fileId = file['id'] as String;
+        final sharedWithDoctorId = share['shared_with_doctor'];
+
+        // Check if this share is relevant to patient's assigned doctors
+        if (doctorIds.contains(sharedWithDoctorId) &&
+            !seenFileIds.contains(fileId)) {
+          seenFileIds.add(fileId);
+
+          allFiles.add({
+            'id': file['id'],
+            'filename': file['filename'],
+            'file_type': file['file_type'],
+            'file_size': file['file_size'],
+            'uploaded_at': file['uploaded_at'],
+            'ipfs_cid': file['ipfs_cid'],
+            'category': file['category'],
+            'uploaded_by': file['uploaded_by'],
+            'User': file['User'],
+            'shared_at': share['shared_at'],
+            'shared_by_user_id': share['shared_by_user_id'],
+            'access_method': 'doctor_share',
+          });
+        }
+      }
+
+      // Sort by upload date (newest first)
+      allFiles.sort((a, b) {
+        final aDate =
+            DateTime.tryParse(a['uploaded_at'] ?? '') ?? DateTime(1970);
+        final bDate =
+            DateTime.tryParse(b['uploaded_at'] ?? '') ?? DateTime(1970);
+        return bDate.compareTo(aDate);
+      });
+
+      print('Final result: ${allFiles.length} files available to patient');
+
+      // Debug: Print file details
+      for (final file in allFiles) {
+        print('  - ${file['filename']} (${file['access_method']})');
+      }
+
+      return allFiles;
+    } catch (e, stackTrace) {
       print('Error fetching doctor files for patient: $e');
+      print('Stack trace: $stackTrace');
       return [];
+    }
+  }
+
+  /// Helper method to check if a file was uploaded by a doctor in the organization
+  static Future<bool> _isFileFromDoctorInOrganization(
+    String uploaderId,
+    String orgId,
+  ) async {
+    try {
+      final supabase = Supabase.instance.client;
+
+      final doctorCheck =
+          await supabase
+              .from('Organization_User')
+              .select('id')
+              .eq('organization_id', orgId)
+              .eq('user_id', uploaderId)
+              .eq('position', 'Doctor')
+              .maybeSingle();
+
+      return doctorCheck != null;
+    } catch (e) {
+      print('Error checking if uploader is doctor in org: $e');
+      return false;
     }
   }
 

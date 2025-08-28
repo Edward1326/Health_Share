@@ -1,7 +1,10 @@
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
+import 'package:health_share/services/crypto_utils.dart';
 import 'package:health_share/services/files_services/file_preview.dart';
+import 'package:health_share/services/files_services/file_share_to_group.dart';
+import 'package:health_share/services/files_services/files_share_to_org.dart';
 import 'package:http/http.dart' as http;
 import 'package:encrypt/encrypt.dart' as encrypt;
 import 'package:basic_utils/basic_utils.dart';
@@ -12,7 +15,6 @@ import 'package:health_share/services/aes_helper.dart';
 import 'package:health_share/services/files_services/file_picker_service.dart';
 import 'package:health_share/services/files_services/upload_file.dart';
 import 'package:health_share/services/files_services/decrypt_file.dart';
-import 'package:health_share/services/crypto_utils.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:open_file/open_file.dart';
 
@@ -54,160 +56,6 @@ class _FilesScreenState extends State<FilesScreen> {
   void initState() {
     super.initState();
     _loadFiles();
-  }
-
-  // Add this debug method to your _FilesScreenState class
-
-  Future<void> _debugFileKeys(String fileId) async {
-    try {
-      final supabase = Supabase.instance.client;
-
-      print('=== FILE KEYS DEBUG ===');
-      print('File ID: $fileId');
-
-      // Check all File_Keys entries for this file
-      final allKeys = await supabase
-          .from('File_Keys')
-          .select('*')
-          .eq('file_id', fileId);
-
-      print('Total keys found: ${allKeys.length}');
-
-      for (final key in allKeys) {
-        print('Key entry:');
-        print('  - Recipient Type: ${key['recipient_type']}');
-        print('  - Recipient ID: ${key['recipient_id']}');
-        print('  - Has encrypted key: ${key['aes_key_encrypted'] != null}');
-        if (key['aes_key_encrypted'] != null) {
-          print(
-            '  - Key length: ${key['aes_key_encrypted'].toString().length}',
-          );
-        }
-      }
-
-      // Check File_Shares for this file
-      final shares = await supabase
-          .from('File_Shares')
-          .select('*')
-          .eq('file_id', fileId);
-
-      print('File shares found: ${shares.length}');
-      for (final share in shares) {
-        print('Share entry:');
-        print('  - Shared with group: ${share['shared_with_group_id']}');
-        print('  - Shared by: ${share['shared_by_user_id']}');
-        print('  - Shared at: ${share['shared_at']}');
-        print('  - Revoked at: ${share['revoked_at']}');
-      }
-
-      print('=== END FILE KEYS DEBUG ===');
-    } catch (e, stack) {
-      print('Error in debug: $e');
-      print(stack);
-    }
-  }
-
-  // Also add this method to test the sharing process step by step
-  Future<void> _testSharingProcess() async {
-    try {
-      final supabase = Supabase.instance.client;
-      final user = supabase.auth.currentUser;
-
-      if (user == null) {
-        print('No user logged in');
-        return;
-      }
-
-      print('=== SHARING PROCESS TEST ===');
-
-      // 1. Check user's RSA keys
-      print('1. Checking user RSA keys...');
-      final userData =
-          await supabase
-              .from('User')
-              .select('rsa_private_key, rsa_public_key')
-              .eq('id', user.id)
-              .single();
-
-      print('User has private key: ${userData['rsa_private_key'] != null}');
-      print('User has public key: ${userData['rsa_public_key'] != null}');
-
-      if (userData['rsa_private_key'] != null) {
-        print(
-          'Private key length: ${userData['rsa_private_key'].toString().length}',
-        );
-      }
-
-      // 2. Check user's groups
-      print('\n2. Checking user groups...');
-      final userGroups = await supabase
-          .from('Group_Members')
-          .select('''
-          group_id,
-          role,
-          Group!inner(id, name, rsa_public_key, rsa_private_key)
-        ''')
-          .eq('user_id', user.id);
-
-      print('User is member of ${userGroups.length} groups');
-
-      for (final membership in userGroups) {
-        final group = membership['Group'];
-        print('Group: ${group['name']} (${group['id']})');
-        print('  - Role: ${membership['role']}');
-        print('  - Has public key: ${group['rsa_public_key'] != null}');
-        print('  - Has private key: ${group['rsa_private_key'] != null}');
-
-        if (group['rsa_public_key'] != null) {
-          print(
-            '  - Public key length: ${group['rsa_public_key'].toString().length}',
-          );
-        }
-      }
-
-      // 3. Test encryption/decryption
-      print('\n3. Testing encryption/decryption...');
-      if (userGroups.isNotEmpty) {
-        final testGroup = userGroups.first['Group'];
-        final groupPublicKeyPem = testGroup['rsa_public_key'];
-        final groupPrivateKeyPem = testGroup['rsa_private_key'];
-
-        if (groupPublicKeyPem != null && groupPrivateKeyPem != null) {
-          try {
-            final groupPublicKey = CryptoUtils.rsaPublicKeyFromPem(
-              groupPublicKeyPem,
-            );
-            final groupPrivateKey = CryptoUtils.rsaPrivateKeyFromPem(
-              groupPrivateKeyPem,
-            );
-
-            final testData = '{"key":"test123","nonce":"test456"}';
-            print('Test data: $testData');
-
-            final encrypted = CryptoUtils.rsaEncrypt(testData, groupPublicKey);
-            print('Encrypted length: ${encrypted.length}');
-
-            final decrypted = CryptoUtils.rsaDecrypt(
-              encrypted,
-              groupPrivateKey,
-            );
-            print('Decrypted: $decrypted');
-            print(
-              'Encryption test: ${testData == decrypted ? "PASSED" : "FAILED"}',
-            );
-          } catch (cryptoError) {
-            print('Crypto test failed: $cryptoError');
-          }
-        } else {
-          print('Group missing RSA keys');
-        }
-      }
-
-      print('=== END SHARING PROCESS TEST ===');
-    } catch (e, stack) {
-      print('Error in sharing process test: $e');
-      print(stack);
-    }
   }
 
   /// Load files from Supabase
@@ -270,8 +118,9 @@ class _FilesScreenState extends State<FilesScreen> {
   String _formatFileSize(int bytes) {
     if (bytes < 1024) return '$bytes B';
     if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
-    if (bytes < 1024 * 1024 * 1024)
+    if (bytes < 1024 * 1024 * 1024) {
       return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
+    }
     return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(1)} GB';
   }
 
@@ -328,6 +177,167 @@ class _FilesScreenState extends State<FilesScreen> {
         return const Color(0xFFE53E3E);
       default:
         return const Color(0xFF718096);
+    }
+  }
+
+  // Fetch assigned doctors using the new service
+  Future<List<Map<String, dynamic>>> _fetchAssignedDoctors() async {
+    try {
+      final user = Supabase.instance.client.auth.currentUser;
+      if (user == null) {
+        throw Exception('User not logged in');
+      }
+
+      return await FileShareToOrgService.fetchAssignedDoctors(user.id);
+    } catch (e) {
+      print('Error fetching assigned doctors: $e');
+      return [];
+    }
+  }
+
+  // Helper method to fetch user groups using the new service
+  Future<List<Map<String, dynamic>>> _fetchUserGroups(String userId) async {
+    return await FileShareToGroupService.fetchUserGroups(userId);
+  }
+
+  // Enhanced sharing dialog with both groups and doctors
+  Future<void> _showShareSelectionDialog(List<FileItem> filesToShare) async {
+    try {
+      final supabase = Supabase.instance.client;
+      final user = supabase.auth.currentUser;
+
+      if (user == null) {
+        _showError('User not logged in');
+        return;
+      }
+
+      // Fetch both groups and doctors
+      final Future<List<Map<String, dynamic>>> groupsFuture = _fetchUserGroups(
+        user.id,
+      );
+      final Future<List<Map<String, dynamic>>> doctorsFuture =
+          _fetchAssignedDoctors();
+
+      final results = await Future.wait([groupsFuture, doctorsFuture]);
+      final userGroups = results[0];
+      final assignedDoctors = results[1];
+
+      if (userGroups.isEmpty && assignedDoctors.isEmpty) {
+        _showError(
+          'You are not a member of any groups or assigned to any doctors',
+        );
+        return;
+      }
+
+      // Show enhanced selection dialog
+      final selectedTargets =
+          await showDialog<Map<String, List<Map<String, dynamic>>>>(
+            context: context,
+            builder: (BuildContext context) {
+              return _EnhancedShareSelectionDialog(
+                groups: userGroups,
+                doctors: assignedDoctors,
+                filesToShare: filesToShare,
+              );
+            },
+          );
+
+      if (selectedTargets != null &&
+          (selectedTargets['groups']!.isNotEmpty ||
+              selectedTargets['doctors']!.isNotEmpty)) {
+        await _shareFilesToTargets(filesToShare, selectedTargets);
+      }
+    } catch (e) {
+      _showError('Error loading sharing options: $e');
+    }
+  }
+
+  // Simplified sharing method that delegates to the appropriate services
+  Future<void> _shareFilesToTargets(
+    List<FileItem> filesToShare,
+    Map<String, List<Map<String, dynamic>>> selectedTargets,
+  ) async {
+    try {
+      final supabase = Supabase.instance.client;
+      final user = supabase.auth.currentUser;
+
+      if (user == null) {
+        _showError('User not logged in');
+        return;
+      }
+
+      final selectedGroups = selectedTargets['groups']!;
+      final selectedDoctors = selectedTargets['doctors']!;
+
+      print('=== ENHANCED SHARING DEBUG ===');
+      print('User ID: ${user.id}');
+      print('Files to share: ${filesToShare.length}');
+      print('Groups selected: ${selectedGroups.length}');
+      print('Doctors selected: ${selectedDoctors.length}');
+
+      // Show loading dialog
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder:
+            (context) => AlertDialog(
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const CircularProgressIndicator(),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Sharing ${filesToShare.length} file(s) to ${selectedGroups.length} group(s) and ${selectedDoctors.length} doctor(s)...',
+                  ),
+                ],
+              ),
+            ),
+      );
+
+      // Extract file IDs
+      final fileIds = filesToShare.map((file) => file.id).toList();
+
+      // Share with groups using the dedicated service
+      if (selectedGroups.isNotEmpty) {
+        final groupIds =
+            selectedGroups.map((group) => group['id'] as String).toList();
+        await FileShareToGroupService.shareFilesToGroups(
+          fileIds,
+          groupIds,
+          user.id,
+        );
+      }
+
+      // Share with doctors using the dedicated service
+      if (selectedDoctors.isNotEmpty) {
+        final doctorIds =
+            selectedDoctors
+                .map((doctor) => doctor['doctor_id'] as String)
+                .toList();
+        await FileShareToOrgService.shareFilesToDoctors(
+          fileIds,
+          doctorIds,
+          user.id,
+        );
+      }
+
+      Navigator.of(context).pop(); // Close loading dialog
+
+      // Exit selection mode
+      setState(() {
+        _isSelectionMode = false;
+        _selectedFiles.clear();
+      });
+
+      final totalTargets = selectedGroups.length + selectedDoctors.length;
+      _showSuccess(
+        'Successfully shared ${filesToShare.length} file(s) to $totalTargets recipient(s)',
+      );
+    } catch (e, stackTrace) {
+      print('❌ CRITICAL ERROR in _shareFilesToTargets: $e');
+      print('Stack trace: $stackTrace');
+      Navigator.of(context).pop(); // Close loading dialog
+      _showError('Error sharing files: $e');
     }
   }
 
@@ -590,322 +600,7 @@ class _FilesScreenState extends State<FilesScreen> {
     final selectedItems =
         _selectedFiles.map((index) => _filteredAndSortedItems[index]).toList();
 
-    await _showGroupSelectionDialog(selectedItems);
-  }
-
-  /// Show dialog to select groups for sharing files
-  Future<void> _showGroupSelectionDialog(List<FileItem> filesToShare) async {
-    try {
-      final supabase = Supabase.instance.client;
-      final user = supabase.auth.currentUser;
-
-      if (user == null) {
-        _showError('User not logged in');
-        return;
-      }
-
-      // Fetch user's groups
-      final groupsResponse = await supabase
-          .from('Group_Members')
-          .select('''
-            group_id,
-            Group!inner(id, name)
-          ''')
-          .eq('user_id', user.id);
-
-      final userGroups =
-          groupsResponse
-              .map(
-                (item) => {
-                  'id': item['Group']['id'],
-                  'name': item['Group']['name'],
-                },
-              )
-              .toList();
-
-      if (userGroups.isEmpty) {
-        _showError('You are not a member of any groups');
-        return;
-      }
-
-      // Show group selection dialog
-      final selectedGroups = await showDialog<List<Map<String, dynamic>>>(
-        context: context,
-        builder: (BuildContext context) {
-          return _GroupSelectionDialog(
-            groups: userGroups,
-            filesToShare: filesToShare,
-          );
-        },
-      );
-
-      if (selectedGroups != null && selectedGroups.isNotEmpty) {
-        await _shareFilesToGroups(filesToShare, selectedGroups);
-      }
-    } catch (e) {
-      _showError('Error loading groups: $e');
-    }
-  }
-
-  /// Share selected files to selected groups - UPDATED for new encryption flow
-  /// Share selected files to selected groups - FIXED for base64 encoding
-  /// Share selected files to selected groups - FIXED for base64 encoding
-  Future<void> _shareFilesToGroups(
-    List<FileItem> filesToShare,
-    List<Map<String, dynamic>> selectedGroups,
-  ) async {
-    try {
-      final supabase = Supabase.instance.client;
-      final user = supabase.auth.currentUser;
-
-      if (user == null) {
-        _showError('User not logged in');
-        return;
-      }
-
-      print('=== SHARING DEBUG ===');
-      print('User ID: ${user.id}');
-      print('Files to share: ${filesToShare.length}');
-      print('Groups selected: ${selectedGroups.length}');
-
-      // Show loading dialog
-      showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder:
-            (context) => AlertDialog(
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const CircularProgressIndicator(),
-                  const SizedBox(height: 16),
-                  Text(
-                    'Sharing ${filesToShare.length} file(s) to ${selectedGroups.length} group(s)...',
-                  ),
-                ],
-              ),
-            ),
-      );
-
-      // Get user's RSA private key for decrypting AES keys
-      print('Fetching user RSA private key...');
-      final userData =
-          await supabase
-              .from('User')
-              .select('rsa_private_key')
-              .eq('id', user.id)
-              .single();
-
-      final userRsaPrivateKeyPem = userData['rsa_private_key'] as String;
-      print('User RSA key length: ${userRsaPrivateKeyPem.length}');
-
-      final userRsaPrivateKey = MyCryptoUtils.rsaPrivateKeyFromPem(
-        userRsaPrivateKeyPem,
-      );
-      print('RSA private key parsed successfully');
-
-      for (final group in selectedGroups) {
-        final groupId = group['id'] as String;
-        final groupName = group['name'] as String;
-
-        print('\n--- Processing group: $groupName ($groupId) ---');
-
-        try {
-          // Get group's RSA public key
-          print('Fetching group RSA public key...');
-          final groupData =
-              await supabase
-                  .from('Group')
-                  .select('rsa_public_key')
-                  .eq('id', groupId)
-                  .single();
-
-          final groupRsaPublicKeyPem = groupData['rsa_public_key'] as String;
-          print('Group RSA key length: ${groupRsaPublicKeyPem.length}');
-
-          final groupRsaPublicKey = MyCryptoUtils.rsaPublicKeyFromPem(
-            groupRsaPublicKeyPem,
-          );
-          print('Group RSA public key parsed successfully');
-
-          for (final file in filesToShare) {
-            print('\n  Processing file: ${file.name} (${file.id})');
-
-            try {
-              // Get file's encrypted AES key package from user's File_Keys
-              print('  Fetching user file key...');
-              final userFileKey =
-                  await supabase
-                      .from('File_Keys')
-                      .select('aes_key_encrypted')
-                      .eq('file_id', file.id)
-                      .eq('recipient_type', 'user')
-                      .isFilter(
-                        'recipient_id',
-                        null,
-                      ) // Add explicit user ID check
-                      .single();
-
-              final encryptedKeyPackage =
-                  userFileKey['aes_key_encrypted'] as String;
-              print(
-                '  User file key retrieved, length: ${encryptedKeyPackage.length}',
-              );
-
-              // Decrypt the AES key package using user's RSA private key
-              print('  Decrypting AES key package...');
-              final decryptedKeyJson = MyCryptoUtils.rsaDecrypt(
-                encryptedKeyPackage,
-                userRsaPrivateKey,
-              );
-              print('  AES key decrypted successfully');
-
-              // Re-encrypt the same JSON with group's RSA public key
-              print('  Re-encrypting for group...');
-              final groupEncryptedKeyPackage = MyCryptoUtils.rsaEncrypt(
-                decryptedKeyJson,
-                groupRsaPublicKey,
-              );
-
-              print(
-                '  Group encryption successful, base64 length: ${groupEncryptedKeyPackage.length}',
-              );
-
-              print(
-                '  Group encryption successful, base64 length: ${groupEncryptedKeyPackage.length}',
-              );
-
-              // Check if file is already shared with this group
-              print('  Checking for existing share...');
-              final existingShare =
-                  await supabase
-                      .from('File_Shares')
-                      .select('id')
-                      .eq('file_id', file.id)
-                      .eq('shared_with_group_id', groupId)
-                      .maybeSingle();
-
-              if (existingShare == null) {
-                print('  Creating new file share...');
-
-                // Create file share record
-                final shareResult =
-                    await supabase.from('File_Shares').insert({
-                      'file_id': file.id,
-                      'shared_with_group_id': groupId,
-                      'shared_by_user_id': user.id,
-                      'shared_at': DateTime.now().toIso8601String(),
-                    }).select();
-
-                print('  File share created: ${shareResult.first['id']}');
-
-                // Create group file key record with base64 encoded encrypted package
-                print('  Creating group file key...');
-                final keyResult =
-                    await supabase.from('File_Keys').insert({
-                      'file_id': file.id,
-                      'recipient_type': 'group',
-                      'recipient_id': groupId,
-                      'aes_key_encrypted':
-                          groupEncryptedKeyPackage, // Now base64 encoded
-                    }).select();
-
-                print('  Group file key created: ${keyResult.first}');
-                print(
-                  '  ✓ File ${file.name} shared successfully with $groupName',
-                );
-              } else {
-                print('  File already shared with this group, skipping...');
-              }
-            } catch (fileError, fileStack) {
-              print('  ❌ Error processing file ${file.name}: $fileError');
-              print('  File stack trace: $fileStack');
-              // Continue with next file instead of failing completely
-            }
-          }
-
-          print('--- Completed group: $groupName ---');
-        } catch (groupError, groupStack) {
-          print('❌ Error processing group $groupName: $groupError');
-          print('Group stack trace: $groupStack');
-          // Continue with next group instead of failing completely
-        }
-      }
-
-      Navigator.of(context).pop(); // Close loading dialog
-
-      // Exit selection mode
-      setState(() {
-        _isSelectionMode = false;
-        _selectedFiles.clear();
-      });
-
-      print('=== SHARING COMPLETED ===');
-      _showSuccess(
-        'Successfully shared ${filesToShare.length} file(s) to ${selectedGroups.length} group(s)',
-      );
-    } catch (e, stackTrace) {
-      print('❌ CRITICAL ERROR in _shareFilesToGroups: $e');
-      print('Stack trace: $stackTrace');
-
-      Navigator.of(context).pop(); // Close loading dialog
-      _showError('Error sharing files: $e');
-    }
-  }
-
-  // ADDITIONAL DEBUGGING METHOD TO CHECK USER'S GROUP MEMBERSHIP:
-  Future<void> _debugGroupMembership() async {
-    try {
-      final supabase = Supabase.instance.client;
-      final user = supabase.auth.currentUser;
-
-      if (user == null) {
-        print('No user logged in');
-        return;
-      }
-
-      print('=== GROUP MEMBERSHIP DEBUG ===');
-      print('User ID: ${user.id}');
-
-      // Check Group_Members table
-      final membershipData = await supabase
-          .from('Group_Members')
-          .select('*')
-          .eq('user_id', user.id);
-
-      print('Group memberships found: ${membershipData.length}');
-      for (final membership in membershipData) {
-        print(
-          '  - Group ID: ${membership['group_id']}, Role: ${membership['role']}',
-        );
-      }
-
-      // Check actual groups
-      final groupsResponse = await supabase
-          .from('Group_Members')
-          .select('''
-          group_id,
-          role,
-          Group!inner(id, name, rsa_public_key)
-        ''')
-          .eq('user_id', user.id);
-
-      print('Groups with details: ${groupsResponse.length}');
-      for (final item in groupsResponse) {
-        final group = item['Group'];
-        print('  - Group: ${group['name']} (${group['id']})');
-        print('    Role: ${item['role']}');
-        print('    Has RSA key: ${group['rsa_public_key'] != null}');
-        if (group['rsa_public_key'] != null) {
-          print(
-            '    RSA key length: ${group['rsa_public_key'].toString().length}',
-          );
-        }
-      }
-    } catch (e, stack) {
-      print('Error debugging group membership: $e');
-      print('Stack trace: $stack');
-    }
+    await _showShareSelectionDialog(selectedItems);
   }
 
   void _previewFile(FileItem item) async {
@@ -1093,6 +788,7 @@ class _FilesScreenState extends State<FilesScreen> {
               ),
             ),
           ),
+
           const SizedBox(height: 16),
           // Filter and Sort Options
           Row(
@@ -1227,66 +923,119 @@ class FileItem {
   });
 }
 
-/// Dialog widget for selecting groups to share files with
-class _GroupSelectionDialog extends StatefulWidget {
+/// Enhanced Dialog widget for selecting both groups and doctors
+class _EnhancedShareSelectionDialog extends StatefulWidget {
   final List<Map<String, dynamic>> groups;
+  final List<Map<String, dynamic>> doctors;
   final List<FileItem> filesToShare;
 
-  const _GroupSelectionDialog({
+  const _EnhancedShareSelectionDialog({
     required this.groups,
+    required this.doctors,
     required this.filesToShare,
   });
 
   @override
-  State<_GroupSelectionDialog> createState() => __GroupSelectionDialogState();
+  State<_EnhancedShareSelectionDialog> createState() =>
+      _EnhancedShareSelectionDialogState();
 }
 
-class __GroupSelectionDialogState extends State<_GroupSelectionDialog> {
+class _EnhancedShareSelectionDialogState
+    extends State<_EnhancedShareSelectionDialog>
+    with TickerProviderStateMixin {
+  late TabController _tabController;
   final Set<String> _selectedGroupIds = {};
+  final Set<String> _selectedDoctorIds = {};
+
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: 2, vsync: this);
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
+
+  String _formatFullName(Map<String, dynamic> user) {
+    final person = user['Person'];
+    if (person == null) {
+      return user['email'] ?? 'Unknown User';
+    }
+
+    final firstName = person['first_name']?.toString().trim() ?? '';
+    final middleName = person['middle_name']?.toString().trim() ?? '';
+    final lastName = person['last_name']?.toString().trim() ?? '';
+
+    List<String> nameParts = [];
+    if (firstName.isNotEmpty) nameParts.add(firstName);
+    if (middleName.isNotEmpty) nameParts.add(middleName);
+    if (lastName.isNotEmpty) nameParts.add(lastName);
+
+    return nameParts.isEmpty
+        ? (user['email'] ?? 'Unknown User')
+        : nameParts.join(' ');
+  }
 
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      title: Text('Share ${widget.filesToShare.length} file(s) with groups'),
+      title: Text('Share ${widget.filesToShare.length} file(s)'),
       content: SizedBox(
         width: double.maxFinite,
+        height: 400,
         child: Column(
-          mainAxisSize: MainAxisSize.min,
           children: [
             Text(
-              'Select the groups you want to share these files with:',
+              'Choose groups and doctors to share with:',
               style: TextStyle(color: Colors.grey[600], fontSize: 14),
             ),
             const SizedBox(height: 16),
-            Flexible(
-              child: ListView.builder(
-                shrinkWrap: true,
-                itemCount: widget.groups.length,
-                itemBuilder: (context, index) {
-                  final group = widget.groups[index];
-                  final groupId = group['id'] as String;
-                  final isSelected = _selectedGroupIds.contains(groupId);
-
-                  return CheckboxListTile(
-                    value: isSelected,
-                    onChanged: (bool? value) {
-                      setState(() {
-                        if (value == true) {
-                          _selectedGroupIds.add(groupId);
-                        } else {
-                          _selectedGroupIds.remove(groupId);
-                        }
-                      });
-                    },
-                    title: Text(
-                      group['name'] as String,
-                      style: const TextStyle(fontWeight: FontWeight.w500),
+            Container(
+              decoration: BoxDecoration(
+                color: Colors.grey[100],
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: TabBar(
+                controller: _tabController,
+                indicator: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                labelColor: Colors.blue[700],
+                unselectedLabelColor: Colors.grey[600],
+                tabs: [
+                  Tab(
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.group, size: 16),
+                        const SizedBox(width: 6),
+                        Text('Groups (${widget.groups.length})'),
+                      ],
                     ),
-                    activeColor: const Color(0xFF667EEA),
-                    controlAffinity: ListTileControlAffinity.leading,
-                  );
-                },
+                  ),
+                  Tab(
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.medical_services, size: 16),
+                        const SizedBox(width: 6),
+                        Text('Doctors (${widget.doctors.length})'),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            Expanded(
+              child: TabBarView(
+                controller: _tabController,
+                children: [_buildGroupsTab(), _buildDoctorsTab()],
               ),
             ),
           ],
@@ -1299,7 +1048,7 @@ class __GroupSelectionDialogState extends State<_GroupSelectionDialog> {
         ),
         ElevatedButton(
           onPressed:
-              _selectedGroupIds.isEmpty
+              (_selectedGroupIds.isEmpty && _selectedDoctorIds.isEmpty)
                   ? null
                   : () {
                     final selectedGroups =
@@ -1309,7 +1058,19 @@ class __GroupSelectionDialogState extends State<_GroupSelectionDialog> {
                                   _selectedGroupIds.contains(group['id']),
                             )
                             .toList();
-                    Navigator.pop(context, selectedGroups);
+                    final selectedDoctors =
+                        widget.doctors
+                            .where(
+                              (doctor) => _selectedDoctorIds.contains(
+                                doctor['doctor_id'],
+                              ),
+                            )
+                            .toList();
+
+                    Navigator.pop(context, {
+                      'groups': selectedGroups,
+                      'doctors': selectedDoctors,
+                    });
                   },
           style: ElevatedButton.styleFrom(
             backgroundColor: const Color(0xFF667EEA),
@@ -1318,9 +1079,133 @@ class __GroupSelectionDialogState extends State<_GroupSelectionDialog> {
               borderRadius: BorderRadius.circular(8),
             ),
           ),
-          child: Text('Share with ${_selectedGroupIds.length} group(s)'),
+          child: Text(
+            'Share (${_selectedGroupIds.length + _selectedDoctorIds.length})',
+          ),
         ),
       ],
+    );
+  }
+
+  Widget _buildGroupsTab() {
+    if (widget.groups.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.group_off, size: 48, color: Colors.grey[400]),
+            const SizedBox(height: 16),
+            Text(
+              'No groups available',
+              style: TextStyle(color: Colors.grey[600], fontSize: 16),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return ListView.builder(
+      itemCount: widget.groups.length,
+      itemBuilder: (context, index) {
+        final group = widget.groups[index];
+        final groupId = group['id'] as String;
+        final isSelected = _selectedGroupIds.contains(groupId);
+
+        return CheckboxListTile(
+          value: isSelected,
+          onChanged: (bool? value) {
+            setState(() {
+              if (value == true) {
+                _selectedGroupIds.add(groupId);
+              } else {
+                _selectedGroupIds.remove(groupId);
+              }
+            });
+          },
+          title: Text(
+            group['name'] as String,
+            style: const TextStyle(fontWeight: FontWeight.w500),
+          ),
+          subtitle: Text('Group'),
+          secondary: CircleAvatar(
+            backgroundColor: Colors.blue[50],
+            child: Icon(Icons.group, color: Colors.blue[600], size: 20),
+          ),
+          activeColor: const Color(0xFF667EEA),
+          controlAffinity: ListTileControlAffinity.leading,
+        );
+      },
+    );
+  }
+
+  Widget _buildDoctorsTab() {
+    if (widget.doctors.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.medical_services_outlined,
+              size: 48,
+              color: Colors.grey[400],
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'No assigned doctors',
+              style: TextStyle(color: Colors.grey[600], fontSize: 16),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return ListView.builder(
+      itemCount: widget.doctors.length,
+      itemBuilder: (context, index) {
+        final doctor = widget.doctors[index];
+        final doctorId = doctor['doctor_id'] as String;
+        final isSelected = _selectedDoctorIds.contains(doctorId);
+        final doctorUser = doctor['user'];
+
+        return CheckboxListTile(
+          value: isSelected,
+          onChanged: (bool? value) {
+            setState(() {
+              if (value == true) {
+                _selectedDoctorIds.add(doctorId);
+              } else {
+                _selectedDoctorIds.remove(doctorId);
+              }
+            });
+          },
+          title: Text(
+            'Dr. ${_formatFullName(doctorUser)}',
+            style: const TextStyle(fontWeight: FontWeight.w500),
+          ),
+          subtitle: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(doctor['organization_name'] ?? 'Unknown Organization'),
+              if (doctor['department'] != null)
+                Text(
+                  doctor['department'],
+                  style: TextStyle(fontSize: 12, color: Colors.grey[500]),
+                ),
+            ],
+          ),
+          secondary: CircleAvatar(
+            backgroundColor: Colors.green[50],
+            child: Icon(
+              Icons.medical_services,
+              color: Colors.green[600],
+              size: 20,
+            ),
+          ),
+          activeColor: const Color(0xFF667EEA),
+          controlAffinity: ListTileControlAffinity.leading,
+          isThreeLine: doctor['department'] != null,
+        );
+      },
     );
   }
 }

@@ -24,9 +24,11 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen>
     with TickerProviderStateMixin {
   late TabController _tabController;
   List<Map<String, dynamic>> _members = [];
-  List<Map<String, dynamic>> _sharedFiles = [];
+  Map<String, List<Map<String, dynamic>>> _filesByUser =
+      {}; // Organize files by user
   bool _isLoading = false;
   String? _currentUserId;
+  bool _isGroupOwner = false;
 
   @override
   void initState() {
@@ -41,6 +43,7 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen>
     final user = Supabase.instance.client.auth.currentUser;
     setState(() {
       _currentUserId = user?.id;
+      _isGroupOwner = user?.id == widget.groupData['user_id'];
     });
   }
 
@@ -56,13 +59,11 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen>
           .eq('group_id', widget.groupId)
           .order('added_at', ascending: true);
 
-      print('DEBUG: Members response: $response'); // Debug line
-
       setState(() {
         _members = List<Map<String, dynamic>>.from(response);
       });
     } catch (e) {
-      print('DEBUG: Error loading members: $e'); // Debug line
+      print('DEBUG: Error loading members: $e');
       _showError('Error loading members: $e');
     } finally {
       setState(() => _isLoading = false);
@@ -71,22 +72,40 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen>
 
   Future<void> _fetchSharedFiles() async {
     try {
-      // Use the new GroupFileService instead of the old method
       final sharedFiles = await GroupFileService.fetchGroupSharedFiles(
         widget.groupId,
       );
 
+      // Organize files by user
+      Map<String, List<Map<String, dynamic>>> filesByUser = {};
+
+      for (final shareRecord in sharedFiles) {
+        final sharedByUser = shareRecord['shared_by'] ?? {};
+        final userEmail = sharedByUser['email'] ?? 'Unknown User';
+        final personData = sharedByUser['Person'] ?? {};
+        final firstName = personData['first_name'] ?? userEmail.split('@')[0];
+        final userId = shareRecord['shared_by_user_id'] ?? 'unknown';
+
+        // Create a key combining user ID and first name for uniqueness
+        final userKey = '$userId|$firstName';
+
+        if (!filesByUser.containsKey(userKey)) {
+          filesByUser[userKey] = [];
+        }
+        filesByUser[userKey]!.add(shareRecord);
+      }
+
       setState(() {
-        _sharedFiles = sharedFiles;
+        _filesByUser = filesByUser;
       });
 
       print(
-        'Loaded ${_sharedFiles.length} shared files for group ${widget.groupId}',
+        'Organized ${sharedFiles.length} files into ${filesByUser.length} user folders',
       );
     } catch (e) {
       print('Error fetching shared files: $e');
       setState(() {
-        _sharedFiles = [];
+        _filesByUser = {};
       });
     }
   }
@@ -242,7 +261,6 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen>
         final isOwner = member['user_id'] == widget.groupData['user_id'];
         final isCurrentUser = member['user_id'] == _currentUserId;
 
-        // Add null safety checks
         if (user == null) {
           return Container(
             margin: const EdgeInsets.only(bottom: 12),
@@ -353,7 +371,7 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen>
       return const Center(child: CircularProgressIndicator());
     }
 
-    return _sharedFiles.isEmpty
+    return _filesByUser.isEmpty
         ? Center(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -381,13 +399,78 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen>
           onRefresh: _fetchSharedFiles,
           child: ListView.builder(
             padding: const EdgeInsets.all(16),
-            itemCount: _sharedFiles.length,
+            itemCount: _filesByUser.keys.length,
             itemBuilder: (context, index) {
-              final shareRecord = _sharedFiles[index];
-              return _buildSharedFileCard(shareRecord);
+              final userKey = _filesByUser.keys.elementAt(index);
+              final userFiles = _filesByUser[userKey]!;
+              final firstName = userKey.split('|')[1];
+
+              return _buildUserFileFolder(firstName, userFiles);
             },
           ),
         );
+  }
+
+  Widget _buildUserFileFolder(
+    String firstName,
+    List<Map<String, dynamic>> userFiles,
+  ) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey.withOpacity(0.1)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.02),
+            blurRadius: 4,
+            offset: const Offset(0, 1),
+          ),
+        ],
+      ),
+      child: ExpansionTile(
+        title: Row(
+          children: [
+            CircleAvatar(
+              backgroundColor: const Color(0xFF667EEA),
+              radius: 20,
+              child: Text(
+                firstName.isNotEmpty ? firstName[0].toUpperCase() : 'U',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 16,
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '$firstName Files',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 16,
+                    ),
+                  ),
+                  Text(
+                    '${userFiles.length} file${userFiles.length == 1 ? '' : 's'}',
+                    style: TextStyle(color: Colors.grey[600], fontSize: 12),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        children:
+            userFiles
+                .map((shareRecord) => _buildSharedFileCard(shareRecord))
+                .toList(),
+      ),
+    );
   }
 
   Widget _buildSharedFileCard(Map<String, dynamic> shareRecord) {
@@ -401,30 +484,27 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen>
     final sharedByEmail = sharedByUser['email'] ?? 'Unknown User';
     final uploadDate = _formatDate(fileData['uploaded_at'] ?? '');
 
+    // Check permissions for removing share
+    final canRemoveShare =
+        _isGroupOwner || shareRecord['shared_by_user_id'] == _currentUserId;
+
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
+        color: Colors.grey[50],
+        borderRadius: BorderRadius.circular(8),
         border: Border.all(color: Colors.grey.withOpacity(0.1)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.02),
-            blurRadius: 4,
-            offset: const Offset(0, 1),
-          ),
-        ],
       ),
       child: ListTile(
-        contentPadding: const EdgeInsets.all(16),
+        contentPadding: const EdgeInsets.all(12),
         leading: Container(
-          width: 48,
-          height: 48,
+          width: 40,
+          height: 40,
           decoration: BoxDecoration(
             color: _getFileIconColor(fileType),
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.circular(6),
           ),
-          child: Icon(_getFileIcon(fileType), color: Colors.white, size: 24),
+          child: Icon(_getFileIcon(fileType), color: Colors.white, size: 20),
         ),
         title: Text(
           fileName,
@@ -435,14 +515,14 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen>
         subtitle: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const SizedBox(height: 4),
+            const SizedBox(height: 2),
             Text(
-              '$fileSize • Shared by $sharedByEmail',
-              style: TextStyle(color: Colors.grey[600], fontSize: 12),
+              fileSize,
+              style: TextStyle(color: Colors.grey[600], fontSize: 11),
             ),
             Text(
               'Shared: $sharedDate • Uploaded: $uploadDate',
-              style: TextStyle(color: Colors.grey[500], fontSize: 11),
+              style: TextStyle(color: Colors.grey[500], fontSize: 10),
             ),
           ],
         ),
@@ -478,9 +558,8 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen>
                     ],
                   ),
                 ),
-                // Only show remove option if user is the file sharer or group owner
-                if (shareRecord['shared_by_user_id'] == _currentUserId ||
-                    widget.groupData['user_id'] == _currentUserId)
+                // Only show remove option if user is file sharer or group owner
+                if (canRemoveShare)
                   const PopupMenuItem(
                     value: 'remove',
                     child: Row(
@@ -611,7 +690,6 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen>
         return;
       }
 
-      // Show loading indicator
       showDialog(
         context: context,
         barrierDismissible: false,
@@ -628,7 +706,6 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen>
             ),
       );
 
-      // Use GroupFileService to decrypt the shared file
       final decryptedBytes = await GroupFileService.decryptGroupSharedFile(
         fileId: fileId,
         groupId: widget.groupId,
@@ -636,21 +713,20 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen>
         ipfsCid: ipfsCid,
       );
 
-      Navigator.of(context).pop(); // Close loading dialog
+      Navigator.of(context).pop();
 
       if (decryptedBytes == null) {
         _showError('Failed to decrypt file or access denied');
         return;
       }
 
-      // Use your existing EnhancedFilePreviewService
       await EnhancedFilePreviewService.previewFile(
         context,
         fileName,
         decryptedBytes,
       );
     } catch (e) {
-      Navigator.of(context).pop(); // Close loading dialog if still open
+      Navigator.of(context).pop();
       _showError('Error previewing file: $e');
     }
   }
@@ -659,6 +735,14 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen>
     final fileData = shareRecord['file'];
     final fileName = fileData['filename'] ?? 'Unknown File';
     final fileId = fileData['id'];
+
+    // Additional permission check with user-friendly message
+    final canRemoveShare =
+        _isGroupOwner || shareRecord['shared_by_user_id'] == _currentUserId;
+    if (!canRemoveShare) {
+      _showError('Only the file owner or group admin can remove this share');
+      return;
+    }
 
     final confirm = await showDialog<bool>(
       context: context,
@@ -697,7 +781,7 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen>
         );
 
         if (success) {
-          await _fetchSharedFiles(); // Refresh list
+          await _fetchSharedFiles();
           _showSuccess('File share removed from group');
         } else {
           _showError('Failed to remove file share');
@@ -782,7 +866,6 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen>
 
   Future<void> _inviteUser(String email) async {
     try {
-      // Find user by email from custom User table
       final userResponse =
           await Supabase.instance.client
               .from('User')
@@ -795,7 +878,6 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen>
         return;
       }
 
-      // Check if user is already a member
       final memberCheck =
           await Supabase.instance.client
               .from('Group_Members')
@@ -809,7 +891,6 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen>
         return;
       }
 
-      // Check for existing pending invitation
       final inviteCheck =
           await Supabase.instance.client
               .from('Group_Invitations')
@@ -824,7 +905,6 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen>
         return;
       }
 
-      // Send invitation
       await Supabase.instance.client.from('Group_Invitations').insert({
         'group_id': widget.groupId,
         'invitee_id': userResponse['id'],
@@ -953,7 +1033,7 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen>
           .eq('user_id', _currentUserId!);
 
       if (mounted) {
-        Navigator.pop(context, true); // Return true to indicate group was left
+        Navigator.pop(context, true);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Left "${widget.groupName}" successfully'),
