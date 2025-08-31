@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:health_share/services/files_services/file_preview.dart';
 import 'package:health_share/services/group_services/group_file_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'dart:typed_data';
 
 class GroupDetailsScreen extends StatefulWidget {
   final String groupId;

@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:health_share/services/files_services/file_preview.dart';
+import 'package:health_share/services/org_services/files_decrypt_org.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class OrgDoctorsFilesScreen extends StatefulWidget {
@@ -924,14 +926,63 @@ class _OrgDoctorsFilesScreenState extends State<OrgDoctorsFilesScreen>
       child: Material(
         color: Colors.transparent,
         child: InkWell(
-          onTap: () {
-            // TODO: Implement file preview/download
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('File preview coming soon'),
-                duration: Duration(seconds: 2),
-              ),
+          // In OrgDoctorsFilesScreen, update the _buildFileCard method's InkWell onTap:
+          onTap: () async {
+            // Show loading dialog
+            showDialog(
+              context: context,
+              barrierDismissible: false,
+              builder:
+                  (context) => AlertDialog(
+                    content: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const CircularProgressIndicator(),
+                        const SizedBox(height: 16),
+                        Text('Decrypting ${file['filename']}...'),
+                      ],
+                    ),
+                  ),
             );
+
+            try {
+              // Get file metadata if needed
+              final fileMetadata = await OrgFilesDecryptService.getFileMetadata(
+                file['id'],
+              );
+
+              if (fileMetadata == null) {
+                throw Exception('File metadata not found');
+              }
+
+              // Decrypt the file
+              final decryptedBytes =
+                  await OrgFilesDecryptService.decryptSharedFileSimple(
+                    fileId: file['id'],
+                    ipfsCid: fileMetadata['ipfs_cid'],
+                  );
+
+              Navigator.of(context).pop(); // Close loading dialog
+
+              if (decryptedBytes == null) {
+                throw Exception('Failed to decrypt file');
+              }
+
+              // Use your existing preview service
+              await EnhancedFilePreviewService.previewFile(
+                context,
+                file['filename'],
+                decryptedBytes,
+              );
+            } catch (e) {
+              Navigator.of(context).pop(); // Close loading dialog
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Error opening file: ${e.toString()}'),
+                  backgroundColor: Colors.red,
+                ),
+              );
+            }
           },
           borderRadius: BorderRadius.circular(16),
           child: Padding(

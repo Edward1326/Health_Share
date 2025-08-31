@@ -34,20 +34,29 @@ class DecryptFileService {
               .single();
 
       final rsaPrivateKeyPem = userData['rsa_private_key'] as String;
-      final rsaPrivateKey = CryptoUtils.rsaPrivateKeyFromPem(rsaPrivateKeyPem);
+      final rsaPrivateKey = MyCryptoUtils.rsaPrivateKeyFromPem(
+        rsaPrivateKeyPem,
+      );
       print('Retrieved RSA private key from user data');
 
       // 3. Get encrypted AES key+nonce JSON from Supabase
+      // FIXED: Added userId filter to ensure we get the correct key for this user
       final fileKeyRecord =
           await supabase
               .from('File_Keys')
               .select('aes_key_encrypted')
               .eq('file_id', fileId)
               .eq('recipient_type', 'user')
+              .eq(
+                'recipient_id',
+                userId,
+              ) // Add this line - assuming your column is named 'recipient_id'
               .maybeSingle();
 
       if (fileKeyRecord == null || fileKeyRecord['aes_key_encrypted'] == null) {
-        print('AES key not found in File_Keys for file_id: $fileId');
+        print(
+          'AES key not found in File_Keys for file_id: $fileId and user_id: $userId',
+        );
         return null;
       }
 
@@ -55,10 +64,26 @@ class DecryptFileService {
       print('Retrieved encrypted AES key package from database');
 
       // 4. Decrypt AES key package (Base64 → JSON string)
-      final decryptedJson = MyCryptoUtils.rsaDecrypt(
-        encryptedKeyPackage,
-        rsaPrivateKey,
-      );
+      String? decryptedJson;
+      try {
+        decryptedJson = MyCryptoUtils.rsaDecrypt(
+          encryptedKeyPackage,
+          rsaPrivateKey,
+        );
+      } catch (e) {
+        print('Primary RSA decryption failed, trying fallback: $e');
+        // Try the fallback decryption method
+        decryptedJson = MyCryptoUtils.tryDecryptWithFallback(
+          encryptedKeyPackage,
+          rsaPrivateKey,
+        );
+      }
+
+      if (decryptedJson == null) {
+        print('Failed to decrypt AES key package with all methods');
+        return null;
+      }
+
       final keyData = jsonDecode(decryptedJson);
 
       final aesKeyHex = keyData['key'] as String;

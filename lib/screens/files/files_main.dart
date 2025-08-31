@@ -1,22 +1,13 @@
-import 'dart:convert';
-import 'dart:io';
-import 'dart:typed_data';
-import 'package:health_share/services/crypto_utils.dart';
 import 'package:health_share/services/files_services/file_preview.dart';
 import 'package:health_share/services/files_services/file_share_to_group.dart';
 import 'package:health_share/services/files_services/files_share_to_org.dart';
-import 'package:http/http.dart' as http;
-import 'package:encrypt/encrypt.dart' as encrypt;
-import 'package:basic_utils/basic_utils.dart';
+
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter/material.dart';
 import 'package:health_share/components/navbar_main.dart';
-import 'package:health_share/services/aes_helper.dart';
-import 'package:health_share/services/files_services/file_picker_service.dart';
+
 import 'package:health_share/services/files_services/upload_file.dart';
 import 'package:health_share/services/files_services/decrypt_file.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:open_file/open_file.dart';
 
 class FilesScreen extends StatefulWidget {
   const FilesScreen({super.key});
