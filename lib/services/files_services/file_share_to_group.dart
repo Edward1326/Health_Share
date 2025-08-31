@@ -123,7 +123,7 @@ class FileShareToGroupService {
               .select('aes_key_encrypted')
               .eq('file_id', fileId)
               .eq('recipient_type', 'user')
-              .isFilter('recipient_id', null)
+              .eq('recipient_id', userId)
               .single();
 
       final encryptedKeyPackage = userFileKey['aes_key_encrypted'] as String;

@@ -26,7 +26,7 @@ class FileShareToOrgService {
               .from('User')
               .select('rsa_private_key, email')
               .eq('id', userId)
-              .maybeSingle(); // Changed from .single() to .maybeSingle()
+              .maybeSingle();
 
       if (userData == null) {
         throw Exception('User not found with ID: $userId');
@@ -160,7 +160,6 @@ class FileShareToOrgService {
   }
 
   /// Share a single file with a doctor
-  /// Share a single file with a doctor
   static Future<void> _shareFileToDoctor(
     String fileId,
     String doctorId,
@@ -172,13 +171,22 @@ class FileShareToOrgService {
     try {
       print('\n    Processing file $fileId for doctor $doctorName');
 
-      // Check if already shared
+      // Get doctor details to extract the actual user_id
+      final doctorData = await _fetchDoctorDetails(doctorId);
+      if (doctorData == null) {
+        throw Exception('Doctor details not found for $doctorId');
+      }
+
+      final doctorUserId = doctorData['user']['id'] as String;
+      print('    📋 Doctor user_id: $doctorUserId');
+
+      // Check if already shared (using doctor's User.id)
       final existingShare =
           await _supabase
               .from('File_Shares')
               .select('id')
               .eq('file_id', fileId)
-              .eq('shared_with_doctor', doctorId)
+              .eq('shared_with_doctor', doctorUserId) // Use User.id
               .isFilter('revoked_at', null)
               .maybeSingle();
 
@@ -240,11 +248,12 @@ class FileShareToOrgService {
         doctorRsaPublicKey,
       );
 
-      // Create share record
+      // Create share record using doctor's User.id for consistency
       print('    📝 Creating File_Shares record...');
       final shareInsertData = {
         'file_id': fileId,
-        'shared_with_doctor': doctorId,
+        'shared_with_doctor':
+            doctorUserId, // Use User.id instead of Organization_User.id
         'shared_by_user_id': userId,
         'shared_at': DateTime.now().toIso8601String(),
       };
@@ -258,12 +267,12 @@ class FileShareToOrgService {
 
       print('    ✓ File_Shares created: ${shareResult['id']}');
 
-      // Create doctor key record
+      // Create doctor key record using User.id
       print('    🔑 Creating File_Keys record for doctor...');
       final keyInsertData = {
         'file_id': fileId,
-        'recipient_type': 'doctor',
-        'recipient_id': doctorId,
+        'recipient_type': 'user',
+        'recipient_id': doctorUserId, // Use User.id
         'aes_key_encrypted': doctorEncryptedKeyPackage,
         if (nonceHex != null && nonceHex.isNotEmpty) 'nonce_hex': nonceHex,
       };
@@ -477,27 +486,51 @@ class FileShareToOrgService {
   }
 
   /// Check if files are already shared with specific doctors
+  /// Updated to use doctor User.id instead of Organization_User.id
   static Future<Map<String, Set<String>>> getExistingDoctorShares(
     List<String> fileIds,
     List<String> doctorIds,
   ) async {
     try {
+      // First, get the User.id for each doctorId (Organization_User.id)
+      final doctorUserIds = <String, String>{};
+      for (final doctorId in doctorIds) {
+        final doctorData = await _fetchDoctorDetails(doctorId);
+        if (doctorData != null) {
+          final doctorUserId = doctorData['user']['id'] as String;
+          doctorUserIds[doctorId] = doctorUserId;
+        }
+      }
+
+      final userIds = doctorUserIds.values.toList();
+
       final existingShares = await _supabase
           .from('File_Shares')
           .select('file_id, shared_with_doctor')
           .inFilter('file_id', fileIds)
-          .inFilter('shared_with_doctor', doctorIds);
+          .inFilter('shared_with_doctor', userIds); // Use User.id
 
       final Map<String, Set<String>> result = {};
 
       for (final share in existingShares) {
         final fileId = share['file_id'] as String;
-        final doctorId = share['shared_with_doctor'] as String;
+        final doctorUserId = share['shared_with_doctor'] as String;
 
-        if (!result.containsKey(fileId)) {
-          result[fileId] = <String>{};
+        // Find the corresponding Organization_User.id for this User.id
+        final doctorId =
+            doctorUserIds.entries
+                .firstWhere(
+                  (entry) => entry.value == doctorUserId,
+                  orElse: () => const MapEntry('', ''),
+                )
+                .key;
+
+        if (doctorId.isNotEmpty) {
+          if (!result.containsKey(fileId)) {
+            result[fileId] = <String>{};
+          }
+          result[fileId]!.add(doctorId);
         }
-        result[fileId]!.add(doctorId);
       }
 
       return result;

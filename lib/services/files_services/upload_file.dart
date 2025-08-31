@@ -100,6 +100,7 @@ class UploadFileService {
       final success = await _storeFileKey(
         fileId: fileId,
         encryptedKeyPackage: encryptedKeyPackage,
+        userId: user.id,
       );
 
       if (!success) {
@@ -174,6 +175,7 @@ class UploadFileService {
   static Future<bool> _storeFileKey({
     required String fileId,
     required String encryptedKeyPackage,
+    required String userId,
   }) async {
     try {
       final supabase = Supabase.instance.client;
@@ -181,7 +183,7 @@ class UploadFileService {
       final insertData = {
         'file_id': fileId,
         'recipient_type': 'user',
-        'recipient_id': null,
+        'recipient_id': userId,
         'aes_key_encrypted': encryptedKeyPackage,
       };
 
