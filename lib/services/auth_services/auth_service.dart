@@ -1,8 +1,5 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:rsa_encrypt/rsa_encrypt.dart';
-import 'package:basic_utils/basic_utils.dart';
-import 'package:pointycastle/asymmetric/api.dart'
-    as crypto; // For RSA key types
+import 'package:fast_rsa/fast_rsa.dart';
 
 class AuthService {
   final SupabaseClient _supabase = Supabase.instance.client;
@@ -33,17 +30,11 @@ class AuthService {
 
       final authUserId = authUser.id;
 
-      // 2. Generate RSA key pair
-      final helper = RsaKeyHelper();
-      final pair = await helper.computeRSAKeyPair(helper.getSecureRandom());
+      // 2. Generate RSA key pair using fast_rsa
+      final keyPair = await RSA.generate(2048); // 2048-bit key size
 
-      final crypto.RSAPublicKey publicKey =
-          pair.publicKey as crypto.RSAPublicKey;
-      final crypto.RSAPrivateKey privateKey =
-          pair.privateKey as crypto.RSAPrivateKey;
-
-      final publicPem = CryptoUtils.encodeRSAPublicKeyToPem(publicKey);
-      final privatePem = CryptoUtils.encodeRSAPrivateKeyToPem(privateKey);
+      final publicPem = keyPair.publicKey;
+      final privatePem = keyPair.privateKey;
 
       // 3. Insert into person table
       final personInsertResponse =
@@ -102,5 +93,66 @@ class AuthService {
     final session = _supabase.auth.currentSession;
     final user = session?.user;
     return user?.email;
+  }
+
+  // Helper method to get user's RSA keys from database
+  Future<Map<String, String>?> getUserRSAKeys() async {
+    try {
+      final user = _supabase.auth.currentUser;
+      if (user == null) return null;
+
+      final response =
+          await _supabase
+              .from('User')
+              .select('rsa_public_key, rsa_private_key')
+              .eq('id', user.id)
+              .single();
+
+      return {
+        'publicKey': response['rsa_public_key'],
+        'privateKey': response['rsa_private_key'],
+      };
+    } catch (e) {
+      print('Error fetching RSA keys: $e');
+      return null;
+    }
+  }
+
+  // Helper method to encrypt data using user's public key with RSA-OAEP
+  Future<String?> encryptData(String data) async {
+    try {
+      final keys = await getUserRSAKeys();
+      if (keys == null) return null;
+
+      final encrypted = await RSA.encryptOAEP(
+        data,
+        "",
+        Hash.SHA256,
+        keys['publicKey']!,
+      );
+      return encrypted;
+    } catch (e) {
+      print('Encryption error: $e');
+      return null;
+    }
+  }
+
+  // Helper method to decrypt data using user's private key with RSA-OAEP
+  Future<String?> decryptData(String encryptedData) async {
+    try {
+      final keys = await getUserRSAKeys();
+      if (keys == null) return null;
+
+      final decrypted = await RSA.decryptOAEP(
+        encryptedData,
+        "",
+        Hash.SHA256,
+        keys['privateKey']!,
+      );
+      return decrypted;
+    } catch (e) {
+      print('Decryption error: $e');
+      return null;
+    }
   }
 }

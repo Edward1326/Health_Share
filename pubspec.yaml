@@ -35,11 +35,18 @@ dependencies:
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.8
   supabase_flutter: ^2.9.1
-  permission_handler: ^11.0.1
-
+  permission_handler: ^12.0.1
+  pointycastle: ^3.9.1
+  asn1lib: ^1.5.3
   #RSA
   rsa_encrypt: ^2.0.0
   basic_utils: ^5.6.1
+
+  #RSA NEW
+  fast_rsa: ^3.8.5
+
+  #SHA 256 and AES
+  cryptography: ^2.7.0
 
   #FILES
   file_picker: ^10.2.1 # for picking any file type
@@ -55,7 +62,7 @@ dependencies:
 
   #IPFS
   http: ^1.2.1
-  flutter_dotenv: ^5.2.1
+  flutter_dotenv: ^6.0.0
 
 dev_dependencies:
   flutter_test:

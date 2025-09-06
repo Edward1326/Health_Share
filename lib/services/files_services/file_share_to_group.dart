@@ -1,6 +1,6 @@
 import 'dart:convert';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:health_share/services/crypto_utils.dart';
+import 'package:fast_rsa/fast_rsa.dart';
 
 class FileShareToGroupService {
   static final _supabase = Supabase.instance.client;
@@ -26,16 +26,13 @@ class FileShareToGroupService {
               .single();
 
       final userRsaPrivateKeyPem = userData['rsa_private_key'] as String;
-      final userRsaPrivateKey = MyCryptoUtils.rsaPrivateKeyFromPem(
-        userRsaPrivateKeyPem,
-      );
 
       // Share with each group
       for (final groupId in groupIds) {
         await _shareFilesToSingleGroup(
           fileIds,
           groupId,
-          userRsaPrivateKey,
+          userRsaPrivateKeyPem,
           userId,
         );
       }
@@ -52,7 +49,7 @@ class FileShareToGroupService {
   static Future<void> _shareFilesToSingleGroup(
     List<String> fileIds,
     String groupId,
-    dynamic userRsaPrivateKey,
+    String userRsaPrivateKeyPem,
     String userId,
   ) async {
     try {
@@ -66,9 +63,6 @@ class FileShareToGroupService {
 
       final groupName = groupData['name'] as String;
       final groupRsaPublicKeyPem = groupData['rsa_public_key'] as String;
-      final groupRsaPublicKey = MyCryptoUtils.rsaPublicKeyFromPem(
-        groupRsaPublicKeyPem,
-      );
 
       print('\n--- Processing group: $groupName ($groupId) ---');
 
@@ -77,8 +71,8 @@ class FileShareToGroupService {
           fileId,
           groupId,
           groupName,
-          groupRsaPublicKey,
-          userRsaPrivateKey,
+          groupRsaPublicKeyPem,
+          userRsaPrivateKeyPem,
           userId,
         );
       }
@@ -93,8 +87,8 @@ class FileShareToGroupService {
     String fileId,
     String groupId,
     String groupName,
-    dynamic groupRsaPublicKey,
-    dynamic userRsaPrivateKey,
+    String groupRsaPublicKeyPem,
+    String userRsaPrivateKeyPem,
     String userId,
   ) async {
     try {
@@ -116,7 +110,7 @@ class FileShareToGroupService {
         return;
       }
 
-      // Get user's encrypted AES key
+      // Get user's encrypted AES key package
       final userFileKey =
           await _supabase
               .from('File_Keys')
@@ -128,24 +122,64 @@ class FileShareToGroupService {
 
       final encryptedKeyPackage = userFileKey['aes_key_encrypted'] as String;
 
-      // Check encrypted package size
+      // Validate encrypted package size (RSA has limitations)
       final encryptedBytes = base64Decode(encryptedKeyPackage);
-      if (encryptedBytes.length > 256) {
+      if (encryptedBytes.length > 512) {
+        // More conservative limit for RSA
         print('❌ ERROR: Encrypted key package too large for RSA decryption');
         print('  File: $fileId, Size: ${encryptedBytes.length} bytes');
-        return;
+        throw Exception('Encrypted key package exceeds RSA limits');
       }
 
-      // Decrypt and re-encrypt for group using MyCryptoUtils
-      final decryptedKeyJson = MyCryptoUtils.rsaDecrypt(
-        encryptedKeyPackage,
-        userRsaPrivateKey,
+      // Decrypt AES key package using user's private key (with fallback)
+      String? decryptedKeyJson;
+      try {
+        // Try RSA-OAEP first
+        decryptedKeyJson = await RSA.decryptOAEP(
+          encryptedKeyPackage,
+          "",
+          Hash.SHA256,
+          userRsaPrivateKeyPem,
+        );
+        print(
+          '✓ Successfully decrypted AES key package using RSA-OAEP for file $fileId',
+        );
+      } catch (e) {
+        print('RSA-OAEP decryption failed, trying PKCS1v15 fallback: $e');
+        try {
+          decryptedKeyJson = await RSA.decryptPKCS1v15(
+            encryptedKeyPackage,
+            userRsaPrivateKeyPem,
+          );
+          print(
+            '✓ Successfully decrypted AES key package using PKCS1v15 fallback for file $fileId',
+          );
+        } catch (fallbackError) {
+          print(
+            '❌ Both RSA-OAEP and PKCS1v15 decryption failed: $fallbackError',
+          );
+          rethrow;
+        }
+      }
+
+      // Re-encrypt the key package for the group using group's public key with RSA-OAEP
+      final groupEncryptedKeyPackage = await RSA.encryptOAEP(
+        decryptedKeyJson,
+        "",
+        Hash.SHA256,
+        groupRsaPublicKeyPem,
       );
 
-      final groupEncryptedKeyPackage = MyCryptoUtils.rsaEncrypt(
-        decryptedKeyJson,
-        groupRsaPublicKey,
+      print(
+        '✓ Successfully re-encrypted AES key package using RSA-OAEP for group $groupName',
       );
+
+      // Validate the re-encrypted package
+      final reEncryptedBytes = base64Decode(groupEncryptedKeyPackage);
+      if (reEncryptedBytes.length > 512) {
+        print('❌ ERROR: Re-encrypted key package too large');
+        throw Exception('Re-encrypted key package exceeds RSA limits');
+      }
 
       // Create share record
       await _supabase.from('File_Shares').insert({
@@ -155,6 +189,8 @@ class FileShareToGroupService {
         'shared_at': DateTime.now().toIso8601String(),
       });
 
+      print('✓ Created share record for file $fileId');
+
       // Create group key record
       await _supabase.from('File_Keys').insert({
         'file_id': fileId,
@@ -163,9 +199,10 @@ class FileShareToGroupService {
         'aes_key_encrypted': groupEncryptedKeyPackage,
       });
 
-      print('✓ File $fileId shared with group $groupName');
-    } catch (e) {
+      print('✓ File $fileId shared with group $groupName successfully');
+    } catch (e, stackTrace) {
       print('❌ Error sharing file $fileId with group $groupName: $e');
+      print('Stack trace: $stackTrace');
       rethrow;
     }
   }
@@ -181,7 +218,8 @@ class FileShareToGroupService {
             group_id,
             Group!inner(id, name)
           ''')
-          .eq('user_id', userId);
+          .eq('user_id', userId)
+          .order('Group(name)', ascending: true);
 
       return groupsResponse
           .map(
@@ -225,6 +263,93 @@ class FileShareToGroupService {
     } catch (e) {
       print('Error checking existing group shares: $e');
       return {};
+    }
+  }
+
+  /// Get group members count for UI display
+  static Future<int> getGroupMemberCount(String groupId) async {
+    try {
+      final response = await _supabase
+          .from('Group_Members')
+          .select('id')
+          .eq('group_id', groupId);
+
+      return response.length;
+    } catch (e) {
+      print('Error fetching group member count: $e');
+      return 0;
+    }
+  }
+
+  /// Validate that user has access to file before sharing
+  static Future<bool> validateUserFileAccess(
+    String fileId,
+    String userId,
+  ) async {
+    try {
+      // Check if user owns the file
+      final fileData =
+          await _supabase
+              .from('Files')
+              .select('uploaded_by')
+              .eq('id', fileId)
+              .single();
+
+      if (fileData['uploaded_by'] == userId) {
+        return true;
+      }
+
+      // Check if user has access via File_Keys
+      final keyAccess =
+          await _supabase
+              .from('File_Keys')
+              .select('id')
+              .eq('file_id', fileId)
+              .eq('recipient_type', 'user')
+              .eq('recipient_id', userId)
+              .maybeSingle();
+
+      return keyAccess != null;
+    } catch (e) {
+      print('Error validating user file access: $e');
+      return false;
+    }
+  }
+
+  /// Remove file share from group (revoke access)
+  static Future<bool> revokeFileFromGroup({
+    required String fileId,
+    required String groupId,
+    required String userId,
+  }) async {
+    try {
+      // Validate user has permission to revoke
+      final hasAccess = await validateUserFileAccess(fileId, userId);
+      if (!hasAccess) {
+        print('User $userId does not have access to file $fileId');
+        return false;
+      }
+
+      // Delete share record
+      await _supabase
+          .from('File_Shares')
+          .delete()
+          .eq('file_id', fileId)
+          .eq('shared_with_group_id', groupId);
+
+      // Delete group key record
+      await _supabase
+          .from('File_Keys')
+          .delete()
+          .eq('file_id', fileId)
+          .eq('recipient_type', 'group')
+          .eq('recipient_id', groupId);
+
+      print('✓ Successfully revoked file $fileId from group $groupId');
+      return true;
+    } catch (e) {
+      print('❌ Error revoking file from group: $e');
+      return false;
     }
   }
 }

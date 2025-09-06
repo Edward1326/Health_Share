@@ -1,6 +1,6 @@
 import 'dart:convert';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:health_share/services/crypto_utils.dart';
+import 'package:fast_rsa/fast_rsa.dart';
 
 class FileShareToOrgService {
   static final _supabase = Supabase.instance.client;
@@ -41,10 +41,6 @@ class FileShareToOrgService {
 
       print('✓ User found: ${userData['email']}');
       print('✓ RSA private key length: ${userRsaPrivateKeyPem.length}');
-
-      final userRsaPrivateKey = MyCryptoUtils.rsaPrivateKeyFromPem(
-        userRsaPrivateKeyPem,
-      );
 
       // STEP 2: Validate all files exist and user has access
       print('\n--- Step 2: Validating file access ---');
@@ -101,7 +97,7 @@ class FileShareToOrgService {
           await _shareFilesToSingleDoctor(
             fileIds,
             doctorId,
-            userRsaPrivateKey,
+            userRsaPrivateKeyPem,
             userId,
           );
           print('✓ Successfully shared with doctor: $doctorId');
@@ -123,7 +119,7 @@ class FileShareToOrgService {
   static Future<void> _shareFilesToSingleDoctor(
     List<String> fileIds,
     String doctorId,
-    dynamic userRsaPrivateKey,
+    String userRsaPrivateKeyPem,
     String userId,
   ) async {
     try {
@@ -137,9 +133,6 @@ class FileShareToOrgService {
       final doctorUser = doctorData['user'];
       final doctorName = _formatFullName(doctorUser);
       final doctorRsaPublicKeyPem = doctorUser['rsa_public_key'] as String;
-      final doctorRsaPublicKey = MyCryptoUtils.rsaPublicKeyFromPem(
-        doctorRsaPublicKeyPem,
-      );
 
       print('\n--- Processing doctor: $doctorName ($doctorId) ---');
 
@@ -148,8 +141,8 @@ class FileShareToOrgService {
           fileId,
           doctorId,
           doctorName,
-          doctorRsaPublicKey,
-          userRsaPrivateKey,
+          doctorRsaPublicKeyPem,
+          userRsaPrivateKeyPem,
           userId,
         );
       }
@@ -164,8 +157,8 @@ class FileShareToOrgService {
     String fileId,
     String doctorId,
     String doctorName,
-    dynamic doctorRsaPublicKey,
-    dynamic userRsaPrivateKey,
+    String doctorRsaPublicKeyPem,
+    String userRsaPrivateKeyPem,
     String userId,
   ) async {
     try {
@@ -226,27 +219,66 @@ class FileShareToOrgService {
         '    ✓ Retrieved encrypted key package (${encryptedKeyPackage.length} chars)',
       );
 
-      // Validate encrypted package size
+      // Validate encrypted package size (RSA has limitations)
       final encryptedBytes = base64Decode(encryptedKeyPackage);
       if (encryptedBytes.length > 512) {
-        // Increased limit for safety
-        throw Exception(
-          'Encrypted key package too large: ${encryptedBytes.length} bytes',
-        );
+        // More conservative limit for RSA
+        print('❌ ERROR: Encrypted key package too large for RSA decryption');
+        print('  File: $fileId, Size: ${encryptedBytes.length} bytes');
+        throw Exception('Encrypted key package exceeds RSA limits');
       }
 
-      // Decrypt and re-encrypt for doctor
-      print('    🔓 Decrypting key package...');
-      final decryptedKeyJson = MyCryptoUtils.rsaDecrypt(
-        encryptedKeyPackage,
-        userRsaPrivateKey,
+      // Decrypt AES key package using user's private key (with fallback)
+      String? decryptedKeyJson;
+      try {
+        print('    🔓 Attempting RSA-OAEP decryption...');
+        // Try RSA-OAEP first
+        decryptedKeyJson = await RSA.decryptOAEP(
+          encryptedKeyPackage,
+          "",
+          Hash.SHA256,
+          userRsaPrivateKeyPem,
+        );
+        print(
+          '    ✓ Successfully decrypted AES key package using RSA-OAEP for file $fileId',
+        );
+      } catch (e) {
+        print('    RSA-OAEP decryption failed, trying PKCS1v15 fallback: $e');
+        try {
+          decryptedKeyJson = await RSA.decryptPKCS1v15(
+            encryptedKeyPackage,
+            userRsaPrivateKeyPem,
+          );
+          print(
+            '    ✓ Successfully decrypted AES key package using PKCS1v15 fallback for file $fileId',
+          );
+        } catch (fallbackError) {
+          print(
+            '    ❌ Both RSA-OAEP and PKCS1v15 decryption failed: $fallbackError',
+          );
+          rethrow;
+        }
+      }
+
+      // Re-encrypt the key package for the doctor using doctor's public key with RSA-OAEP
+      print('    🔒 Re-encrypting for doctor using RSA-OAEP...');
+      final doctorEncryptedKeyPackage = await RSA.encryptOAEP(
+        decryptedKeyJson,
+        "",
+        Hash.SHA256,
+        doctorRsaPublicKeyPem,
       );
 
-      print('    🔒 Re-encrypting for doctor...');
-      final doctorEncryptedKeyPackage = MyCryptoUtils.rsaEncrypt(
-        decryptedKeyJson,
-        doctorRsaPublicKey,
+      print(
+        '    ✓ Successfully re-encrypted AES key package using RSA-OAEP for doctor $doctorName',
       );
+
+      // Validate the re-encrypted package
+      final reEncryptedBytes = base64Decode(doctorEncryptedKeyPackage);
+      if (reEncryptedBytes.length > 512) {
+        print('❌ ERROR: Re-encrypted key package too large');
+        throw Exception('Re-encrypted key package exceeds RSA limits');
+      }
 
       // Create share record using doctor's User.id for consistency
       print('    📝 Creating File_Shares record...');
@@ -579,6 +611,87 @@ class FileShareToOrgService {
       return isValid;
     } catch (e) {
       print('Error validating doctor assignment: $e');
+      return false;
+    }
+  }
+
+  /// Remove file share from doctor (revoke access)
+  static Future<bool> revokeFileFromDoctor({
+    required String fileId,
+    required String doctorId,
+    required String userId,
+  }) async {
+    try {
+      // Get doctor's user ID first
+      final doctorData = await _fetchDoctorDetails(doctorId);
+      if (doctorData == null) {
+        print('Doctor $doctorId not found');
+        return false;
+      }
+
+      final doctorUserId = doctorData['user']['id'] as String;
+
+      // Validate user has permission to revoke
+      final hasAccess = await validateUserFileAccess(fileId, userId);
+      if (!hasAccess) {
+        print('User $userId does not have access to file $fileId');
+        return false;
+      }
+
+      // Delete share record
+      await _supabase
+          .from('File_Shares')
+          .delete()
+          .eq('file_id', fileId)
+          .eq('shared_with_doctor', doctorUserId);
+
+      // Delete doctor key record
+      await _supabase
+          .from('File_Keys')
+          .delete()
+          .eq('file_id', fileId)
+          .eq('recipient_type', 'user')
+          .eq('recipient_id', doctorUserId);
+
+      print('✓ Successfully revoked file $fileId from doctor $doctorId');
+      return true;
+    } catch (e) {
+      print('❌ Error revoking file from doctor: $e');
+      return false;
+    }
+  }
+
+  /// Validate that user has access to file before sharing
+  static Future<bool> validateUserFileAccess(
+    String fileId,
+    String userId,
+  ) async {
+    try {
+      // Check if user owns the file
+      final fileData =
+          await _supabase
+              .from('Files')
+              .select('uploaded_by')
+              .eq('id', fileId)
+              .single();
+
+      if (fileData['uploaded_by'] == userId) {
+        return true;
+      }
+
+      // Check if user has access via File_Keys
+      final keyAccess =
+          await _supabase
+              .from('File_Keys')
+              .select('id')
+              .eq('file_id', fileId)
+              .eq('recipient_type', 'user')
+              .eq('recipient_id', userId)
+              .maybeSingle();
+
+      return keyAccess != null;
+    } catch (e) {
+      print('Error validating user file access: $e');
       return false;
     }
   }

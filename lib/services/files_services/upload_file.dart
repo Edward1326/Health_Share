@@ -1,16 +1,20 @@
 import 'dart:convert';
-import 'package:health_share/services/crypto_utils.dart';
+import 'dart:typed_data';
+import 'package:cryptography/cryptography.dart' hide Hash;
+import 'package:fast_rsa/fast_rsa.dart';
 import 'package:http/http.dart' as http;
-import 'package:encrypt/encrypt.dart' as encrypt;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter/material.dart';
-import 'package:health_share/services/aes_helper.dart';
 import 'package:health_share/services/files_services/file_picker_service.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 class UploadFileService {
   // Pinata JWT token (store securely in .env)
   static final String _pinataJWT = dotenv.env['PINATA_JWT'] ?? '';
+
+  // Cryptography instances
+  static final _aesGcm = AesGcm.with256bits();
+  static final _sha256 = Sha256();
 
   /// Uploads a file with encryption and stores metadata in Supabase
   /// Returns true if successful, false otherwise
@@ -24,13 +28,15 @@ class UploadFileService {
       final fileName = file.path.split('/').last;
       final fileType = fileName.split('.').last.toUpperCase();
 
-      // 2. Generate AES key + nonce
-      final aesKey = encrypt.Key.fromSecureRandom(32); // 32 bytes = AES-256
-      final aesNonce = encrypt.IV.fromSecureRandom(12); // 96-bit nonce
+      // 2. Calculate SHA-256 hash of original file
+      final fileHash = await _calculateSHA256(fileBytes);
+      print('File SHA-256 hash: $fileHash');
 
-      // 3. Encrypt file
-      final aesHelper = AESHelper(aesKey.base16, aesNonce.base16);
-      final encryptedBytes = aesHelper.encryptData(fileBytes);
+      // 3. Generate AES key and encrypt file
+      final aesKey = await _aesGcm.newSecretKey();
+      final encryptionResult = await _encryptFileData(fileBytes, aesKey);
+      final encryptedBytes = encryptionResult['encryptedData'] as Uint8List;
+      final nonce = encryptionResult['nonce'] as List<int>;
 
       // 4. Get current user
       final supabase = Supabase.instance.client;
@@ -53,19 +59,24 @@ class UploadFileService {
               .single();
 
       final rsaPublicKeyPem = userData['rsa_public_key'] as String;
-      final rsaPublicKey = MyCryptoUtils.rsaPublicKeyFromPem(rsaPublicKeyPem);
 
-      // 6. Build JSON with AES key + nonce
-      final keyData = {'key': aesKey.base16, 'nonce': aesNonce.base16};
+      // 6. Prepare AES key data for RSA encryption
+      final aesKeyBytes = await aesKey.extractBytes();
+      final keyData = {
+        'key': base64Encode(aesKeyBytes),
+        'nonce': base64Encode(nonce),
+      };
       final keyDataJson = jsonEncode(keyData);
 
-      // 7. Encrypt JSON with RSA -> already Base64 string
-      final encryptedKeyPackage = MyCryptoUtils.rsaEncrypt(
+      // 7. Encrypt AES key package with RSA-OAEP
+      final encryptedKeyPackage = await RSA.encryptOAEP(
         keyDataJson,
-        rsaPublicKey,
+        "",
+        Hash.SHA256,
+        rsaPublicKeyPem,
       );
 
-      // 8. Upload encrypted file to Pinata with original filename
+      // 8. Upload encrypted file to Pinata
       final ipfsCid = await _uploadToPinata(encryptedBytes, fileName);
       if (ipfsCid == null) {
         if (context.mounted) {
@@ -77,7 +88,7 @@ class UploadFileService {
       }
       print('Upload successful. CID: $ipfsCid');
 
-      // 9. Insert file metadata into Supabase
+      // 9. Insert file metadata into Supabase with SHA-256 hash
       final fileInsert =
           await supabase
               .from('Files')
@@ -89,6 +100,7 @@ class UploadFileService {
                 'file_size': fileBytes.length,
                 'ipfs_cid': ipfsCid,
                 'uploaded_by': user.id,
+                'sha256_hash': fileHash,
               })
               .select()
               .single();
@@ -135,9 +147,84 @@ class UploadFileService {
     }
   }
 
+  /// Calculate SHA-256 hash of file data
+  static Future<String> _calculateSHA256(Uint8List data) async {
+    final hash = await _sha256.hash(data);
+    return hash.bytes
+        .map((byte) => byte.toRadixString(16).padLeft(2, '0'))
+        .join();
+  }
+
+  /// Encrypt file data using AES-GCM
+  /// FIXED: Now combines ciphertext and MAC into single data structure
+  static Future<Map<String, dynamic>> _encryptFileData(
+    Uint8List fileData,
+    SecretKey aesKey,
+  ) async {
+    try {
+      // Generate random nonce for AES-GCM
+      final nonce = _aesGcm.newNonce();
+
+      // Encrypt the file data
+      final secretBox = await _aesGcm.encrypt(
+        fileData,
+        secretKey: aesKey,
+        nonce: nonce,
+      );
+
+      // Combine ciphertext and MAC into single byte array
+      // Format: [ciphertext][16-byte MAC]
+      final combinedData = Uint8List(secretBox.cipherText.length + 16);
+      combinedData.setRange(
+        0,
+        secretBox.cipherText.length,
+        secretBox.cipherText,
+      );
+      combinedData.setRange(
+        secretBox.cipherText.length,
+        combinedData.length,
+        secretBox.mac.bytes,
+      );
+
+      return {
+        'encryptedData': combinedData, // Now includes both ciphertext and MAC
+        'nonce': nonce,
+      };
+    } catch (e) {
+      throw Exception('Failed to encrypt file data: $e');
+    }
+  }
+
+  /// Decrypt file data using AES-GCM (for future use)
+  /// FIXED: Now properly separates MAC from combined data
+  static Future<Uint8List> decryptFileData(
+    Uint8List combinedData, // Contains both ciphertext and MAC
+    List<int> nonce,
+    SecretKey aesKey,
+  ) async {
+    try {
+      // Separate ciphertext and MAC
+      final cipherText = combinedData.sublist(0, combinedData.length - 16);
+      final macBytes = combinedData.sublist(combinedData.length - 16);
+
+      final secretBox = SecretBox(cipherText, nonce: nonce, mac: Mac(macBytes));
+      final decryptedData = await _aesGcm.decrypt(secretBox, secretKey: aesKey);
+
+      return Uint8List.fromList(decryptedData);
+    } catch (e) {
+      throw Exception('Failed to decrypt file data: $e');
+    }
+  }
+
+  /// Create AES key from base64 string (for decryption)
+  static Future<SecretKey> createAESKeyFromBase64(String base64Key) async {
+    final keyBytes = base64Decode(base64Key);
+    return SecretKey(keyBytes);
+  }
+
   /// Uploads encrypted file to Pinata with original filename
   static Future<String?> _uploadToPinata(
-    List<int> encryptedBytes,
+    Uint8List encryptedBytes, // Now contains both ciphertext and MAC
     String fileName,
   ) async {
     try {
@@ -150,8 +237,7 @@ class UploadFileService {
               http.MultipartFile.fromBytes(
                 'file',
                 encryptedBytes,
-                filename:
-                    fileName, // Use the original filename instead of 'encrypted.aes'
+                filename: fileName,
               ),
             );
 

@@ -1,11 +1,8 @@
-import 'package:basic_utils/basic_utils.dart' as crypto;
-import 'package:basic_utils/basic_utils.dart';
 import 'package:flutter/material.dart';
 import 'package:health_share/screens/groups/group_details.dart';
 import 'package:health_share/components/navbar_main.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:rsa_encrypt/rsa_encrypt.dart';
-import 'package:crypto/crypto.dart' as crypto;
+import 'package:fast_rsa/fast_rsa.dart';
 
 class GroupsScreen extends StatefulWidget {
   const GroupsScreen({super.key});
@@ -24,7 +21,6 @@ class _GroupsScreenState extends State<GroupsScreen>
   String _searchQuery = '';
 
   List<Map<String, dynamic>> _groups = [];
-  List<Map<String, dynamic>> _invitations = [];
   bool _isLoading = false;
   String? _currentUserId;
 
@@ -41,7 +37,6 @@ class _GroupsScreenState extends State<GroupsScreen>
     _fadeController.forward();
     _getCurrentUser();
     _fetchGroups();
-    _fetchInvitations();
   }
 
   Future<void> _getCurrentUser() async {
@@ -72,39 +67,6 @@ class _GroupsScreenState extends State<GroupsScreen>
       );
       _isLoading = false;
     });
-  }
-
-  Future<void> _fetchInvitations() async {
-    if (_currentUserId == null) {
-      print('DEBUG: _currentUserId is null');
-      return;
-    }
-
-    print('DEBUG: Fetching invitations for user: $_currentUserId');
-
-    try {
-      final response = await Supabase.instance.client
-          .from('Group_Invitations')
-          .select('''
-          *,
-          Group!inner(name),
-          invited_by_user:User!invited_by(email)
-        ''')
-          .eq('invitee_id', _currentUserId!)
-          .eq('status', 'pending')
-          .order('invited_at', ascending: false);
-
-      print('DEBUG: Raw response: $response');
-      print('DEBUG: Response length: ${response.length}');
-
-      setState(() {
-        _invitations = List<Map<String, dynamic>>.from(response);
-      });
-
-      print('DEBUG: _invitations length: ${_invitations.length}');
-    } catch (e) {
-      print('DEBUG: Error fetching invitations: $e');
-    }
   }
 
   List<Map<String, dynamic>> get _filteredGroups {
@@ -141,46 +103,6 @@ class _GroupsScreenState extends State<GroupsScreen>
             fontSize: 20,
           ),
         ),
-        actions: [
-          if (_invitations.isNotEmpty)
-            Stack(
-              children: [
-                IconButton(
-                  onPressed: _showInvitationsDialog,
-                  icon: Icon(
-                    Icons.notifications_outlined,
-                    color: Colors.grey[600],
-                  ),
-                ),
-                Positioned(
-                  right: 8,
-                  top: 8,
-                  child: Container(
-                    padding: const EdgeInsets.all(2),
-                    decoration: BoxDecoration(
-                      color: Colors.red,
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    constraints: const BoxConstraints(
-                      minWidth: 14,
-                      minHeight: 14,
-                    ),
-                    child: Text(
-                      '${_invitations.length}',
-                      style: const TextStyle(color: Colors.white, fontSize: 8),
-                      textAlign: TextAlign.center,
-                    ),
-                  ),
-                ),
-              ],
-            )
-          else
-            IconButton(
-              onPressed: () {},
-              icon: Icon(Icons.notifications_outlined, color: Colors.grey[600]),
-            ),
-          const SizedBox(width: 8),
-        ],
       ),
       body: FadeTransition(
         opacity: _fadeAnimation,
@@ -369,8 +291,8 @@ class _GroupsScreenState extends State<GroupsScreen>
                 ),
                 PopupMenuButton<String>(
                   onSelected: (value) {
-                    if (value == 'invite') {
-                      _showInviteDialog(group['id']);
+                    if (value == 'add_member') {
+                      _showAddMemberDialog(group['id']);
                     } else if (value == 'members') {
                       _showMembersDialog(group['id']);
                     }
@@ -378,12 +300,12 @@ class _GroupsScreenState extends State<GroupsScreen>
                   itemBuilder:
                       (context) => [
                         const PopupMenuItem(
-                          value: 'invite',
+                          value: 'add_member',
                           child: Row(
                             children: [
                               Icon(Icons.person_add, size: 16),
                               SizedBox(width: 8),
-                              Text('Invite Members'),
+                              Text('Add Member'),
                             ],
                           ),
                         ),
@@ -435,7 +357,7 @@ class _GroupsScreenState extends State<GroupsScreen>
             ),
             const SizedBox(height: 8),
             Text(
-              'Create your first group or wait for invitations',
+              'Create your first group to get started',
               style: TextStyle(fontSize: 16, color: Colors.grey[600]),
               textAlign: TextAlign.center,
             ),
@@ -545,15 +467,11 @@ class _GroupsScreenState extends State<GroupsScreen>
 
   Future<void> _createGroup(String name) async {
     try {
-      // Generate RSA key pair
-      final helper = RsaKeyHelper();
-      final pair = await helper.computeRSAKeyPair(helper.getSecureRandom());
-      final crypto.RSAPublicKey publicKey =
-          pair.publicKey as crypto.RSAPublicKey;
-      final crypto.RSAPrivateKey privateKey =
-          pair.privateKey as crypto.RSAPrivateKey;
-      final publicPem = CryptoUtils.encodeRSAPublicKeyToPem(publicKey);
-      final privatePem = CryptoUtils.encodeRSAPrivateKeyToPem(privateKey);
+      // Generate RSA key pair using fast_rsa (same as AuthService)
+      final keyPair = await RSA.generate(2048); // 2048-bit key size
+
+      final publicPem = keyPair.publicKey;
+      final privatePem = keyPair.privateKey;
 
       // Create group
       final groupResponse =
@@ -597,9 +515,9 @@ class _GroupsScreenState extends State<GroupsScreen>
     }
   }
 
-  void _showInviteDialog(String groupId) {
+  void _showAddMemberDialog(String groupId) {
     final TextEditingController emailController = TextEditingController();
-    bool isInviting = false;
+    bool isAddingMember = false;
 
     showDialog(
       context: context,
@@ -610,7 +528,7 @@ class _GroupsScreenState extends State<GroupsScreen>
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(16),
               ),
-              title: const Text('Invite Member'),
+              title: const Text('Add Member'),
               content: TextField(
                 controller: emailController,
                 decoration: InputDecoration(
@@ -624,7 +542,8 @@ class _GroupsScreenState extends State<GroupsScreen>
               ),
               actions: [
                 TextButton(
-                  onPressed: isInviting ? null : () => Navigator.pop(context),
+                  onPressed:
+                      isAddingMember ? null : () => Navigator.pop(context),
                   child: Text(
                     'Cancel',
                     style: TextStyle(color: Colors.grey[600]),
@@ -632,12 +551,15 @@ class _GroupsScreenState extends State<GroupsScreen>
                 ),
                 ElevatedButton(
                   onPressed:
-                      isInviting
+                      isAddingMember
                           ? null
                           : () async {
                             if (emailController.text.isNotEmpty) {
-                              setDialogState(() => isInviting = true);
-                              await _inviteUser(groupId, emailController.text);
+                              setDialogState(() => isAddingMember = true);
+                              await _addMemberDirectly(
+                                groupId,
+                                emailController.text,
+                              );
                               Navigator.pop(context);
                             }
                           },
@@ -649,7 +571,7 @@ class _GroupsScreenState extends State<GroupsScreen>
                     ),
                   ),
                   child:
-                      isInviting
+                      isAddingMember
                           ? const SizedBox(
                             width: 16,
                             height: 16,
@@ -660,7 +582,7 @@ class _GroupsScreenState extends State<GroupsScreen>
                               ),
                             ),
                           )
-                          : const Text('Invite'),
+                          : const Text('Add Member'),
                 ),
               ],
             );
@@ -670,7 +592,7 @@ class _GroupsScreenState extends State<GroupsScreen>
     );
   }
 
-  Future<void> _inviteUser(String groupId, String email) async {
+  Future<void> _addMemberDirectly(String groupId, String email) async {
     try {
       // Find user by email from custom User table
       final userResponse =
@@ -713,40 +635,16 @@ class _GroupsScreenState extends State<GroupsScreen>
         return;
       }
 
-      // Check for existing pending invitation
-      final inviteCheck =
-          await Supabase.instance.client
-              .from('Group_Invitations')
-              .select('id')
-              .eq('group_id', groupId)
-              .eq('invitee_id', userResponse['id'])
-              .eq('status', 'pending')
-              .maybeSingle();
-
-      if (inviteCheck != null) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Invitation already sent to this user'),
-              backgroundColor: Colors.orange,
-            ),
-          );
-        }
-        return;
-      }
-
-      // Send invitation
-      await Supabase.instance.client.from('Group_Invitations').insert({
+      // Add user directly to group members
+      await Supabase.instance.client.from('Group_Members').insert({
         'group_id': groupId,
-        'invitee_id': userResponse['id'],
-        'invited_by': _currentUserId,
-        'status': 'pending',
+        'user_id': userResponse['id'],
       });
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Invitation sent to $email'),
+            content: Text('$email has been added to the group'),
             backgroundColor: const Color(0xFF667EEA),
           ),
         );
@@ -755,146 +653,7 @@ class _GroupsScreenState extends State<GroupsScreen>
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error sending invitation: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
-  }
-
-  void _showInvitationsDialog() {
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
-          title: const Text('Group Invitations'),
-          content: SizedBox(
-            width: double.maxFinite,
-            child: ListView.builder(
-              shrinkWrap: true,
-              itemCount: _invitations.length,
-              itemBuilder: (context, index) {
-                final invitation = _invitations[index];
-                return Card(
-                  margin: const EdgeInsets.only(bottom: 8),
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          invitation['Group']['name'],
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          'Invited by: ${invitation['invited_by_user']['email']}',
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Colors.grey[600],
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.end,
-                          children: [
-                            TextButton(
-                              onPressed:
-                                  () => _respondToInvitation(
-                                    invitation['id'],
-                                    'rejected',
-                                  ),
-                              child: const Text('Reject'),
-                            ),
-                            const SizedBox(width: 8),
-                            ElevatedButton(
-                              onPressed:
-                                  () => _respondToInvitation(
-                                    invitation['id'],
-                                    'accepted',
-                                    groupId: invitation['group_id'],
-                                  ),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFF667EEA),
-                                foregroundColor: Colors.white,
-                              ),
-                              child: const Text('Accept'),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Close'),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  Future<void> _respondToInvitation(
-    String invitationId,
-    String status, {
-    String? groupId,
-  }) async {
-    try {
-      // Update invitation status
-      await Supabase.instance.client
-          .from('Group_Invitations')
-          .update({
-            'status': status,
-            'responded_at': DateTime.now().toIso8601String(),
-          })
-          .eq('id', invitationId);
-
-      // If accepted, add user to group members
-      if (status == 'accepted' && groupId != null) {
-        await Supabase.instance.client.from('Group_Members').insert({
-          'group_id': groupId,
-          'user_id': _currentUserId,
-        });
-      }
-
-      // Refresh data
-      await _fetchInvitations();
-      await _fetchGroups();
-
-      if (mounted) {
-        Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              status == 'accepted'
-                  ? 'Invitation accepted! You\'ve joined the group.'
-                  : 'Invitation rejected.',
-            ),
-            backgroundColor:
-                status == 'accepted'
-                    ? const Color(0xFF667EEA)
-                    : Colors.grey[600],
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error responding to invitation: $e'),
+            content: Text('Error adding member: $e'),
             backgroundColor: Colors.red,
           ),
         );

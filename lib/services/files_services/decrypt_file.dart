@@ -1,12 +1,15 @@
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:http/http.dart' as http;
-import 'package:basic_utils/basic_utils.dart';
+import 'package:cryptography/cryptography.dart' hide Hash;
+import 'package:fast_rsa/fast_rsa.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:health_share/services/aes_helper.dart';
-import 'package:health_share/services/crypto_utils.dart';
 
 class DecryptFileService {
+  // Cryptography instances
+  static final _aesGcm = AesGcm.with256bits();
+  static final _sha256 = Sha256();
+
   static Future<Uint8List?> decryptFileFromIpfs({
     required String cid,
     required String fileId,
@@ -34,23 +37,16 @@ class DecryptFileService {
               .single();
 
       final rsaPrivateKeyPem = userData['rsa_private_key'] as String;
-      final rsaPrivateKey = MyCryptoUtils.rsaPrivateKeyFromPem(
-        rsaPrivateKeyPem,
-      );
       print('Retrieved RSA private key from user data');
 
       // 3. Get encrypted AES key+nonce JSON from Supabase
-      // FIXED: Added userId filter to ensure we get the correct key for this user
       final fileKeyRecord =
           await supabase
               .from('File_Keys')
               .select('aes_key_encrypted')
               .eq('file_id', fileId)
               .eq('recipient_type', 'user')
-              .eq(
-                'recipient_id',
-                userId,
-              ) // Add this line - assuming your column is named 'recipient_id'
+              .eq('recipient_id', userId)
               .maybeSingle();
 
       if (fileKeyRecord == null || fileKeyRecord['aes_key_encrypted'] == null) {
@@ -63,48 +59,214 @@ class DecryptFileService {
       final encryptedKeyPackage = fileKeyRecord['aes_key_encrypted'] as String;
       print('Retrieved encrypted AES key package from database');
 
-      // 4. Decrypt AES key package (Base64 → JSON string)
+      // 4. Decrypt AES key package using RSA-OAEP
       String? decryptedJson;
       try {
-        decryptedJson = MyCryptoUtils.rsaDecrypt(
+        decryptedJson = await RSA.decryptOAEP(
           encryptedKeyPackage,
-          rsaPrivateKey,
+          "",
+          Hash.SHA256,
+          rsaPrivateKeyPem,
         );
+        print('Successfully decrypted AES key package');
       } catch (e) {
-        print('Primary RSA decryption failed, trying fallback: $e');
-        // Try the fallback decryption method
-        decryptedJson = MyCryptoUtils.tryDecryptWithFallback(
-          encryptedKeyPackage,
-          rsaPrivateKey,
-        );
-      }
+        print('RSA-OAEP decryption failed: $e');
 
-      if (decryptedJson == null) {
-        print('Failed to decrypt AES key package with all methods');
-        return null;
+        // Fallback to PKCS1v15 for backward compatibility
+        print('Attempting fallback to PKCS1v15 for backward compatibility...');
+        try {
+          decryptedJson = await RSA.decryptPKCS1v15(
+            encryptedKeyPackage,
+            rsaPrivateKeyPem,
+          );
+          print('Successfully decrypted using PKCS1v15 fallback');
+        } catch (fallbackError) {
+          print('PKCS1v15 fallback also failed: $fallbackError');
+          return null;
+        }
       }
 
       final keyData = jsonDecode(decryptedJson);
+      final aesKeyBase64 = keyData['key'] as String;
+      final nonceBase64 = keyData['nonce'] as String;
 
-      final aesKeyHex = keyData['key'] as String;
-      final nonceHex = keyData['nonce'] as String;
+      // Convert from base64 to bytes
+      final aesKeyBytes = base64Decode(aesKeyBase64);
+      final nonceBytes = base64Decode(nonceBase64);
 
-      print('Successfully decrypted AES key and nonce');
+      print('Successfully extracted AES key and nonce');
 
-      // 5. Create AESHelper with GCM mode and decrypt file
-      final aesHelper = AESHelper(aesKeyHex, nonceHex);
-      final decryptedBytes = aesHelper.decryptData(encryptedBytes);
+      // 5. Create SecretKey from bytes
+      final aesKey = SecretKey(aesKeyBytes);
+
+      // 6. Decrypt file using AES-GCM
+      final decryptedBytes = await _decryptFileData(
+        encryptedBytes,
+        nonceBytes,
+        aesKey,
+      );
+
+      if (decryptedBytes == null) {
+        print('Failed to decrypt file data');
+        return null;
+      }
 
       print(
         'Successfully decrypted file. Size: ${decryptedBytes.length} bytes',
       );
 
+      // 7. Verify file integrity with SHA-256 (optional)
+      await _verifyFileIntegrity(fileId, decryptedBytes);
+
       return decryptedBytes;
     } catch (e, st) {
       print('Error during decryption flow: $e');
-      print(st);
+      print('Stack trace: $st');
       return null;
     }
+  }
+
+  /// Decrypt file data using AES-GCM
+  /// FIXED: Properly separates MAC from combined encrypted data
+  static Future<Uint8List?> _decryptFileData(
+    Uint8List combinedData, // Contains both ciphertext and MAC
+    List<int> nonce,
+    SecretKey aesKey,
+  ) async {
+    try {
+      print(
+        'Attempting to decrypt ${combinedData.length} bytes of combined data',
+      );
+
+      // Check if we have enough data (at least 16 bytes for MAC)
+      if (combinedData.length < 16) {
+        print(
+          'Error: Combined data too short, must be at least 16 bytes for MAC',
+        );
+        return null;
+      }
+
+      // Separate ciphertext and MAC
+      // Format: [ciphertext][16-byte MAC]
+      final cipherText = combinedData.sublist(0, combinedData.length - 16);
+      final macBytes = combinedData.sublist(combinedData.length - 16);
+
+      print(
+        'Separated ciphertext: ${cipherText.length} bytes, MAC: ${macBytes.length} bytes',
+      );
+
+      // Create SecretBox with proper MAC
+      final secretBox = SecretBox(cipherText, nonce: nonce, mac: Mac(macBytes));
+
+      final decryptedData = await _aesGcm.decrypt(secretBox, secretKey: aesKey);
+
+      return Uint8List.fromList(decryptedData);
+    } catch (e) {
+      print('AES-GCM decryption failed: $e');
+      print('This might be due to incorrect MAC separation or corrupted data');
+
+      // Try alternative approaches for backward compatibility
+      return await _tryAlternativeDecryption(combinedData, nonce, aesKey);
+    }
+  }
+
+  /// Try alternative decryption methods for backward compatibility
+  static Future<Uint8List?> _tryAlternativeDecryption(
+    Uint8List encryptedData,
+    List<int> nonce,
+    SecretKey aesKey,
+  ) async {
+    print('Trying alternative decryption methods...');
+
+    // Method 1: Try with Mac.empty (for old data without proper MAC storage)
+    try {
+      print('Attempting decryption with Mac.empty');
+      final secretBox = SecretBox(encryptedData, nonce: nonce, mac: Mac.empty);
+
+      final decryptedData = await _aesGcm.decrypt(secretBox, secretKey: aesKey);
+      print('✅ Success with Mac.empty method');
+      return Uint8List.fromList(decryptedData);
+    } catch (e) {
+      print('Mac.empty method failed: $e');
+    }
+
+    // Method 2: Try assuming MAC is at the beginning (alternative format)
+    try {
+      if (encryptedData.length > 16) {
+        print('Attempting decryption with MAC at beginning');
+        final macBytes = encryptedData.sublist(0, 16);
+        final cipherText = encryptedData.sublist(16);
+
+        final secretBox = SecretBox(
+          cipherText,
+          nonce: nonce,
+          mac: Mac(macBytes),
+        );
+
+        final decryptedData = await _aesGcm.decrypt(
+          secretBox,
+          secretKey: aesKey,
+        );
+        print('✅ Success with MAC-at-beginning method');
+        return Uint8List.fromList(decryptedData);
+      }
+    } catch (e) {
+      print('MAC-at-beginning method failed: $e');
+    }
+
+    print('❌ All decryption methods failed');
+    return null;
+  }
+
+  /// Verify file integrity using SHA-256 hash
+  static Future<bool> _verifyFileIntegrity(
+    String fileId,
+    Uint8List decryptedData,
+  ) async {
+    try {
+      final supabase = Supabase.instance.client;
+
+      // Get stored hash from database
+      final fileRecord =
+          await supabase
+              .from('Files')
+              .select('sha256_hash')
+              .eq('id', fileId)
+              .maybeSingle();
+
+      if (fileRecord == null || fileRecord['sha256_hash'] == null) {
+        print('No stored hash found for verification');
+        return false;
+      }
+
+      final storedHash = fileRecord['sha256_hash'] as String;
+
+      // Calculate hash of decrypted data
+      final calculatedHash = await _calculateSHA256(decryptedData);
+
+      final isValid = storedHash.toLowerCase() == calculatedHash.toLowerCase();
+
+      if (isValid) {
+        print('✅ File integrity verified - hashes match');
+      } else {
+        print('❌ File integrity check failed - hashes do not match');
+        print('Stored: $storedHash');
+        print('Calculated: $calculatedHash');
+      }
+
+      return isValid;
+    } catch (e) {
+      print('Error during integrity verification: $e');
+      return false;
+    }
+  }
+
+  /// Calculate SHA-256 hash of data
+  static Future<String> _calculateSHA256(Uint8List data) async {
+    final hash = await _sha256.hash(data);
+    return hash.bytes
+        .map((byte) => byte.toRadixString(16).padLeft(2, '0'))
+        .join();
   }
 
   /// Downloads file from IPFS using CID
@@ -143,7 +305,7 @@ class DecryptFileService {
       final files = await supabase
           .from('Files')
           .select(
-            'id, filename, file_type, file_size, uploaded_at, ipfs_cid, category',
+            'id, filename, file_type, file_size, uploaded_at, ipfs_cid, category, sha256_hash',
           )
           .eq('uploaded_by', userId)
           .order('uploaded_at', ascending: false);
@@ -153,6 +315,72 @@ class DecryptFileService {
     } catch (e) {
       print('Error fetching files: $e');
       return [];
+    }
+  }
+
+  /// Helper method to create SecretKey from base64 string
+  static SecretKey createSecretKeyFromBase64(String base64Key) {
+    final keyBytes = base64Decode(base64Key);
+    return SecretKey(keyBytes);
+  }
+
+  /// Get decryption key for a specific file (useful for sharing files)
+  static Future<Map<String, dynamic>?> getFileDecryptionKey({
+    required String fileId,
+    required String userId,
+  }) async {
+    try {
+      final supabase = Supabase.instance.client;
+
+      // Get user's RSA private key
+      final userData =
+          await supabase
+              .from('User')
+              .select('rsa_private_key')
+              .eq('id', userId)
+              .single();
+
+      final rsaPrivateKeyPem = userData['rsa_private_key'] as String;
+
+      // Get encrypted AES key package
+      final fileKeyRecord =
+          await supabase
+              .from('File_Keys')
+              .select('aes_key_encrypted')
+              .eq('file_id', fileId)
+              .eq('recipient_type', 'user')
+              .eq('recipient_id', userId)
+              .maybeSingle();
+
+      if (fileKeyRecord == null || fileKeyRecord['aes_key_encrypted'] == null) {
+        return null;
+      }
+
+      final encryptedKeyPackage = fileKeyRecord['aes_key_encrypted'] as String;
+
+      // Try to decrypt with RSA-OAEP first, fallback to PKCS1v15
+      String? decryptedJson;
+      try {
+        decryptedJson = await RSA.decryptOAEP(
+          encryptedKeyPackage,
+          "",
+          Hash.SHA256,
+          rsaPrivateKeyPem,
+        );
+      } catch (e) {
+        print('RSA-OAEP decryption failed, trying PKCS1v15 fallback: $e');
+        decryptedJson = await RSA.decryptPKCS1v15(
+          encryptedKeyPackage,
+          rsaPrivateKeyPem,
+        );
+      }
+
+      final keyData = jsonDecode(decryptedJson);
+
+      return {'aesKey': keyData['key'], 'nonce': keyData['nonce']};
+    } catch (e) {
+      print('Error getting decryption key: $e');
+      return null;
     }
   }
 }

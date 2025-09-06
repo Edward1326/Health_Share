@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:health_share/services/files_services/file_preview.dart';
+import 'package:health_share/services/group_services/files_decrypt_group.dart';
 import 'package:health_share/services/group_services/group_file_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -165,8 +166,8 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen>
         actions: [
           PopupMenuButton<String>(
             onSelected: (value) {
-              if (value == 'invite') {
-                _showInviteDialog();
+              if (value == 'add_member') {
+                _showAddMemberDialog();
               } else if (value == 'leave') {
                 _showLeaveGroupDialog();
               } else if (value == 'refresh') {
@@ -176,12 +177,12 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen>
             itemBuilder:
                 (context) => [
                   const PopupMenuItem(
-                    value: 'invite',
+                    value: 'add_member',
                     child: Row(
                       children: [
                         Icon(Icons.person_add, size: 16),
                         SizedBox(width: 8),
-                        Text('Invite Members'),
+                        Text('Add Members'),
                       ],
                     ),
                   ),
@@ -705,7 +706,8 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen>
             ),
       );
 
-      final decryptedBytes = await GroupFileService.decryptGroupSharedFile(
+      // Direct call to FilesDecryptGroup instead of through GroupFileService
+      final decryptedBytes = await FilesDecryptGroup.decryptGroupSharedFile(
         fileId: fileId,
         groupId: widget.groupId,
         userId: _currentUserId!,
@@ -863,7 +865,7 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen>
     _showSuccess('Data refreshed');
   }
 
-  Future<void> _inviteUser(String email) async {
+  Future<void> _addMemberDirectly(String email) async {
     try {
       final userResponse =
           await Supabase.instance.client
@@ -890,36 +892,21 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen>
         return;
       }
 
-      final inviteCheck =
-          await Supabase.instance.client
-              .from('Group_Invitations')
-              .select('id')
-              .eq('group_id', widget.groupId)
-              .eq('invitee_id', userResponse['id'])
-              .eq('status', 'pending')
-              .maybeSingle();
-
-      if (inviteCheck != null) {
-        _showError('Invitation already sent to this user');
-        return;
-      }
-
-      await Supabase.instance.client.from('Group_Invitations').insert({
+      await Supabase.instance.client.from('Group_Members').insert({
         'group_id': widget.groupId,
-        'invitee_id': userResponse['id'],
-        'invited_by': _currentUserId,
-        'status': 'pending',
+        'user_id': userResponse['id'],
       });
 
-      _showSuccess('Invitation sent to $email');
+      await _fetchMembers(); // Refresh members list
+      _showSuccess('$email added to group successfully');
     } catch (e) {
-      _showError('Error sending invitation: $e');
+      _showError('Error adding member: $e');
     }
   }
 
-  void _showInviteDialog() {
+  void _showAddMemberDialog() {
     final TextEditingController emailController = TextEditingController();
-    bool isInviting = false;
+    bool isAdding = false;
 
     showDialog(
       context: context,
@@ -930,7 +917,7 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen>
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(16),
               ),
-              title: const Text('Invite Member'),
+              title: const Text('Add Member'),
               content: TextField(
                 controller: emailController,
                 decoration: InputDecoration(
@@ -944,7 +931,7 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen>
               ),
               actions: [
                 TextButton(
-                  onPressed: isInviting ? null : () => Navigator.pop(context),
+                  onPressed: isAdding ? null : () => Navigator.pop(context),
                   child: Text(
                     'Cancel',
                     style: TextStyle(color: Colors.grey[600]),
@@ -952,12 +939,12 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen>
                 ),
                 ElevatedButton(
                   onPressed:
-                      isInviting
+                      isAdding
                           ? null
                           : () async {
                             if (emailController.text.isNotEmpty) {
-                              setDialogState(() => isInviting = true);
-                              await _inviteUser(emailController.text);
+                              setDialogState(() => isAdding = true);
+                              await _addMemberDirectly(emailController.text);
                               Navigator.pop(context);
                             }
                           },
@@ -969,7 +956,7 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen>
                     ),
                   ),
                   child:
-                      isInviting
+                      isAdding
                           ? const SizedBox(
                             width: 16,
                             height: 16,
@@ -980,7 +967,7 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen>
                               ),
                             ),
                           )
-                          : const Text('Invite'),
+                          : const Text('Add Member'),
                 ),
               ],
             );
