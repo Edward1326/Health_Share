@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:health_share/components/navbar_main.dart';
+import 'package:health_share/services/hive_service/hive_service.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -47,6 +48,31 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     _fadeController.dispose();
     _slideController.dispose();
     super.dispose();
+  }
+
+  /// Function to test Hive connection
+  Future<void> _testHiveConnection() async {
+    final connected = await HiveService.testConnection();
+    debugPrint('Hive connection: ${connected ? 'SUCCESS' : 'FAILED'}');
+
+    final broadcast = await HiveService.broadcastCustomJson({
+      'test': 'data',
+      'timestamp': DateTime.now().toIso8601String(),
+    });
+    debugPrint('Test broadcast: ${broadcast ? 'SUCCESS' : 'FAILED'}');
+
+    // Optional: show result in a snackbar
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            connected && broadcast
+                ? 'Hive test SUCCESS ✅'
+                : 'Hive test FAILED ❌',
+          ),
+        ),
+      );
+    }
   }
 
   @override
@@ -101,40 +127,29 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   ),
                 ),
 
-                // Recent Folder Section
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 20.0),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const SizedBox(height: 8),
-                        _buildSectionHeader(
-                          'Recent Folders',
-                          Icons.folder_outlined,
+                // Button in the middle of the screen
+                SliverFillRemaining(
+                  hasScrollBody: false,
+                  child: Center(
+                    child: ElevatedButton(
+                      onPressed: _testHiveConnection,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.blueAccent,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 24,
+                          vertical: 14,
                         ),
-                        const SizedBox(height: 16),
-                        _buildRecentFoldersGrid(),
-                      ],
-                    ),
-                  ),
-                ),
-
-                // Groups Overview Section
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.all(20.0),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const SizedBox(height: 16),
-                        _buildSectionHeader(
-                          'Groups Overview',
-                          Icons.group_outlined,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
                         ),
-                        const SizedBox(height: 16),
-                        _buildGroupsOverview(),
-                      ],
+                      ),
+                      child: const Text(
+                        'Test Hive Connection',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
                     ),
                   ),
                 ),
@@ -173,238 +188,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             border: Border.all(color: Colors.grey.withOpacity(0.1)),
           ),
           child: Icon(icon, color: Colors.grey[700], size: 22),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSectionHeader(String title, IconData icon) {
-    return Row(
-      children: [
-        Container(
-          width: 32,
-          height: 32,
-          decoration: BoxDecoration(
-            color: const Color(0xFF667EEA).withOpacity(0.1),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Icon(icon, color: const Color(0xFF667EEA), size: 18),
-        ),
-        const SizedBox(width: 12),
-        Text(
-          title,
-          style: TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.w600,
-            color: Colors.grey[800],
-            letterSpacing: -0.3,
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildRecentFoldersGrid() {
-    final recentFolders = [
-      {
-        'name': 'Projects',
-        'icon': Icons.work_outline,
-        'color': const Color(0xFF667EEA),
-      },
-      {
-        'name': 'Documents',
-        'icon': Icons.description_outlined,
-        'color': const Color(0xFF11998E),
-      },
-      {
-        'name': 'Photos',
-        'icon': Icons.photo_outlined,
-        'color': const Color(0xFFE056FD),
-      },
-      {
-        'name': 'Downloads',
-        'icon': Icons.download_outlined,
-        'color': const Color(0xFFF093FB),
-      },
-    ];
-
-    return GridView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        childAspectRatio: 1.4,
-        crossAxisSpacing: 16,
-        mainAxisSpacing: 16,
-      ),
-      itemCount: recentFolders.length,
-      itemBuilder: (context, index) {
-        final folder = recentFolders[index];
-        return _buildFolderCard(
-          name: folder['name'] as String,
-          icon: folder['icon'] as IconData,
-          color: folder['color'] as Color,
-          fileCount: (index + 1) * 12,
-        );
-      },
-    );
-  }
-
-  Widget _buildFolderCard({
-    required String name,
-    required IconData icon,
-    required Color color,
-    required int fileCount,
-  }) {
-    return Material(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(16),
-      elevation: 0,
-      shadowColor: Colors.black.withOpacity(0.05),
-      child: InkWell(
-        onTap: () {
-          // Navigate to folder
-        },
-        borderRadius: BorderRadius.circular(16),
-        child: Container(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: Colors.grey.withOpacity(0.08)),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.all(20.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  width: 44,
-                  height: 44,
-                  decoration: BoxDecoration(
-                    color: color.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Icon(icon, color: color, size: 22),
-                ),
-                const Spacer(),
-                Text(
-                  name,
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.grey[800],
-                    letterSpacing: -0.2,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  '$fileCount files',
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: Colors.grey[500],
-                    fontWeight: FontWeight.w400,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildGroupsOverview() {
-    final groups = [
-      {'name': 'Design Team', 'members': 8, 'avatar': '🎨'},
-      {'name': 'Development', 'members': 12, 'avatar': '💻'},
-      {'name': 'Marketing', 'members': 6, 'avatar': '📈'},
-    ];
-
-    return Column(
-      children:
-          groups
-              .map(
-                (group) => _buildGroupCard(
-                  name: group['name'] as String,
-                  members: group['members'] as int,
-                  avatar: group['avatar'] as String,
-                ),
-              )
-              .toList(),
-    );
-  }
-
-  Widget _buildGroupCard({
-    required String name,
-    required int members,
-    required String avatar,
-  }) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      child: Material(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        elevation: 0,
-        shadowColor: Colors.black.withOpacity(0.05),
-        child: InkWell(
-          onTap: () {
-            // Navigate to group
-          },
-          borderRadius: BorderRadius.circular(16),
-          child: Container(
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: Colors.grey.withOpacity(0.08)),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.all(20.0),
-              child: Row(
-                children: [
-                  Container(
-                    width: 52,
-                    height: 52,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF667EEA).withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: Center(
-                      child: Text(avatar, style: const TextStyle(fontSize: 24)),
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          name,
-                          style: TextStyle(
-                            fontSize: 17,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.grey[800],
-                            letterSpacing: -0.2,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          '$members members',
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Colors.grey[500],
-                            fontWeight: FontWeight.w400,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Icon(
-                    Icons.arrow_forward_ios,
-                    color: Colors.grey[400],
-                    size: 16,
-                  ),
-                ],
-              ),
-            ),
-          ),
         ),
       ),
     );

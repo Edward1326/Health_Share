@@ -36,10 +36,10 @@ dependencies:
   cupertino_icons: ^1.0.8
   supabase_flutter: ^2.9.1
   permission_handler: ^12.0.1
-  pointycastle: ^3.9.1
+  pointycastle: ^4.0.0
   asn1lib: ^1.5.3
+
   #RSA
-  rsa_encrypt: ^2.0.0
   basic_utils: ^5.6.1
 
   #RSA NEW
@@ -55,7 +55,6 @@ dependencies:
   dio: ^5.4.0 # for uploading files (or use http/multipart)
 
   #AES encryption
-  encrypt: ^5.0.3
 
   #AES decryption
   open_file: ^3.3.0
@@ -63,6 +62,7 @@ dependencies:
   #IPFS
   http: ^1.2.1
   flutter_dotenv: ^6.0.0
+  convert: ^3.1.2
 
 dev_dependencies:
   flutter_test:
