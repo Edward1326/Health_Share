@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:health_share/components/navbar_main.dart';
-import 'package:health_share/services/hive_service/hive_service.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:health_share/services/hive_service/public_key_recovery.dart';
+// Import your Hive key file here
+// import 'package:health_share/path/to/your/hive_key_file.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -15,6 +18,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   late Animation<double> _fadeAnimation;
   late Animation<Offset> _slideAnimation;
   int _selectedIndex = 0;
+
+  // WIF posting key will be read from .env file
 
   @override
   void initState() {
@@ -50,27 +55,33 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     super.dispose();
   }
 
-  /// Function to test Hive connection
-  Future<void> _testHiveConnection() async {
-    final connected = await HiveService.testConnection();
-    debugPrint('Hive connection: ${connected ? 'SUCCESS' : 'FAILED'}');
+  void _checkPublicKey() {
+    try {
+      // Get WIF posting key from environment variables
+      final wifPostingKey = dotenv.env['HIVE_POSTING_WIF'];
 
-    final broadcast = await HiveService.broadcastCustomJson({
-      'test': 'data',
-      'timestamp': DateTime.now().toIso8601String(),
-    });
-    debugPrint('Test broadcast: ${broadcast ? 'SUCCESS' : 'FAILED'}');
+      if (wifPostingKey == null || wifPostingKey.isEmpty) {
+        throw Exception('HIVE_POSTING_WIF not found in .env file');
+      }
 
-    // Optional: show result in a snackbar
-    if (mounted) {
+      final pubKey = deriveHivePublicKey(wifPostingKey);
+
+      // Print to console
+      print("Public Key: $pubKey");
+      print("Account Name: ${dotenv.env['HIVE_ACCOUNT_NAME']}");
+      print("Node URL: ${dotenv.env['HIVE_NODE_URL']}");
+
+      // Also show a snackbar for user feedback
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(
-            connected && broadcast
-                ? 'Hive test SUCCESS ✅'
-                : 'Hive test FAILED ❌',
-          ),
+          content: Text("Public key printed to console"),
+          duration: const Duration(seconds: 2),
         ),
+      );
+    } catch (e) {
+      print("Error deriving public key: $e");
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Error: $e"), backgroundColor: Colors.red),
       );
     }
   }
@@ -126,36 +137,37 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                     ),
                   ),
                 ),
-
-                // Button in the middle of the screen
+                // Center content with button
                 SliverFillRemaining(
-                  hasScrollBody: false,
                   child: Center(
-                    child: ElevatedButton(
-                      onPressed: _testHiveConnection,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.blueAccent,
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 24,
-                          vertical: 14,
+                    child: Padding(
+                      padding: const EdgeInsets.all(20.0),
+                      child: ElevatedButton(
+                        onPressed: _checkPublicKey,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF3B82F6),
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 32,
+                            vertical: 16,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          elevation: 2,
+                          shadowColor: Colors.black.withOpacity(0.1),
                         ),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                      child: const Text(
-                        'Test Hive Connection',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
+                        child: const Text(
+                          'Check Hive Public Key',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                       ),
                     ),
                   ),
                 ),
-
-                // Add padding for bottom navigation
-                const SliverToBoxAdapter(child: SizedBox(height: 100)),
               ],
             ),
           ),

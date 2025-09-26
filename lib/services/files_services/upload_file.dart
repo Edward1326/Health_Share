@@ -2,6 +2,10 @@ import 'dart:convert';
 import 'dart:typed_data';
 import 'package:cryptography/cryptography.dart' hide Hash;
 import 'package:fast_rsa/fast_rsa.dart';
+import 'package:health_share/services/hive_service/create_custom_json.dart';
+import 'package:health_share/services/hive_service/create_transaction.dart';
+import 'package:health_share/services/hive_service/sign_transaction.dart';
+import 'package:health_share/services/hive_service/broadcast_transaction.dart';
 import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter/material.dart';
@@ -16,7 +20,8 @@ class UploadFileService {
   static final _aesGcm = AesGcm.with256bits();
   static final _sha256 = Sha256();
 
-  /// Uploads a file with encryption and stores metadata in Supabase
+  /// Uploads a file with encryption, stores metadata in Supabase, AND logs to Hive blockchain
+  /// This is the main integration point that connects all services
   /// Returns true if successful, false otherwise
   static Future<bool> uploadFile(BuildContext context) async {
     try {
@@ -89,6 +94,7 @@ class UploadFileService {
       print('Upload successful. CID: $ipfsCid');
 
       // 9. Insert file metadata into Supabase with SHA-256 hash
+      final uploadTimestamp = DateTime.now();
       final fileInsert =
           await supabase
               .from('Files')
@@ -96,7 +102,7 @@ class UploadFileService {
                 'filename': fileName,
                 'category': 'General',
                 'file_type': fileType,
-                'uploaded_at': DateTime.now().toIso8601String(),
+                'uploaded_at': uploadTimestamp.toIso8601String(),
                 'file_size': fileBytes.length,
                 'ipfs_cid': ipfsCid,
                 'uploaded_by': user.id,
@@ -108,14 +114,14 @@ class UploadFileService {
       final String fileId = fileInsert['id'].toString();
       print('File inserted with ID: $fileId');
 
-      // 10. Insert encrypted key package into File_Keys
-      final success = await _storeFileKey(
+      // 10. Store encrypted key package in File_Keys
+      final keyStoreSuccess = await _storeFileKey(
         fileId: fileId,
         encryptedKeyPackage: encryptedKeyPackage,
         userId: user.id,
       );
 
-      if (!success) {
+      if (!keyStoreSuccess) {
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
@@ -127,14 +133,29 @@ class UploadFileService {
         return false;
       }
 
+      // 🔗 11. HIVE BLOCKCHAIN INTEGRATION - The key connection point!
+      final hiveSuccess = await _logToHiveBlockchain(
+        fileName: fileName,
+        fileHash: fileHash,
+        timestamp: uploadTimestamp,
+        context: context,
+      );
+
+      // 12. Show final success message
       if (context.mounted) {
+        final message =
+            hiveSuccess
+                ? 'File uploaded, encrypted, and logged to Hive blockchain successfully!'
+                : 'File uploaded and encrypted successfully! (Hive logging failed - check logs)';
+
+        final backgroundColor = hiveSuccess ? Colors.green : Colors.orange;
+
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('File uploaded and encrypted successfully!'),
-          ),
+          SnackBar(content: Text(message), backgroundColor: backgroundColor),
         );
       }
-      return true;
+
+      return true; // Still return true even if Hive fails, since file upload succeeded
     } catch (e, stackTrace) {
       print('Error uploading file: $e');
       print('Stack trace: $stackTrace');
@@ -146,6 +167,140 @@ class UploadFileService {
       return false;
     }
   }
+
+  /// 🔗 MAIN INTEGRATION METHOD - Connects all 5 Hive services
+  /// This method orchestrates the entire Hive workflow:
+  /// HiveCustomJsonService → HiveTransactionService → HiveTransactionSigner → HiveTransactionBroadcaster
+  static Future<bool> _logToHiveBlockchain({
+    required String fileName,
+    required String fileHash,
+    required DateTime timestamp,
+    required BuildContext context,
+  }) async {
+    try {
+      // Check if Hive is configured
+      if (!HiveCustomJsonService.isHiveConfigured()) {
+        print('Warning: Hive not configured (HIVE_ACCOUNT_NAME missing)');
+        return false;
+      }
+
+      print('Starting Hive blockchain logging...');
+
+      // 🔗 STEP 1: Create custom JSON using HiveCustomJsonService
+      final customJsonResult = HiveCustomJsonService.createMedicalLogCustomJson(
+        fileName: fileName,
+        fileHash: fileHash,
+        timestamp: timestamp,
+      );
+      final customJsonOperation =
+          customJsonResult['operation'] as List<dynamic>;
+      print('✓ Custom JSON created');
+
+      // 🔗 STEP 2: Create unsigned transaction using HiveTransactionService
+      final unsignedTransaction =
+          await HiveTransactionService.createCustomJsonTransaction(
+            customJsonOperation: customJsonOperation,
+            expirationMinutes: 30,
+          );
+      print('✓ Unsigned transaction created');
+
+      // 🔗 STEP 3: Sign transaction using HiveTransactionSigner
+      final signedTransaction = await HiveTransactionSigner.signTransaction(
+        unsignedTransaction,
+      );
+      print('✓ Transaction signed');
+
+      // 🔗 STEP 4: Broadcast transaction using HiveTransactionBroadcaster
+      final broadcastResult =
+          await HiveTransactionBroadcaster.broadcastTransaction(
+            signedTransaction,
+          );
+
+      if (broadcastResult.success) {
+        print('✓ Transaction broadcasted successfully!');
+        print('  Transaction ID: ${broadcastResult.getTxId()}');
+        print('  Block Number: ${broadcastResult.getBlockNum()}');
+        return true;
+      } else {
+        print(
+          '✗ Failed to broadcast transaction: ${broadcastResult.getError()}',
+        );
+        return false;
+      }
+    } catch (e, stackTrace) {
+      print('Error logging to Hive blockchain: $e');
+      print('Stack trace: $stackTrace');
+      return false;
+    }
+  }
+
+  /// Test the complete Hive workflow without uploading a file
+  /// Useful for debugging and testing the integration
+  static Future<bool> testHiveWorkflow({
+    String testFileName = 'test_file.pdf',
+    String testFileHash = 'abc123def456...',
+  }) async {
+    try {
+      return await _logToHiveBlockchain(
+        fileName: testFileName,
+        fileHash: testFileHash,
+        timestamp: DateTime.now(),
+        context: NavigatorService.navigatorKey.currentContext!,
+      );
+    } catch (e) {
+      print('Hive workflow test failed: $e');
+      return false;
+    }
+  }
+
+  /// Get status of all services for debugging
+  static Future<Map<String, dynamic>> getServicesStatus() async {
+    final status = <String, dynamic>{};
+
+    // Check HiveCustomJsonService
+    status['hive_configured'] = HiveCustomJsonService.isHiveConfigured();
+    status['hive_account'] = HiveCustomJsonService.getHiveAccountName();
+
+    // Check HiveTransactionService connectivity
+    try {
+      final blockchainTime =
+          await HiveTransactionService.getCurrentBlockchainTime();
+      status['blockchain_connectivity'] = blockchainTime != null;
+      status['blockchain_time'] = blockchainTime;
+    } catch (e) {
+      status['blockchain_connectivity'] = false;
+      status['blockchain_error'] = e.toString();
+    }
+
+    // Check HiveTransactionSigner WIF
+    final wif = HiveTransactionSigner.getPostingWif();
+    status['wif_configured'] = wif.isNotEmpty;
+    status['wif_valid'] =
+        wif.isNotEmpty ? HiveTransactionSigner.isValidWif(wif) : false;
+
+    // Check HiveTransactionBroadcaster connectivity
+    try {
+      final nodeConnectivity =
+          await HiveTransactionBroadcaster.testConnection();
+      status['node_connectivity'] = nodeConnectivity;
+      status['node_url'] = HiveTransactionBroadcaster.getHiveNodeUrl();
+
+      if (nodeConnectivity) {
+        final nodeInfo = await HiveTransactionBroadcaster.getNodeInfo();
+        status['node_info'] = nodeInfo;
+      }
+    } catch (e) {
+      status['node_connectivity'] = false;
+      status['node_error'] = e.toString();
+    }
+
+    // Check Pinata
+    status['pinata_configured'] = _pinataJWT.isNotEmpty;
+
+    return status;
+  }
+
+  // ... (keep all existing helper methods unchanged)
 
   /// Calculate SHA-256 hash of file data
   static Future<String> _calculateSHA256(Uint8List data) async {
@@ -283,4 +438,10 @@ class UploadFileService {
       return false;
     }
   }
+}
+
+// Helper class for navigation context (if not already existing)
+class NavigatorService {
+  static final GlobalKey<NavigatorState> navigatorKey =
+      GlobalKey<NavigatorState>();
 }

@@ -39,30 +39,25 @@ dependencies:
   pointycastle: ^4.0.0
   asn1lib: ^1.5.3
 
-  #RSA
   basic_utils: ^5.6.1
 
-  #RSA NEW
   fast_rsa: ^3.8.5
 
-  #SHA 256 and AES
   cryptography: ^2.7.0
 
-  #FILES
   file_picker: ^10.2.1 # for picking any file type
   path_provider: ^2.1.2 # for access to directories (optional)
   path: ^1.9.0 # for manipulating file paths
   dio: ^5.4.0 # for uploading files (or use http/multipart)
 
-  #AES encryption
-
-  #AES decryption
+  bs58: ^1.0.2
+  crypto: ^3.0.3
+  base58check: ^2.0.0
   open_file: ^3.3.0
-
-  #IPFS
   http: ^1.2.1
   flutter_dotenv: ^6.0.0
   convert: ^3.1.2
+  hex: ^0.2.0
 
 dev_dependencies:
   flutter_test:
