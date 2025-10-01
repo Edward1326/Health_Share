@@ -8,6 +8,7 @@ import 'package:health_share/components/navbar_main.dart';
 
 import 'package:health_share/services/files_services/upload_file.dart';
 import 'package:health_share/services/files_services/decrypt_file.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 class FilesScreen extends StatefulWidget {
   const FilesScreen({super.key});
@@ -606,7 +607,7 @@ class _FilesScreenState extends State<FilesScreen> {
               children: [
                 const CircularProgressIndicator(),
                 const SizedBox(height: 16),
-                Text('Decrypting ${item.name}...'),
+                Text('Verifying and decrypting ${item.name}...'),
               ],
             ),
           ),
@@ -624,14 +625,34 @@ class _FilesScreenState extends State<FilesScreen> {
         return;
       }
 
-      print('Starting decryption for file: ${item.name}');
-      print('File ID: ${item.id}, IPFS CID: ${item.ipfsCid}');
+      // ✅ Fetch Hive username from .env instead of Supabase
+      final hiveUsername = dotenv.env['HIVE_ACCOUNT_NAME'] ?? '';
 
-      // Use the new DecryptFileService
+      if (hiveUsername.isEmpty) {
+        Navigator.of(context).pop();
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Hive username not configured. Please check your .env file.',
+            ),
+            backgroundColor: Colors.orange,
+          ),
+        );
+        return;
+      }
+
+      print(
+        'Starting blockchain verification and decryption for file: ${item.name}',
+      );
+      print('File ID: ${item.id}, IPFS CID: ${item.ipfsCid}');
+      print('Hive Username (from .env): $hiveUsername');
+
+      // Use the new DecryptFileService with blockchain verification
       final decryptedBytes = await DecryptFileService.decryptFileFromIpfs(
         cid: item.ipfsCid,
         fileId: item.id,
         userId: user.id,
+        username: hiveUsername, // ← now comes from .env
       );
 
       Navigator.of(context).pop(); // Close loading dialog
@@ -639,7 +660,9 @@ class _FilesScreenState extends State<FilesScreen> {
       if (decryptedBytes == null) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Failed to decrypt file'),
+            content: Text(
+              'Failed to decrypt file. Blockchain verification may have failed.',
+            ),
             backgroundColor: Colors.red,
           ),
         );
@@ -650,7 +673,6 @@ class _FilesScreenState extends State<FilesScreen> {
         'Successfully decrypted file. Size: ${decryptedBytes.length} bytes',
       );
 
-      // Verify decrypted data is not empty
       if (decryptedBytes.isEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -668,7 +690,7 @@ class _FilesScreenState extends State<FilesScreen> {
         decryptedBytes,
       );
     } catch (e, stackTrace) {
-      Navigator.of(context).pop(); // Close loading dialog
+      Navigator.of(context).pop();
       print('Error in _previewFile: $e');
       print('Stack trace: $stackTrace');
 

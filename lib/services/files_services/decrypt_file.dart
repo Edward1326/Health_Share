@@ -4,21 +4,63 @@ import 'package:http/http.dart' as http;
 import 'package:cryptography/cryptography.dart' hide Hash;
 import 'package:fast_rsa/fast_rsa.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:health_share/services/hive_service/verify_hive/hive_compare.dart';
 
 class DecryptFileService {
   // Cryptography instances
   static final _aesGcm = AesGcm.with256bits();
   static final _sha256 = Sha256();
 
+  /// Decrypts a file from IPFS with blockchain verification
+  ///
+  /// This method now includes a critical security step:
+  /// 1. VERIFY blockchain integrity BEFORE decryption
+  /// 2. Only proceed with decryption if verification passes
+  ///
+  /// Parameters:
+  /// - cid: IPFS content identifier
+  /// - fileId: File ID from Supabase
+  /// - userId: User ID requesting decryption
+  /// - username: Hive username for blockchain verification
+  /// - skipVerification: Set to true to bypass blockchain check (NOT RECOMMENDED)
+  ///
+  /// Returns decrypted file bytes or null if verification/decryption fails
   static Future<Uint8List?> decryptFileFromIpfs({
     required String cid,
     required String fileId,
     required String userId,
+    required String username,
+    bool skipVerification = false,
   }) async {
     try {
       final supabase = Supabase.instance.client;
 
       print('Starting decryption for CID: $cid, File ID: $fileId');
+
+      // 🔒 CRITICAL SECURITY STEP: Verify blockchain integrity FIRST
+      if (!skipVerification) {
+        print('\n🔐 === BLOCKCHAIN VERIFICATION START ===');
+        print('Verifying file integrity against Hive blockchain...');
+
+        final isVerified = await HiveCompareService.verifyBeforeDecryption(
+          fileId: fileId,
+          username: username,
+        );
+
+        if (!isVerified) {
+          print('❌ BLOCKCHAIN VERIFICATION FAILED');
+          print('File hash does not match blockchain record');
+          print('DECRYPTION ABORTED FOR SECURITY');
+          print('=== BLOCKCHAIN VERIFICATION END ===\n');
+          return null;
+        }
+
+        print('✅ BLOCKCHAIN VERIFICATION PASSED');
+        print('File integrity confirmed - proceeding with decryption');
+        print('=== BLOCKCHAIN VERIFICATION END ===\n');
+      } else {
+        print('⚠️ WARNING: Blockchain verification skipped');
+      }
 
       // 1. Download encrypted file from IPFS
       final encryptedBytes = await _downloadFromIPFS(cid);
@@ -115,7 +157,7 @@ class DecryptFileService {
         'Successfully decrypted file. Size: ${decryptedBytes.length} bytes',
       );
 
-      // 7. Verify file integrity with SHA-256 (optional)
+      // 7. Verify file integrity with SHA-256 (optional secondary check)
       await _verifyFileIntegrity(fileId, decryptedBytes);
 
       return decryptedBytes;
@@ -124,6 +166,48 @@ class DecryptFileService {
       print('Stack trace: $st');
       return null;
     }
+  }
+
+  /// Batch decrypt multiple files with blockchain verification
+  ///
+  /// Efficiently verifies and decrypts multiple files in sequence
+  /// Returns a map of fileId -> decrypted bytes (or null if failed)
+  static Future<Map<String, Uint8List?>> decryptMultipleFiles({
+    required List<Map<String, String>> files, // [{fileId, cid, username}]
+    required String userId,
+    bool skipVerification = false,
+  }) async {
+    print('=== BATCH DECRYPTION START ===');
+    print('Files to decrypt: ${files.length}');
+
+    final results = <String, Uint8List?>{};
+
+    for (final file in files) {
+      final fileId = file['fileId']!;
+      final cid = file['cid']!;
+      final username = file['username']!;
+
+      print('\nDecrypting file: $fileId');
+
+      final decryptedBytes = await decryptFileFromIpfs(
+        cid: cid,
+        fileId: fileId,
+        userId: userId,
+        username: username,
+        skipVerification: skipVerification,
+      );
+
+      results[fileId] = decryptedBytes;
+    }
+
+    final successCount = results.values.where((v) => v != null).length;
+    final failCount = files.length - successCount;
+
+    print('\n=== BATCH DECRYPTION END ===');
+    print('Success: $successCount / ${files.length}');
+    print('Failed: $failCount / ${files.length}');
+
+    return results;
   }
 
   /// Decrypt file data using AES-GCM
@@ -381,6 +465,33 @@ class DecryptFileService {
     } catch (e) {
       print('Error getting decryption key: $e');
       return null;
+    }
+  }
+
+  /// Check if a file can be decrypted (verifies blockchain integrity)
+  /// Useful for pre-flight checks before attempting decryption
+  static Future<bool> canDecryptFile({
+    required String fileId,
+    required String username,
+  }) async {
+    try {
+      print('Checking if file can be decrypted: $fileId');
+
+      final isVerified = await HiveCompareService.verifyBeforeDecryption(
+        fileId: fileId,
+        username: username,
+      );
+
+      if (isVerified) {
+        print('✅ File can be decrypted - blockchain verification passed');
+      } else {
+        print('❌ File cannot be decrypted - blockchain verification failed');
+      }
+
+      return isVerified;
+    } catch (e) {
+      print('Error checking decryption eligibility: $e');
+      return false;
     }
   }
 }
