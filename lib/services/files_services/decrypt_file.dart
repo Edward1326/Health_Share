@@ -9,7 +9,6 @@ import 'package:health_share/services/hive_service/verify_hive/hive_compare.dart
 class DecryptFileService {
   // Cryptography instances
   static final _aesGcm = AesGcm.with256bits();
-  static final _sha256 = Sha256();
 
   /// Decrypts a file from IPFS with blockchain verification
   ///
@@ -157,9 +156,6 @@ class DecryptFileService {
         'Successfully decrypted file. Size: ${decryptedBytes.length} bytes',
       );
 
-      // 7. Verify file integrity with SHA-256 (optional secondary check)
-      await _verifyFileIntegrity(fileId, decryptedBytes);
-
       return decryptedBytes;
     } catch (e, st) {
       print('Error during decryption flow: $e');
@@ -300,57 +296,6 @@ class DecryptFileService {
 
     print('❌ All decryption methods failed');
     return null;
-  }
-
-  /// Verify file integrity using SHA-256 hash
-  static Future<bool> _verifyFileIntegrity(
-    String fileId,
-    Uint8List decryptedData,
-  ) async {
-    try {
-      final supabase = Supabase.instance.client;
-
-      // Get stored hash from database
-      final fileRecord =
-          await supabase
-              .from('Files')
-              .select('sha256_hash')
-              .eq('id', fileId)
-              .maybeSingle();
-
-      if (fileRecord == null || fileRecord['sha256_hash'] == null) {
-        print('No stored hash found for verification');
-        return false;
-      }
-
-      final storedHash = fileRecord['sha256_hash'] as String;
-
-      // Calculate hash of decrypted data
-      final calculatedHash = await _calculateSHA256(decryptedData);
-
-      final isValid = storedHash.toLowerCase() == calculatedHash.toLowerCase();
-
-      if (isValid) {
-        print('✅ File integrity verified - hashes match');
-      } else {
-        print('❌ File integrity check failed - hashes do not match');
-        print('Stored: $storedHash');
-        print('Calculated: $calculatedHash');
-      }
-
-      return isValid;
-    } catch (e) {
-      print('Error during integrity verification: $e');
-      return false;
-    }
-  }
-
-  /// Calculate SHA-256 hash of data
-  static Future<String> _calculateSHA256(Uint8List data) async {
-    final hash = await _sha256.hash(data);
-    return hash.bytes
-        .map((byte) => byte.toRadixString(16).padLeft(2, '0'))
-        .join();
   }
 
   /// Downloads file from IPFS using CID

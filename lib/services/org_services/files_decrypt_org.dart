@@ -5,10 +5,22 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:cryptography/cryptography.dart' hide Hash;
 import 'package:pointycastle/export.dart' hide Mac;
 import 'package:asn1lib/asn1lib.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:health_share/services/hive_service/verify_hive/hive_compare.dart';
+import 'package:fast_rsa/fast_rsa.dart'; // Added Fast RSA import
 
 class OrgFilesDecryptService {
   static final _supabase = Supabase.instance.client;
   static final _aesGcm = AesGcm.with256bits();
+
+  /// Get the current authenticated user or throw an error
+  static User get _currentUser {
+    final user = Supabase.instance.client.auth.currentUser;
+    if (user == null) {
+      throw Exception('No authenticated user found');
+    }
+    return user;
+  }
 
   /// Decrypt a file shared between doctor and patient using PointyCastle RSA
   static Future<Uint8List?> decryptSharedFile({
@@ -16,6 +28,7 @@ class OrgFilesDecryptService {
     required String ipfsCid,
     required String sharedBy,
     required String doctorId,
+    bool skipVerification = false,
   }) async {
     try {
       print('=== ORG FILE DECRYPTION DEBUG ===');
@@ -24,9 +37,36 @@ class OrgFilesDecryptService {
       print('Shared by: $sharedBy');
       print('Doctor ID: $doctorId');
 
-      final currentUser = _supabase.auth.currentUser;
-      if (currentUser == null) {
-        throw Exception('No current user found');
+      // 🔒 STEP 1: Verify blockchain integrity FIRST
+      if (!skipVerification) {
+        print('\n🔐 === BLOCKCHAIN VERIFICATION START ===');
+        print('Verifying file integrity against Hive blockchain...');
+
+        // Get Hive username from .env
+        final hiveUsername = dotenv.env['HIVE_ACCOUNT_NAME'];
+        if (hiveUsername == null || hiveUsername.isEmpty) {
+          print('❌ HIVE_ACCOUNT_NAME not found in .env');
+          return null;
+        }
+
+        final isVerified = await HiveCompareService.verifyBeforeDecryption(
+          fileId: fileId,
+          username: hiveUsername,
+        );
+
+        if (!isVerified) {
+          print('❌ BLOCKCHAIN VERIFICATION FAILED');
+          print('File hash does not match blockchain record');
+          print('DECRYPTION ABORTED FOR SECURITY');
+          print('=== BLOCKCHAIN VERIFICATION END ===\n');
+          return null;
+        }
+
+        print('✅ BLOCKCHAIN VERIFICATION PASSED');
+        print('File integrity confirmed - proceeding with decryption');
+        print('=== BLOCKCHAIN VERIFICATION END ===\n');
+      } else {
+        print('⚠️ WARNING: Blockchain verification skipped');
       }
 
       // STEP 1: Download encrypted file from IPFS
@@ -43,7 +83,7 @@ class OrgFilesDecryptService {
           await _supabase
               .from('User')
               .select('id, rsa_private_key, email')
-              .eq('id', currentUser.id)
+              .eq('id', _currentUser.id)
               .single();
 
       final rsaPrivateKeyPem = userData['rsa_private_key'] as String?;
@@ -61,15 +101,15 @@ class OrgFilesDecryptService {
               .select('aes_key_encrypted, nonce_hex')
               .eq('file_id', fileId)
               .eq('recipient_type', 'user')
-              .eq('recipient_id', currentUser.id)
+              .eq('recipient_id', _currentUser.id)
               .maybeSingle();
 
       if (fileKeyRecord == null || fileKeyRecord['aes_key_encrypted'] == null) {
         throw Exception('No decryption key found for this file');
       }
 
-      // STEP 4: Decrypt the file using PointyCastle RSA
-      return _performDecryptionWithPointyCastle(
+      // STEP 4: Decrypt the file with PointyCastle and Fast RSA fallback
+      return _performDecryptionWithFallback(
         encryptedBytes,
         fileKeyRecord['aes_key_encrypted'] as String,
         fileKeyRecord['nonce_hex'] as String?,
@@ -86,15 +126,43 @@ class OrgFilesDecryptService {
   static Future<Uint8List?> decryptSharedFileSimple({
     required String fileId,
     required String ipfsCid,
+    bool skipVerification = false,
   }) async {
     try {
       print('=== SIMPLE ORG FILE DECRYPTION ===');
       print('File ID: $fileId');
       print('IPFS CID: $ipfsCid');
 
-      final currentUser = _supabase.auth.currentUser;
-      if (currentUser == null) {
-        throw Exception('No current user found');
+      // 🔒 STEP 1: Verify blockchain integrity FIRST
+      if (!skipVerification) {
+        print('\n🔐 === BLOCKCHAIN VERIFICATION START ===');
+        print('Verifying file integrity against Hive blockchain...');
+
+        // Get Hive username from .env
+        final hiveUsername = dotenv.env['HIVE_ACCOUNT_NAME'];
+        if (hiveUsername == null || hiveUsername.isEmpty) {
+          print('❌ HIVE_ACCOUNT_NAME not found in .env');
+          return null;
+        }
+
+        final isVerified = await HiveCompareService.verifyBeforeDecryption(
+          fileId: fileId,
+          username: hiveUsername,
+        );
+
+        if (!isVerified) {
+          print('❌ BLOCKCHAIN VERIFICATION FAILED');
+          print('File hash does not match blockchain record');
+          print('DECRYPTION ABORTED FOR SECURITY');
+          print('=== BLOCKCHAIN VERIFICATION END ===\n');
+          return null;
+        }
+
+        print('✅ BLOCKCHAIN VERIFICATION PASSED');
+        print('File integrity confirmed - proceeding with decryption');
+        print('=== BLOCKCHAIN VERIFICATION END ===\n');
+      } else {
+        print('⚠️ WARNING: Blockchain verification skipped');
       }
 
       // Download encrypted file
@@ -108,7 +176,7 @@ class OrgFilesDecryptService {
           await _supabase
               .from('User')
               .select('rsa_private_key')
-              .eq('id', currentUser.id)
+              .eq('id', _currentUser.id)
               .single();
 
       final rsaPrivateKeyPem = userData['rsa_private_key'] as String;
@@ -119,7 +187,7 @@ class OrgFilesDecryptService {
           .select('aes_key_encrypted, nonce_hex')
           .eq('file_id', fileId)
           .eq('recipient_type', 'user')
-          .eq('recipient_id', currentUser.id);
+          .eq('recipient_id', _currentUser.id);
 
       if (fileKeyRecords.isEmpty) {
         throw Exception('No decryption key found for this file');
@@ -128,7 +196,7 @@ class OrgFilesDecryptService {
       // Use the first valid key found
       final fileKeyRecord = fileKeyRecords.first;
 
-      return _performDecryptionWithPointyCastle(
+      return _performDecryptionWithFallback(
         encryptedBytes,
         fileKeyRecord['aes_key_encrypted'] as String,
         fileKeyRecord['nonce_hex'] as String?,
@@ -141,47 +209,90 @@ class OrgFilesDecryptService {
     }
   }
 
-  /// Perform the actual decryption using PointyCastle RSA and cryptography AES
-  static Future<Uint8List?> _performDecryptionWithPointyCastle(
+  /// Perform decryption with PointyCastle RSA first, then Fast RSA fallback
+  static Future<Uint8List?> _performDecryptionWithFallback(
     Uint8List encryptedBytes,
     String encryptedKeyPackage,
     String? nonceHex,
     String rsaPrivateKeyPem,
   ) async {
     try {
-      print('\n--- Performing decryption with PointyCastle RSA ---');
+      print(
+        '\n--- Performing decryption with PointyCastle + Fast RSA fallback ---',
+      );
 
-      // Parse the RSA private key using PointyCastle
-      final rsaPrivateKey = _parseRSAPrivateKeyFromPem(rsaPrivateKeyPem);
-      if (rsaPrivateKey == null) {
-        throw Exception('Failed to parse RSA private key');
-      }
-
-      // Decrypt the AES key package using PointyCastle RSA-OAEP
       String? decryptedJson;
+      bool usedFastRSA = false;
+
+      // ATTEMPT 1: PointyCastle RSA-OAEP
       try {
-        // Try RSA-OAEP first (matching doctor's encryption method)
-        decryptedJson = _decryptWithRSAOAEP(encryptedKeyPackage, rsaPrivateKey);
-        print('✓ Successfully decrypted using PointyCastle RSA-OAEP');
-      } catch (e) {
-        print('PointyCastle RSA-OAEP decryption failed: $e');
-        // Try PKCS1v15 as fallback
-        try {
-          decryptedJson = _decryptWithRSAPKCS1v15(
+        final rsaPrivateKey = _parseRSAPrivateKeyFromPem(rsaPrivateKeyPem);
+        if (rsaPrivateKey != null) {
+          decryptedJson = _decryptWithRSAOAEP(
             encryptedKeyPackage,
             rsaPrivateKey,
           );
-          print(
-            '✓ Successfully decrypted using PointyCastle PKCS1v15 fallback',
-          );
-        } catch (fallbackError) {
-          print(
-            '❌ Both PointyCastle RSA decryption methods failed: $fallbackError',
-          );
-          return null;
+          print('✓ Successfully decrypted using PointyCastle RSA-OAEP');
+        }
+      } catch (e) {
+        print('PointyCastle RSA-OAEP failed: $e');
+      }
+
+      // ATTEMPT 2: PointyCastle PKCS1v15 (if OAEP failed)
+      if (decryptedJson == null) {
+        try {
+          final rsaPrivateKey = _parseRSAPrivateKeyFromPem(rsaPrivateKeyPem);
+          if (rsaPrivateKey != null) {
+            decryptedJson = _decryptWithRSAPKCS1v15(
+              encryptedKeyPackage,
+              rsaPrivateKey,
+            );
+            print('✓ Successfully decrypted using PointyCastle PKCS1v15');
+          }
+        } catch (e) {
+          print('PointyCastle PKCS1v15 failed: $e');
         }
       }
 
+      // ATTEMPT 3: Fast RSA OAEP (fallback for user's own shared files)
+      if (decryptedJson == null) {
+        try {
+          decryptedJson = await _decryptWithFastRSAOAEP(
+            encryptedKeyPackage,
+            rsaPrivateKeyPem,
+          );
+          print('✓ Successfully decrypted using Fast RSA OAEP');
+          usedFastRSA = true;
+        } catch (e) {
+          print('Fast RSA OAEP failed: $e');
+        }
+      }
+
+      // ATTEMPT 4: Fast RSA PKCS1v15 (ultimate fallback)
+      if (decryptedJson == null) {
+        try {
+          decryptedJson = await _decryptWithFastRSAPKCS1v15(
+            encryptedKeyPackage,
+            rsaPrivateKeyPem,
+          );
+          print('✓ Successfully decrypted using Fast RSA PKCS1v15');
+          usedFastRSA = true;
+        } catch (e) {
+          print('Fast RSA PKCS1v15 failed: $e');
+        }
+      }
+
+      // If all methods failed
+      if (decryptedJson == null) {
+        print('❌ All RSA decryption methods failed');
+        return null;
+      }
+
+      print(
+        'Decryption method used: ${usedFastRSA ? "Fast RSA" : "PointyCastle"}',
+      );
+
+      // Parse the decrypted JSON
       final keyData = jsonDecode(decryptedJson);
       final aesKeyBase64 = keyData['key'] as String;
       final nonceBase64 =
@@ -202,7 +313,7 @@ class OrgFilesDecryptService {
         throw Exception('Nonce not found in key data or database');
       }
 
-      print('✓ Successfully decrypted AES key and nonce');
+      print('✓ Successfully extracted AES key and nonce');
 
       // Convert from base64 to bytes
       final aesKeyBytes = base64Decode(aesKeyBase64);
@@ -214,7 +325,7 @@ class OrgFilesDecryptService {
       // Create SecretKey from bytes
       final aesKey = SecretKey(aesKeyBytes);
 
-      // Decrypt file using AES-GCM with cryptography package
+      // Decrypt file using AES-GCM
       final decryptedBytes = await _decryptFileData(
         encryptedBytes,
         nonceBytes,
@@ -231,9 +342,37 @@ class OrgFilesDecryptService {
       );
       return decryptedBytes;
     } catch (e) {
-      print('Error in _performDecryptionWithPointyCastle: $e');
+      print('Error in _performDecryptionWithFallback: $e');
       return null;
     }
+  }
+
+  /// Decrypt using Fast RSA OAEP
+  static Future<String> _decryptWithFastRSAOAEP(
+    String encryptedBase64,
+    String rsaPrivateKeyPem,
+  ) async {
+    print('Attempting Fast RSA OAEP decryption...');
+    final decryptedString = await RSA.decryptOAEP(
+      encryptedBase64,
+      "", // label
+      Hash.SHA256,
+      rsaPrivateKeyPem,
+    );
+    return decryptedString;
+  }
+
+  /// Decrypt using Fast RSA PKCS1v15
+  static Future<String> _decryptWithFastRSAPKCS1v15(
+    String encryptedBase64,
+    String rsaPrivateKeyPem,
+  ) async {
+    print('Attempting Fast RSA PKCS1v15 decryption...');
+    final decryptedString = await RSA.decryptPKCS1v15(
+      encryptedBase64,
+      rsaPrivateKeyPem,
+    );
+    return decryptedString;
   }
 
   /// Parse RSA private key from PEM format using PointyCastle
@@ -298,19 +437,6 @@ class OrgFilesDecryptService {
   static RSAPrivateKey _parseRSAPrivateKeyFromPKCS1(Uint8List keyBytes) {
     final asn1Parser = ASN1Parser(keyBytes);
     final topLevelSeq = asn1Parser.nextObject() as ASN1Sequence;
-
-    // PKCS#1 RSAPrivateKey structure:
-    // RSAPrivateKey ::= SEQUENCE {
-    //   version           Version,
-    //   modulus           INTEGER,  -- n
-    //   publicExponent    INTEGER,  -- e
-    //   privateExponent   INTEGER,  -- d
-    //   prime1            INTEGER,  -- p
-    //   prime2            INTEGER,  -- q
-    //   exponent1         INTEGER,  -- d mod (p-1)
-    //   exponent2         INTEGER,  -- d mod (q-1)
-    //   coefficient       INTEGER   -- (inverse of q) mod p
-    // }
 
     final modulus = (topLevelSeq.elements[1] as ASN1Integer).valueAsBigInteger!;
     final publicExponent =

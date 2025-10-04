@@ -4,6 +4,8 @@ import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:cryptography/cryptography.dart' hide Hash;
 import 'package:fast_rsa/fast_rsa.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:health_share/services/hive_service/verify_hive/hive_compare.dart';
 
 class FilesDecryptGroup {
   // Cryptography instances
@@ -54,6 +56,7 @@ class FilesDecryptGroup {
     required String groupId,
     required String userId,
     required String ipfsCid,
+    bool skipVerification = false, // Add this parameter
   }) async {
     try {
       final supabase = Supabase.instance.client;
@@ -63,6 +66,38 @@ class FilesDecryptGroup {
       print('Group ID: $groupId');
       print('User ID: $userId');
       print('IPFS CID: $ipfsCid');
+
+      // 🔒 STEP 1: Verify blockchain integrity FIRST
+      if (!skipVerification) {
+        print('\n🔐 === BLOCKCHAIN VERIFICATION START ===');
+        print('Verifying file integrity against Hive blockchain...');
+
+        // Get Hive username from .env
+        final hiveUsername = dotenv.env['HIVE_ACCOUNT_NAME'];
+        if (hiveUsername == null || hiveUsername.isEmpty) {
+          print('❌ HIVE_ACCOUNT_NAME not found in .env');
+          return null;
+        }
+
+        final isVerified = await HiveCompareService.verifyBeforeDecryption(
+          fileId: fileId,
+          username: hiveUsername,
+        );
+
+        if (!isVerified) {
+          print('❌ BLOCKCHAIN VERIFICATION FAILED');
+          print('File hash does not match blockchain record');
+          print('DECRYPTION ABORTED FOR SECURITY');
+          print('=== BLOCKCHAIN VERIFICATION END ===\n');
+          return null;
+        }
+
+        print('✅ BLOCKCHAIN VERIFICATION PASSED');
+        print('File integrity confirmed - proceeding with decryption');
+        print('=== BLOCKCHAIN VERIFICATION END ===\n');
+      } else {
+        print('⚠️ WARNING: Blockchain verification skipped');
+      }
 
       // Verify user has access to this file
       final hasAccess = await hasGroupFileAccess(fileId, groupId, userId);
