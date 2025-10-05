@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:health_share/screens/groups/group_details.dart';
 import 'package:health_share/components/navbar_main.dart';
 import 'package:health_share/services/group_services/group_functions.dart';
+import 'package:health_share/services/group_services/fetch_group_service.dart';
+import 'package:health_share/services/group_services/group_management_service.dart';
+import 'package:health_share/services/group_services/group_member_service.dart';
 
 class GroupsScreen extends StatefulWidget {
   const GroupsScreen({super.key});
@@ -48,14 +51,11 @@ class _GroupsScreenState extends State<GroupsScreen>
     setState(() => _isLoading = true);
 
     try {
-      final groups = await GroupFunctions.fetchUserGroups(_currentUserId!);
-      setState(() {
-        _groups = groups;
-        _isLoading = false;
-      });
+      _groups = await FetchGroupService.fetchUserGroups(_currentUserId!);
     } catch (e) {
-      setState(() => _isLoading = false);
       _showError('Error fetching groups: $e');
+    } finally {
+      setState(() => _isLoading = false);
     }
   }
 
@@ -427,7 +427,10 @@ class _GroupsScreenState extends State<GroupsScreen>
 
   Future<void> _createGroup(String name) async {
     try {
-      await GroupFunctions.createGroup(name: name, userId: _currentUserId!);
+      await GroupManagementService.createGroup(
+        name: name,
+        userId: _currentUserId!,
+      );
 
       await _fetchGroups();
       _showSuccess('Group "$name" created successfully!');
@@ -478,7 +481,7 @@ class _GroupsScreenState extends State<GroupsScreen>
                             if (emailController.text.isNotEmpty) {
                               setDialogState(() => isAddingMember = true);
                               try {
-                                await GroupFunctions.addMemberToGroup(
+                                await GroupMemberService.addMemberToGroup(
                                   groupId: groupId,
                                   email: emailController.text,
                                 );
@@ -525,7 +528,9 @@ class _GroupsScreenState extends State<GroupsScreen>
 
   void _showMembersDialog(String groupId) async {
     try {
-      final members = await GroupFunctions.getGroupMembersWithDetails(groupId);
+      final members = await FetchGroupService.getGroupMembersWithDetails(
+        groupId,
+      );
 
       if (mounted) {
         showDialog(

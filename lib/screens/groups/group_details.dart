@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:health_share/services/group_services/files_service_group.dart';
 import 'package:health_share/services/group_services/group_functions.dart';
+import 'package:health_share/services/group_services/fetch_group_service.dart';
+import 'package:health_share/services/group_services/group_member_service.dart';
 
 class GroupDetailsScreen extends StatefulWidget {
   final String groupId;
@@ -45,10 +48,7 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen>
   Future<void> _fetchMembers() async {
     setState(() => _isLoading = true);
     try {
-      final members = await GroupFunctions.fetchGroupMembers(widget.groupId);
-      setState(() {
-        _members = members;
-      });
+      _members = await FetchGroupService.fetchGroupMembers(widget.groupId);
     } catch (e) {
       _showError('Error loading members: $e');
     } finally {
@@ -58,10 +58,10 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen>
 
   Future<void> _fetchSharedFiles() async {
     try {
-      final sharedFiles = await GroupFunctions.fetchGroupSharedFiles(
+      final sharedFiles = await GroupFileService.fetchGroupSharedFiles(
         widget.groupId,
       );
-      final filesByUser = GroupFunctions.organizeFilesByUser(sharedFiles);
+      final filesByUser = GroupFileService.organizeFilesByUser(sharedFiles);
       setState(() {
         _filesByUser = filesByUser;
       });
@@ -582,12 +582,10 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen>
 
     if (confirm == true && _currentUserId != null) {
       try {
-        final success = await GroupFunctions.removeFileFromGroup(
+        final success = await GroupFileService.revokeFileFromGroup(
           fileId: fileId,
           groupId: widget.groupId,
           userId: _currentUserId!,
-          shareRecord: shareRecord,
-          isGroupOwner: _isGroupOwner,
         );
 
         if (success) {
@@ -710,7 +708,7 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen>
                             if (emailController.text.isNotEmpty) {
                               setDialogState(() => isAdding = true);
                               try {
-                                await GroupFunctions.addMemberToGroup(
+                                await GroupMemberService.addMemberToGroup(
                                   groupId: widget.groupId,
                                   email: emailController.text,
                                 );
@@ -791,7 +789,7 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen>
 
   Future<void> _leaveGroup() async {
     try {
-      await GroupFunctions.leaveGroup(
+      await GroupMemberService.leaveGroup(
         groupId: widget.groupId,
         userId: _currentUserId!,
       );

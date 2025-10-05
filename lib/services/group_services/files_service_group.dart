@@ -1,7 +1,6 @@
-import 'dart:convert';
-import 'dart:typed_data';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+/// Handles file operations for groups (queries + commands)
 class GroupFileService {
   /// Fetch all files shared with a specific group
   static Future<List<Map<String, dynamic>>> fetchGroupSharedFiles(
@@ -208,112 +207,6 @@ class GroupFileService {
     } catch (e) {
       print('Error adding file to group storage: $e');
       return false;
-    }
-  }
-
-  /// Add a member to a group
-  static Future<bool> addMemberToGroup({
-    required String groupId,
-    required String email,
-  }) async {
-    try {
-      final supabase = Supabase.instance.client;
-
-      // Find user by email
-      final userResponse =
-          await supabase
-              .from('User')
-              .select('id')
-              .eq('email', email)
-              .maybeSingle();
-
-      if (userResponse == null) {
-        throw Exception('User not found with this email');
-      }
-
-      // Check if user is already a member
-      final memberCheck =
-          await supabase
-              .from('Group_Members')
-              .select('id')
-              .eq('group_id', groupId)
-              .eq('user_id', userResponse['id'])
-              .maybeSingle();
-
-      if (memberCheck != null) {
-        throw Exception('User is already a member of this group');
-      }
-
-      // Add user to group
-      await supabase.from('Group_Members').insert({
-        'group_id': groupId,
-        'user_id': userResponse['id'],
-      });
-
-      print('Successfully added $email to group $groupId');
-      return true;
-    } catch (e) {
-      print('Error adding member: $e');
-      rethrow;
-    }
-  }
-
-  /// Remove current user from a group
-  static Future<bool> leaveGroup({
-    required String groupId,
-    required String userId,
-  }) async {
-    try {
-      final supabase = Supabase.instance.client;
-
-      await supabase
-          .from('Group_Members')
-          .delete()
-          .eq('group_id', groupId)
-          .eq('user_id', userId);
-
-      print('Successfully left group $groupId');
-      return true;
-    } catch (e) {
-      print('Error leaving group: $e');
-      rethrow;
-    }
-  }
-
-  /// Create a new group with RSA keys
-  static Future<Map<String, dynamic>?> createGroup({
-    required String name,
-    required String userId,
-    required String publicKeyPem,
-    required String privateKeyPem,
-  }) async {
-    try {
-      final supabase = Supabase.instance.client;
-
-      // Create group
-      final groupResponse =
-          await supabase
-              .from('Group')
-              .insert({
-                'name': name,
-                'user_id': userId,
-                'rsa_public_key': publicKeyPem,
-                'rsa_private_key': privateKeyPem,
-              })
-              .select()
-              .single();
-
-      // Add creator as first member
-      await supabase.from('Group_Members').insert({
-        'group_id': groupResponse['id'],
-        'user_id': userId,
-      });
-
-      print('Successfully created group: $name');
-      return groupResponse;
-    } catch (e) {
-      print('Error creating group: $e');
-      rethrow;
     }
   }
 }

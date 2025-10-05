@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:health_share/services/files_services/file_preview.dart';
-import 'package:health_share/services/group_services/files_group/files_decrypt_group.dart';
-import 'package:health_share/services/group_services/files_group/files_service_group.dart';
-import 'package:health_share/services/group_services/fetch_group/fetch_group_service.dart';
+import 'package:health_share/services/group_services/files_decrypt_group.dart';
+import 'package:health_share/services/group_services/fetch_group_service.dart';
+import 'package:health_share/services/group_services/files_service_group.dart';
+import 'package:health_share/services/group_services/group_management_service.dart';
+import 'package:health_share/services/group_services/group_member_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:fast_rsa/fast_rsa.dart';
 
-/// Contains all business logic for Groups and Group Details screens
+/// Contains utility functions and UI helpers for Groups screens
+/// Business logic has been moved to dedicated service files
 class GroupFunctions {
   // ==================== USER & AUTH ====================
 
@@ -40,17 +42,9 @@ class GroupFunctions {
     required String userId,
   }) async {
     try {
-      // Generate RSA key pair
-      final keyPair = await RSA.generate(2048);
-      final publicPem = keyPair.publicKey;
-      final privatePem = keyPair.privateKey;
-
-      // Create group using service
-      return await GroupFileService.createGroup(
+      return await GroupManagementService.createGroup(
         name: name,
         userId: userId,
-        publicKeyPem: publicPem,
-        privateKeyPem: privatePem,
       );
     } catch (e) {
       print('Error creating group: $e');
@@ -64,7 +58,7 @@ class GroupFunctions {
     required String userId,
   }) async {
     try {
-      return await GroupFileService.leaveGroup(
+      return await GroupMemberService.leaveGroup(
         groupId: groupId,
         userId: userId,
       );
@@ -116,7 +110,7 @@ class GroupFunctions {
     required String email,
   }) async {
     try {
-      return await GroupFileService.addMemberToGroup(
+      return await GroupMemberService.addMemberToGroup(
         groupId: groupId,
         email: email,
       );
