@@ -145,59 +145,6 @@ class _OrgDetailsScreenState extends State<OrgDetailsScreen>
     }
   }
 
-  Future<void> _joinOrganization() async {
-    final supabase = Supabase.instance.client;
-    final user = supabase.auth.currentUser;
-
-    if (user == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('You must be logged in to join.'),
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-        ),
-      );
-      return;
-    }
-
-    try {
-      await OrgMembershipService.joinOrg(widget.orgId, user.id);
-
-      setState(() {
-        _hasJoined = true;
-        _membershipStatus = 'pending';
-      });
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text('Join request sent successfully!'),
-            backgroundColor: Colors.green[400],
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to join: ${e.toString()}'),
-            backgroundColor: Colors.red[400],
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-          ),
-        );
-      }
-    }
-  }
-
   // ===== UI HELPER METHODS (KEPT IN UI) =====
 
   String _formatFullName(Map<String, dynamic>? user) {

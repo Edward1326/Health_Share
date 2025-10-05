@@ -76,9 +76,13 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     _selectedSex = widget.userData['sex'];
   }
 
-  String _listToString(List<dynamic>? list) {
-    if (list == null || list.isEmpty) return '';
-    return list.join(', ');
+  // UPDATED METHOD - Now handles both List and String types
+  String _listToString(dynamic list) {
+    if (list == null) return '';
+    if (list is String) return list; // Handle string type
+    if (list is List && list.isEmpty) return '';
+    if (list is List) return list.join(', ');
+    return '';
   }
 
   List<String> _stringToList(String text) {

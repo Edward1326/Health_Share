@@ -402,11 +402,19 @@ class _ProfileScreenState extends State<ProfileScreen>
     );
   }
 
-  Widget _buildArrayInfoRow(String label, List<dynamic>? values) {
-    final displayValue =
-        (values != null && values.isNotEmpty)
-            ? values.join(', ')
-            : 'Not provided';
+  // UPDATED METHOD - This is the fix for the error
+  Widget _buildArrayInfoRow(String label, dynamic values) {
+    String displayValue;
+
+    if (values == null) {
+      displayValue = 'Not provided';
+    } else if (values is List) {
+      displayValue = values.isNotEmpty ? values.join(', ') : 'Not provided';
+    } else if (values is String) {
+      displayValue = values.isNotEmpty ? values : 'Not provided';
+    } else {
+      displayValue = 'Not provided';
+    }
 
     return _buildInfoRow(label, displayValue);
   }
