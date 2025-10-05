@@ -23,7 +23,7 @@ class GroupFileService {
               ipfs_cid,
               category
             ),
-            shared_by:User!shared_by_user_id(email)
+            shared_by:User!shared_by_user_id(email, Person!inner(first_name))
           ''')
           .eq('shared_with_group_id', groupId)
           .order('shared_at', ascending: false);
@@ -34,6 +34,34 @@ class GroupFileService {
       print('Error fetching group shared files: $e');
       return [];
     }
+  }
+
+  /// Organize files by user for UI display
+  static Map<String, List<Map<String, dynamic>>> organizeFilesByUser(
+    List<Map<String, dynamic>> sharedFiles,
+  ) {
+    Map<String, List<Map<String, dynamic>>> filesByUser = {};
+
+    for (final shareRecord in sharedFiles) {
+      final sharedByUser = shareRecord['shared_by'] ?? {};
+      final userEmail = sharedByUser['email'] ?? 'Unknown User';
+      final personData = sharedByUser['Person'] ?? {};
+      final firstName = personData['first_name'] ?? userEmail.split('@')[0];
+      final userId = shareRecord['shared_by_user_id'] ?? 'unknown';
+
+      // Create a key combining user ID and first name for uniqueness
+      final userKey = '$userId|$firstName';
+
+      if (!filesByUser.containsKey(userKey)) {
+        filesByUser[userKey] = [];
+      }
+      filesByUser[userKey]!.add(shareRecord);
+    }
+
+    print(
+      'Organized ${sharedFiles.length} files into ${filesByUser.length} user folders',
+    );
+    return filesByUser;
   }
 
   /// Revoke file sharing from a group (only file owner or group owner can do this)
@@ -165,7 +193,7 @@ class GroupFileService {
     try {
       final supabase = Supabase.instance.client;
 
-      // Insert into Group_Files table (this seems to be what's used in GroupDetailsScreen)
+      // Insert into Group_Files table
       await supabase.from('Group_Files').insert({
         'group_id': groupId,
         'file_name': fileName,
@@ -180,6 +208,112 @@ class GroupFileService {
     } catch (e) {
       print('Error adding file to group storage: $e');
       return false;
+    }
+  }
+
+  /// Add a member to a group
+  static Future<bool> addMemberToGroup({
+    required String groupId,
+    required String email,
+  }) async {
+    try {
+      final supabase = Supabase.instance.client;
+
+      // Find user by email
+      final userResponse =
+          await supabase
+              .from('User')
+              .select('id')
+              .eq('email', email)
+              .maybeSingle();
+
+      if (userResponse == null) {
+        throw Exception('User not found with this email');
+      }
+
+      // Check if user is already a member
+      final memberCheck =
+          await supabase
+              .from('Group_Members')
+              .select('id')
+              .eq('group_id', groupId)
+              .eq('user_id', userResponse['id'])
+              .maybeSingle();
+
+      if (memberCheck != null) {
+        throw Exception('User is already a member of this group');
+      }
+
+      // Add user to group
+      await supabase.from('Group_Members').insert({
+        'group_id': groupId,
+        'user_id': userResponse['id'],
+      });
+
+      print('Successfully added $email to group $groupId');
+      return true;
+    } catch (e) {
+      print('Error adding member: $e');
+      rethrow;
+    }
+  }
+
+  /// Remove current user from a group
+  static Future<bool> leaveGroup({
+    required String groupId,
+    required String userId,
+  }) async {
+    try {
+      final supabase = Supabase.instance.client;
+
+      await supabase
+          .from('Group_Members')
+          .delete()
+          .eq('group_id', groupId)
+          .eq('user_id', userId);
+
+      print('Successfully left group $groupId');
+      return true;
+    } catch (e) {
+      print('Error leaving group: $e');
+      rethrow;
+    }
+  }
+
+  /// Create a new group with RSA keys
+  static Future<Map<String, dynamic>?> createGroup({
+    required String name,
+    required String userId,
+    required String publicKeyPem,
+    required String privateKeyPem,
+  }) async {
+    try {
+      final supabase = Supabase.instance.client;
+
+      // Create group
+      final groupResponse =
+          await supabase
+              .from('Group')
+              .insert({
+                'name': name,
+                'user_id': userId,
+                'rsa_public_key': publicKeyPem,
+                'rsa_private_key': privateKeyPem,
+              })
+              .select()
+              .single();
+
+      // Add creator as first member
+      await supabase.from('Group_Members').insert({
+        'group_id': groupResponse['id'],
+        'user_id': userId,
+      });
+
+      print('Successfully created group: $name');
+      return groupResponse;
+    } catch (e) {
+      print('Error creating group: $e');
+      rethrow;
     }
   }
 }

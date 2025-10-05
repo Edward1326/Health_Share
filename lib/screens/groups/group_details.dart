@@ -1,8 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:health_share/services/files_services/file_preview.dart';
-import 'package:health_share/services/group_services/files_decrypt_group.dart';
-import 'package:health_share/services/group_services/group_file_service.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:health_share/services/group_services/group_functions.dart';
 
 class GroupDetailsScreen extends StatefulWidget {
   final String groupId;
@@ -24,8 +21,7 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen>
     with TickerProviderStateMixin {
   late TabController _tabController;
   List<Map<String, dynamic>> _members = [];
-  Map<String, List<Map<String, dynamic>>> _filesByUser =
-      {}; // Organize files by user
+  Map<String, List<Map<String, dynamic>>> _filesByUser = {};
   bool _isLoading = false;
   String? _currentUserId;
   bool _isGroupOwner = false;
@@ -34,36 +30,26 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen>
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
-    _getCurrentUser();
-    _fetchMembers();
-    _fetchSharedFiles();
+    _initializeScreen();
   }
 
-  Future<void> _getCurrentUser() async {
-    final user = Supabase.instance.client.auth.currentUser;
-    setState(() {
-      _currentUserId = user?.id;
-      _isGroupOwner = user?.id == widget.groupData['user_id'];
-    });
+  Future<void> _initializeScreen() async {
+    _currentUserId = GroupFunctions.getCurrentUserId();
+    _isGroupOwner = GroupFunctions.isUserGroupOwner(
+      _currentUserId,
+      widget.groupData,
+    );
+    await Future.wait([_fetchMembers(), _fetchSharedFiles()]);
   }
 
   Future<void> _fetchMembers() async {
     setState(() => _isLoading = true);
     try {
-      final response = await Supabase.instance.client
-          .from('Group_Members')
-          .select('''
-            *,
-            User!user_id(id, email, person_id)
-          ''')
-          .eq('group_id', widget.groupId)
-          .order('added_at', ascending: true);
-
+      final members = await GroupFunctions.fetchGroupMembers(widget.groupId);
       setState(() {
-        _members = List<Map<String, dynamic>>.from(response);
+        _members = members;
       });
     } catch (e) {
-      print('DEBUG: Error loading members: $e');
       _showError('Error loading members: $e');
     } finally {
       setState(() => _isLoading = false);
@@ -72,61 +58,23 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen>
 
   Future<void> _fetchSharedFiles() async {
     try {
-      final sharedFiles = await GroupFileService.fetchGroupSharedFiles(
+      final sharedFiles = await GroupFunctions.fetchGroupSharedFiles(
         widget.groupId,
       );
-
-      // Organize files by user
-      Map<String, List<Map<String, dynamic>>> filesByUser = {};
-
-      for (final shareRecord in sharedFiles) {
-        final sharedByUser = shareRecord['shared_by'] ?? {};
-        final userEmail = sharedByUser['email'] ?? 'Unknown User';
-        final personData = sharedByUser['Person'] ?? {};
-        final firstName = personData['first_name'] ?? userEmail.split('@')[0];
-        final userId = shareRecord['shared_by_user_id'] ?? 'unknown';
-
-        // Create a key combining user ID and first name for uniqueness
-        final userKey = '$userId|$firstName';
-
-        if (!filesByUser.containsKey(userKey)) {
-          filesByUser[userKey] = [];
-        }
-        filesByUser[userKey]!.add(shareRecord);
-      }
-
+      final filesByUser = GroupFunctions.organizeFilesByUser(sharedFiles);
       setState(() {
         _filesByUser = filesByUser;
       });
-
-      print(
-        'Organized ${sharedFiles.length} files into ${filesByUser.length} user folders',
-      );
     } catch (e) {
-      print('Error fetching shared files: $e');
       setState(() {
         _filesByUser = {};
       });
     }
   }
 
-  void _showError(String message) {
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(message), backgroundColor: Colors.red),
-      );
-    }
-  }
-
-  void _showSuccess(String message) {
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(message),
-          backgroundColor: const Color(0xFF667EEA),
-        ),
-      );
-    }
+  Future<void> _refreshData() async {
+    await Future.wait([_fetchMembers(), _fetchSharedFiles()]);
+    _showSuccess('Data refreshed');
   }
 
   @override
@@ -356,7 +304,7 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen>
             subtitle: Padding(
               padding: const EdgeInsets.only(top: 4),
               child: Text(
-                'Joined: ${member['added_at'] != null ? _formatDate(member['added_at']) : 'Unknown'}',
+                'Joined: ${member['added_at'] != null ? GroupFunctions.formatDate(member['added_at']) : 'Unknown'}',
                 style: TextStyle(color: Colors.grey[600], fontSize: 12),
               ),
             ),
@@ -475,18 +423,17 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen>
 
   Widget _buildSharedFileCard(Map<String, dynamic> shareRecord) {
     final fileData = shareRecord['file'] ?? {};
-    final sharedByUser = shareRecord['shared_by'] ?? {};
-
     final fileName = fileData['filename'] ?? 'Unknown File';
-    final fileType = _getFileType(fileName);
-    final fileSize = _formatFileSize(fileData['file_size'] ?? 0);
-    final sharedDate = _formatDate(shareRecord['shared_at']);
-    final sharedByEmail = sharedByUser['email'] ?? 'Unknown User';
-    final uploadDate = _formatDate(fileData['uploaded_at'] ?? '');
+    final fileType = GroupFunctions.getFileType(fileName);
+    final fileSize = GroupFunctions.formatFileSize(fileData['file_size'] ?? 0);
+    final sharedDate = GroupFunctions.formatDate(shareRecord['shared_at']);
+    final uploadDate = GroupFunctions.formatDate(fileData['uploaded_at'] ?? '');
 
-    // Check permissions for removing share
-    final canRemoveShare =
-        _isGroupOwner || shareRecord['shared_by_user_id'] == _currentUserId;
+    final canRemoveShare = GroupFunctions.canUserRemoveShare(
+      isGroupOwner: _isGroupOwner,
+      currentUserId: _currentUserId,
+      shareRecord: shareRecord,
+    );
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
@@ -501,10 +448,14 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen>
           width: 40,
           height: 40,
           decoration: BoxDecoration(
-            color: _getFileIconColor(fileType),
+            color: GroupFunctions.getFileIconColor(fileType),
             borderRadius: BorderRadius.circular(6),
           ),
-          child: Icon(_getFileIcon(fileType), color: Colors.white, size: 20),
+          child: Icon(
+            GroupFunctions.getFileIcon(fileType),
+            color: Colors.white,
+            size: 20,
+          ),
         ),
         title: Text(
           fileName,
@@ -558,7 +509,6 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen>
                     ],
                   ),
                 ),
-                // Only show remove option if user is file sharer or group owner
                 if (canRemoveShare)
                   const PopupMenuItem(
                     value: 'remove',
@@ -579,155 +529,20 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen>
     );
   }
 
-  String _getFileType(String fileName) {
-    final extension = fileName.split('.').last.toLowerCase();
-    return extension;
-  }
-
-  IconData _getFileIcon(String fileType) {
-    switch (fileType) {
-      case 'pdf':
-        return Icons.picture_as_pdf;
-      case 'doc':
-      case 'docx':
-        return Icons.description;
-      case 'xls':
-      case 'xlsx':
-        return Icons.table_chart;
-      case 'ppt':
-      case 'pptx':
-        return Icons.slideshow;
-      case 'jpg':
-      case 'jpeg':
-      case 'png':
-      case 'gif':
-        return Icons.image;
-      case 'mp4':
-      case 'avi':
-      case 'mov':
-        return Icons.video_file;
-      case 'mp3':
-      case 'wav':
-        return Icons.audio_file;
-      case 'zip':
-      case 'rar':
-        return Icons.archive;
-      default:
-        return Icons.insert_drive_file;
-    }
-  }
-
-  Color _getFileIconColor(String fileType) {
-    switch (fileType) {
-      case 'pdf':
-        return Colors.red;
-      case 'doc':
-      case 'docx':
-        return Colors.blue;
-      case 'xls':
-      case 'xlsx':
-        return Colors.green;
-      case 'ppt':
-      case 'pptx':
-        return Colors.orange;
-      case 'jpg':
-      case 'jpeg':
-      case 'png':
-      case 'gif':
-        return Colors.purple;
-      case 'mp4':
-      case 'avi':
-      case 'mov':
-        return Colors.indigo;
-      case 'mp3':
-      case 'wav':
-        return Colors.teal;
-      case 'zip':
-      case 'rar':
-        return Colors.brown;
-      default:
-        return Colors.grey;
-    }
-  }
-
-  String _formatFileSize(int bytes) {
-    if (bytes < 1024) return '$bytes B';
-    if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
-    if (bytes < 1024 * 1024 * 1024)
-      return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
-    return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(1)} GB';
-  }
-
-  String _formatDate(String dateString) {
-    try {
-      final date = DateTime.parse(dateString);
-      final now = DateTime.now();
-      final difference = now.difference(date);
-
-      if (difference.inDays == 0) {
-        return 'Today ${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
-      } else if (difference.inDays == 1) {
-        return 'Yesterday';
-      } else if (difference.inDays < 7) {
-        return '${difference.inDays} days ago';
-      } else {
-        return '${date.day}/${date.month}/${date.year}';
-      }
-    } catch (e) {
-      return 'Unknown date';
-    }
-  }
-
   Future<void> _previewSharedFile(Map<String, dynamic> shareRecord) async {
+    if (_currentUserId == null) {
+      _showError('User not logged in');
+      return;
+    }
+
     try {
-      final fileData = shareRecord['file'];
-      final fileName = fileData['filename'] ?? 'Unknown File';
-      final fileId = fileData['id'];
-      final ipfsCid = fileData['ipfs_cid'];
-
-      if (_currentUserId == null) {
-        _showError('User not logged in');
-        return;
-      }
-
-      showDialog(
+      await GroupFunctions.previewSharedFile(
         context: context,
-        barrierDismissible: false,
-        builder:
-            (context) => AlertDialog(
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const CircularProgressIndicator(),
-                  const SizedBox(height: 16),
-                  Text('Decrypting $fileName...'),
-                ],
-              ),
-            ),
-      );
-
-      // Direct call to FilesDecryptGroup instead of through GroupFileService
-      final decryptedBytes = await FilesDecryptGroup.decryptGroupSharedFile(
-        fileId: fileId,
-        groupId: widget.groupId,
+        shareRecord: shareRecord,
         userId: _currentUserId!,
-        ipfsCid: ipfsCid,
-      );
-
-      Navigator.of(context).pop();
-
-      if (decryptedBytes == null) {
-        _showError('Failed to decrypt file or access denied');
-        return;
-      }
-
-      await EnhancedFilePreviewService.previewFile(
-        context,
-        fileName,
-        decryptedBytes,
+        groupId: widget.groupId,
       );
     } catch (e) {
-      Navigator.of(context).pop();
       _showError('Error previewing file: $e');
     }
   }
@@ -736,14 +551,6 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen>
     final fileData = shareRecord['file'];
     final fileName = fileData['filename'] ?? 'Unknown File';
     final fileId = fileData['id'];
-
-    // Additional permission check with user-friendly message
-    final canRemoveShare =
-        _isGroupOwner || shareRecord['shared_by_user_id'] == _currentUserId;
-    if (!canRemoveShare) {
-      _showError('Only the file owner or group admin can remove this share');
-      return;
-    }
 
     final confirm = await showDialog<bool>(
       context: context,
@@ -775,10 +582,12 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen>
 
     if (confirm == true && _currentUserId != null) {
       try {
-        final success = await GroupFileService.revokeFileFromGroup(
+        final success = await GroupFunctions.removeFileFromGroup(
           fileId: fileId,
           groupId: widget.groupId,
           userId: _currentUserId!,
+          shareRecord: shareRecord,
+          isGroupOwner: _isGroupOwner,
         );
 
         if (success) {
@@ -812,17 +621,17 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen>
                 _buildInfoRow('File Type', fileData['file_type'] ?? 'Unknown'),
                 _buildInfoRow(
                   'File Size',
-                  _formatFileSize(fileData['file_size'] ?? 0),
+                  GroupFunctions.formatFileSize(fileData['file_size'] ?? 0),
                 ),
                 _buildInfoRow('Category', fileData['category'] ?? 'General'),
                 _buildInfoRow(
                   'Uploaded',
-                  _formatDate(fileData['uploaded_at'] ?? ''),
+                  GroupFunctions.formatDate(fileData['uploaded_at'] ?? ''),
                 ),
                 _buildInfoRow('Shared By', sharedByUser['email'] ?? 'Unknown'),
                 _buildInfoRow(
                   'Shared On',
-                  _formatDate(shareRecord['shared_at'] ?? ''),
+                  GroupFunctions.formatDate(shareRecord['shared_at'] ?? ''),
                 ),
               ],
             ),
@@ -858,50 +667,6 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen>
         ],
       ),
     );
-  }
-
-  Future<void> _refreshData() async {
-    await Future.wait([_fetchMembers(), _fetchSharedFiles()]);
-    _showSuccess('Data refreshed');
-  }
-
-  Future<void> _addMemberDirectly(String email) async {
-    try {
-      final userResponse =
-          await Supabase.instance.client
-              .from('User')
-              .select('id')
-              .eq('email', email)
-              .maybeSingle();
-
-      if (userResponse == null) {
-        _showError('User not found with this email');
-        return;
-      }
-
-      final memberCheck =
-          await Supabase.instance.client
-              .from('Group_Members')
-              .select('id')
-              .eq('group_id', widget.groupId)
-              .eq('user_id', userResponse['id'])
-              .maybeSingle();
-
-      if (memberCheck != null) {
-        _showError('User is already a member of this group');
-        return;
-      }
-
-      await Supabase.instance.client.from('Group_Members').insert({
-        'group_id': widget.groupId,
-        'user_id': userResponse['id'],
-      });
-
-      await _fetchMembers(); // Refresh members list
-      _showSuccess('$email added to group successfully');
-    } catch (e) {
-      _showError('Error adding member: $e');
-    }
   }
 
   void _showAddMemberDialog() {
@@ -944,8 +709,22 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen>
                           : () async {
                             if (emailController.text.isNotEmpty) {
                               setDialogState(() => isAdding = true);
-                              await _addMemberDirectly(emailController.text);
-                              Navigator.pop(context);
+                              try {
+                                await GroupFunctions.addMemberToGroup(
+                                  groupId: widget.groupId,
+                                  email: emailController.text,
+                                );
+                                await _fetchMembers();
+                                Navigator.pop(context);
+                                _showSuccess(
+                                  '${emailController.text} added to group successfully',
+                                );
+                              } catch (e) {
+                                setDialogState(() => isAdding = false);
+                                _showError(
+                                  e.toString().replaceAll('Exception: ', ''),
+                                );
+                              }
                             }
                           },
                   style: ElevatedButton.styleFrom(
@@ -1012,11 +791,10 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen>
 
   Future<void> _leaveGroup() async {
     try {
-      await Supabase.instance.client
-          .from('Group_Members')
-          .delete()
-          .eq('group_id', widget.groupId)
-          .eq('user_id', _currentUserId!);
+      await GroupFunctions.leaveGroup(
+        groupId: widget.groupId,
+        userId: _currentUserId!,
+      );
 
       if (mounted) {
         Navigator.pop(context, true);
@@ -1029,6 +807,25 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen>
       }
     } catch (e) {
       _showError('Error leaving group: $e');
+    }
+  }
+
+  void _showError(String message) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(message), backgroundColor: Colors.red),
+      );
+    }
+  }
+
+  void _showSuccess(String message) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(message),
+          backgroundColor: const Color(0xFF667EEA),
+        ),
+      );
     }
   }
 }

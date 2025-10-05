@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:health_share/screens/groups/group_details.dart';
 import 'package:health_share/components/navbar_main.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:fast_rsa/fast_rsa.dart';
+import 'package:health_share/services/group_services/group_functions.dart';
 
 class GroupsScreen extends StatefulWidget {
   const GroupsScreen({super.key});
@@ -35,15 +34,12 @@ class _GroupsScreenState extends State<GroupsScreen>
       CurvedAnimation(parent: _fadeController, curve: Curves.easeInOut),
     );
     _fadeController.forward();
-    _getCurrentUser();
-    _fetchGroups();
+    _initializeScreen();
   }
 
-  Future<void> _getCurrentUser() async {
-    final user = Supabase.instance.client.auth.currentUser;
-    setState(() {
-      _currentUserId = user?.id;
-    });
+  Future<void> _initializeScreen() async {
+    _currentUserId = GroupFunctions.getCurrentUserId();
+    await _fetchGroups();
   }
 
   Future<void> _fetchGroups() async {
@@ -51,33 +47,20 @@ class _GroupsScreenState extends State<GroupsScreen>
 
     setState(() => _isLoading = true);
 
-    // Fetch groups where the current user is a member
-    final response = await Supabase.instance.client
-        .from('Group_Members')
-        .select('''
-          group_id,
-          Group!inner(*)
-        ''')
-        .eq('user_id', _currentUserId!)
-        .order('added_at', ascending: false);
-
-    setState(() {
-      _groups = List<Map<String, dynamic>>.from(
-        response.map((item) => item['Group']),
-      );
-      _isLoading = false;
-    });
+    try {
+      final groups = await GroupFunctions.fetchUserGroups(_currentUserId!);
+      setState(() {
+        _groups = groups;
+        _isLoading = false;
+      });
+    } catch (e) {
+      setState(() => _isLoading = false);
+      _showError('Error fetching groups: $e');
+    }
   }
 
   List<Map<String, dynamic>> get _filteredGroups {
-    if (_searchQuery.isEmpty) return _groups;
-    return _groups
-        .where(
-          (group) => (group['name'] ?? '').toString().toLowerCase().contains(
-            _searchQuery.toLowerCase(),
-          ),
-        )
-        .toList();
+    return GroupFunctions.filterGroups(_groups, _searchQuery);
   }
 
   @override
@@ -150,11 +133,7 @@ class _GroupsScreenState extends State<GroupsScreen>
       ),
       child: TextFormField(
         controller: _searchController,
-        onChanged: (value) {
-          setState(() {
-            _searchQuery = value;
-          });
-        },
+        onChanged: (value) => setState(() => _searchQuery = value),
         decoration: InputDecoration(
           hintText: 'Search for groups...',
           hintStyle: TextStyle(color: Colors.grey[500]),
@@ -165,9 +144,7 @@ class _GroupsScreenState extends State<GroupsScreen>
                     icon: Icon(Icons.clear, color: Colors.grey[400], size: 20),
                     onPressed: () {
                       _searchController.clear();
-                      setState(() {
-                        _searchQuery = '';
-                      });
+                      setState(() => _searchQuery = '');
                     },
                   )
                   : null,
@@ -190,9 +167,7 @@ class _GroupsScreenState extends State<GroupsScreen>
     return SizedBox(
       width: double.infinity,
       child: ElevatedButton(
-        onPressed: () {
-          _showCreateGroupDialog();
-        },
+        onPressed: _showCreateGroupDialog,
         style: ElevatedButton.styleFrom(
           backgroundColor: const Color(0xFF667EEA),
           foregroundColor: Colors.white,
@@ -240,9 +215,7 @@ class _GroupsScreenState extends State<GroupsScreen>
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        onTap: () {
-          _navigateToGroupDetails(group);
-        },
+        onTap: () => _navigateToGroupDetails(group),
         borderRadius: BorderRadius.circular(16),
         child: Container(
           decoration: BoxDecoration(
@@ -275,7 +248,7 @@ class _GroupsScreenState extends State<GroupsScreen>
                       ),
                       const SizedBox(height: 8),
                       FutureBuilder<int>(
-                        future: _getMemberCount(group['id']),
+                        future: GroupFunctions.getMemberCount(group['id']),
                         builder: (context, snapshot) {
                           return Text(
                             '${snapshot.data ?? 0} members',
@@ -367,14 +340,6 @@ class _GroupsScreenState extends State<GroupsScreen>
     );
   }
 
-  Future<int> _getMemberCount(String groupId) async {
-    final response = await Supabase.instance.client
-        .from('Group_Members')
-        .select('id')
-        .eq('group_id', groupId);
-    return response.length;
-  }
-
   void _navigateToGroupDetails(Map<String, dynamic> group) {
     Navigator.push(
       context,
@@ -403,19 +368,14 @@ class _GroupsScreenState extends State<GroupsScreen>
                 borderRadius: BorderRadius.circular(16),
               ),
               title: const Text('Create New Group'),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  TextField(
-                    controller: nameController,
-                    decoration: InputDecoration(
-                      labelText: 'Group Name',
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
+              content: TextField(
+                controller: nameController,
+                decoration: InputDecoration(
+                  labelText: 'Group Name',
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
                   ),
-                ],
+                ),
               ),
               actions: [
                 TextButton(
@@ -467,51 +427,12 @@ class _GroupsScreenState extends State<GroupsScreen>
 
   Future<void> _createGroup(String name) async {
     try {
-      // Generate RSA key pair using fast_rsa (same as AuthService)
-      final keyPair = await RSA.generate(2048); // 2048-bit key size
+      await GroupFunctions.createGroup(name: name, userId: _currentUserId!);
 
-      final publicPem = keyPair.publicKey;
-      final privatePem = keyPair.privateKey;
-
-      // Create group
-      final groupResponse =
-          await Supabase.instance.client
-              .from('Group')
-              .insert({
-                'name': name,
-                'user_id': _currentUserId,
-                'rsa_public_key': publicPem,
-                'rsa_private_key': privatePem,
-              })
-              .select()
-              .single();
-
-      // Add creator as first member
-      await Supabase.instance.client.from('Group_Members').insert({
-        'group_id': groupResponse['id'],
-        'user_id': _currentUserId,
-      });
-
-      // Refresh groups list
       await _fetchGroups();
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Group "$name" created successfully!'),
-            backgroundColor: const Color(0xFF667EEA),
-          ),
-        );
-      }
+      _showSuccess('Group "$name" created successfully!');
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error creating group: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
+      _showError('Error creating group: $e');
     }
   }
 
@@ -556,11 +477,21 @@ class _GroupsScreenState extends State<GroupsScreen>
                           : () async {
                             if (emailController.text.isNotEmpty) {
                               setDialogState(() => isAddingMember = true);
-                              await _addMemberDirectly(
-                                groupId,
-                                emailController.text,
-                              );
-                              Navigator.pop(context);
+                              try {
+                                await GroupFunctions.addMemberToGroup(
+                                  groupId: groupId,
+                                  email: emailController.text,
+                                );
+                                Navigator.pop(context);
+                                _showSuccess(
+                                  '${emailController.text} has been added to the group',
+                                );
+                              } catch (e) {
+                                setDialogState(() => isAddingMember = false);
+                                _showError(
+                                  e.toString().replaceAll('Exception: ', ''),
+                                );
+                              }
                             }
                           },
                   style: ElevatedButton.styleFrom(
@@ -592,86 +523,9 @@ class _GroupsScreenState extends State<GroupsScreen>
     );
   }
 
-  Future<void> _addMemberDirectly(String groupId, String email) async {
-    try {
-      // Find user by email from custom User table
-      final userResponse =
-          await Supabase.instance.client
-              .from('User')
-              .select('id')
-              .eq('email', email)
-              .maybeSingle();
-
-      if (userResponse == null) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('User not found with this email'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
-        return;
-      }
-
-      // Check if user is already a member
-      final memberCheck =
-          await Supabase.instance.client
-              .from('Group_Members')
-              .select('id')
-              .eq('group_id', groupId)
-              .eq('user_id', userResponse['id'])
-              .maybeSingle();
-
-      if (memberCheck != null) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('User is already a member of this group'),
-              backgroundColor: Colors.orange,
-            ),
-          );
-        }
-        return;
-      }
-
-      // Add user directly to group members
-      await Supabase.instance.client.from('Group_Members').insert({
-        'group_id': groupId,
-        'user_id': userResponse['id'],
-      });
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('$email has been added to the group'),
-            backgroundColor: const Color(0xFF667EEA),
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error adding member: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
-  }
-
   void _showMembersDialog(String groupId) async {
     try {
-      final response = await Supabase.instance.client
-          .from('Group_Members')
-          .select('''
-            *,
-            User!user_id(email)
-          ''')
-          .eq('group_id', groupId);
-
-      final members = List<Map<String, dynamic>>.from(response);
+      final members = await GroupFunctions.getGroupMembersWithDetails(groupId);
 
       if (mounted) {
         showDialog(
@@ -716,14 +570,26 @@ class _GroupsScreenState extends State<GroupsScreen>
         );
       }
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error loading members: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
+      _showError('Error loading members: $e');
+    }
+  }
+
+  void _showError(String message) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(message), backgroundColor: Colors.red),
+      );
+    }
+  }
+
+  void _showSuccess(String message) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(message),
+          backgroundColor: const Color(0xFF667EEA),
+        ),
+      );
     }
   }
 }
