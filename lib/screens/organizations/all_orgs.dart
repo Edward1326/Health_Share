@@ -4,6 +4,11 @@ import 'package:health_share/screens/organizations/org_details.dart';
 import 'package:health_share/screens/organizations/org_doctors.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+// Import services
+import 'package:health_share/services/org_services/org_service.dart';
+import 'package:health_share/services/org_services/org_membership_service.dart';
+import 'package:health_share/services/org_services/org_invitation_service.dart';
+
 class OrgScreen extends StatefulWidget {
   const OrgScreen({super.key});
 
@@ -25,7 +30,6 @@ class _OrgScreenState extends State<OrgScreen> with TickerProviderStateMixin {
   bool _isLoading = false;
   int _invitationCount = 0;
 
-  // Toggle state: 0 = All Organizations, 1 = Your Organizations
   int _selectedTab = 0;
 
   @override
@@ -60,13 +64,10 @@ class _OrgScreenState extends State<OrgScreen> with TickerProviderStateMixin {
 
   Future<void> _fetchAllOrganizations() async {
     try {
-      final response = await Supabase.instance.client
-          .from('Organization')
-          .select()
-          .order('name', ascending: true);
+      final organizations = await OrgService.fetchAllOrgs();
 
       setState(() {
-        _allOrganizations = List<Map<String, dynamic>>.from(response);
+        _allOrganizations = organizations;
       });
 
       print('DEBUG: Loaded ${_allOrganizations.length} organizations');
@@ -88,57 +89,12 @@ class _OrgScreenState extends State<OrgScreen> with TickerProviderStateMixin {
     if (currentUser == null) return;
 
     try {
-      print(
-        'DEBUG: Starting fetchJoinedOrganizations for user: ${currentUser.email}',
+      final organizations = await OrgMembershipService.fetchJoinedOrgs(
+        currentUser.id,
       );
 
-      // Get user's database ID
-      final userResponse =
-          await Supabase.instance.client
-              .from('User')
-              .select('id')
-              .eq('email', currentUser.email!)
-              .single();
-
-      final userId = userResponse['id'];
-      print('DEBUG: User database ID: $userId');
-
-      // Get organizations where this user is an accepted patient
-      final patientResponse = await Supabase.instance.client
-          .from('Patient')
-          .select('organization_id')
-          .eq('user_id', userId)
-          .eq('status', 'accepted');
-
-      print('DEBUG: Patient response: $patientResponse');
-
-      if (patientResponse.isEmpty) {
-        print('DEBUG: No accepted patient records found');
-        setState(() => _joinedOrganizations = []);
-        return;
-      }
-
-      // Extract organization IDs directly
-      final orgIds =
-          patientResponse
-              .map((patient) => patient['organization_id'])
-              .where((id) => id != null)
-              .toSet()
-              .toList();
-
-      print('DEBUG: Organization IDs: $orgIds');
-
-      // Get organization details
-      final orgResponse = await Supabase.instance.client
-          .from('Organization')
-          .select('*')
-          .inFilter('id', orgIds)
-          .order('name', ascending: true);
-
-      print('DEBUG: Organizations: $orgResponse');
-
       setState(() {
-        _joinedOrganizations = List<Map<String, dynamic>>.from(orgResponse);
+        _joinedOrganizations = organizations;
       });
 
       print(
@@ -166,14 +122,12 @@ class _OrgScreenState extends State<OrgScreen> with TickerProviderStateMixin {
     if (currentUser == null) return;
 
     try {
-      final response = await Supabase.instance.client
-          .from('Patient')
-          .select('*, Organization(name)')
-          .eq('user_id', currentUser.id)
-          .eq('status', 'invited');
+      final invitations = await OrgInvitationService.fetchUserInvitations(
+        currentUser.id,
+      );
 
       setState(() {
-        _invitations = List<Map<String, dynamic>>.from(response);
+        _invitations = invitations;
         _invitationCount = _invitations.length;
       });
     } catch (e) {
@@ -193,24 +147,24 @@ class _OrgScreenState extends State<OrgScreen> with TickerProviderStateMixin {
     String status,
   ) async {
     try {
-      await Supabase.instance.client
-          .from('Patient')
-          .update({'status': status})
-          .eq('id', invitationId);
+      if (status == 'accepted') {
+        await OrgInvitationService.acceptInvitation(invitationId);
+      } else {
+        await OrgInvitationService.declineInvitation(invitationId);
+      }
 
-      // Refresh all data
       await _fetchAllData();
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              status == 'unassigned'
+              status == 'accepted'
                   ? 'Invitation accepted successfully!'
                   : 'Invitation declined',
             ),
             backgroundColor:
-                status == 'unassigned' ? Colors.green : Colors.orange,
+                status == 'accepted' ? Colors.green : Colors.orange,
           ),
         );
       }
@@ -234,7 +188,7 @@ class _OrgScreenState extends State<OrgScreen> with TickerProviderStateMixin {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(20),
           ),
-          child: Container(
+          child: SizedBox(
             width: MediaQuery.of(context).size.width * 0.9,
             height: MediaQuery.of(context).size.height * 0.7,
             child: Column(
@@ -438,12 +392,12 @@ class _OrgScreenState extends State<OrgScreen> with TickerProviderStateMixin {
                                                 ),
                                                 elevation: 0,
                                               ),
-                                              child: Row(
+                                              child: const Row(
                                                 mainAxisAlignment:
                                                     MainAxisAlignment.center,
                                                 children: [
                                                   Icon(Icons.check, size: 18),
-                                                  const SizedBox(width: 8),
+                                                  SizedBox(width: 8),
                                                   Text(
                                                     'Accept',
                                                     style: TextStyle(
@@ -467,7 +421,7 @@ class _OrgScreenState extends State<OrgScreen> with TickerProviderStateMixin {
                                               },
                                               style: OutlinedButton.styleFrom(
                                                 foregroundColor: Colors.red,
-                                                side: BorderSide(
+                                                side: const BorderSide(
                                                   color: Colors.red,
                                                   width: 2,
                                                 ),
@@ -480,12 +434,12 @@ class _OrgScreenState extends State<OrgScreen> with TickerProviderStateMixin {
                                                       BorderRadius.circular(12),
                                                 ),
                                               ),
-                                              child: Row(
+                                              child: const Row(
                                                 mainAxisAlignment:
                                                     MainAxisAlignment.center,
                                                 children: [
                                                   Icon(Icons.close, size: 18),
-                                                  const SizedBox(width: 8),
+                                                  SizedBox(width: 8),
                                                   Text(
                                                     'Decline',
                                                     style: TextStyle(
@@ -513,6 +467,8 @@ class _OrgScreenState extends State<OrgScreen> with TickerProviderStateMixin {
       },
     );
   }
+
+  // ===== UI HELPER METHODS =====
 
   String _formatDate(String? dateString) {
     if (dateString == null) return 'Unknown date';
@@ -575,7 +531,6 @@ class _OrgScreenState extends State<OrgScreen> with TickerProviderStateMixin {
           ),
         ),
         actions: [
-          // Refresh button
           Container(
             margin: const EdgeInsets.only(right: 8),
             decoration: BoxDecoration(
@@ -604,7 +559,6 @@ class _OrgScreenState extends State<OrgScreen> with TickerProviderStateMixin {
               icon: Icon(Icons.refresh, color: Colors.grey[600], size: 22),
             ),
           ),
-          // Invitations button with modern design
           Stack(
             children: [
               Container(
@@ -673,7 +627,6 @@ class _OrgScreenState extends State<OrgScreen> with TickerProviderStateMixin {
         opacity: _fadeAnimation,
         child: Column(
           children: [
-            // Modern toggle buttons with proper functionality
             Padding(
               padding: const EdgeInsets.symmetric(
                 horizontal: 20.0,
@@ -769,7 +722,6 @@ class _OrgScreenState extends State<OrgScreen> with TickerProviderStateMixin {
                               _searchController.clear();
                               _searchQuery = '';
                             });
-                            // Lazy load joined organizations if not already loaded
                             if (_joinedOrganizations.isEmpty) {
                               _fetchJoinedOrganizations();
                             }
@@ -841,8 +793,6 @@ class _OrgScreenState extends State<OrgScreen> with TickerProviderStateMixin {
                 ),
               ),
             ),
-
-            // Search bar with modern design
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20.0),
               child: Container(
@@ -899,10 +849,7 @@ class _OrgScreenState extends State<OrgScreen> with TickerProviderStateMixin {
                 ),
               ),
             ),
-
             const SizedBox(height: 20),
-
-            // Organizations list
             Expanded(
               child:
                   _isLoading
@@ -945,7 +892,6 @@ class _OrgScreenState extends State<OrgScreen> with TickerProviderStateMixin {
       child: InkWell(
         onTap: () {
           if (isJoined) {
-            // Navigate to YourOrgDetailsScreen for joined organizations
             Navigator.push(
               context,
               MaterialPageRoute(
@@ -957,7 +903,6 @@ class _OrgScreenState extends State<OrgScreen> with TickerProviderStateMixin {
               ),
             );
           } else {
-            // Navigate to regular OrgDetailsScreen for all organizations
             Navigator.push(
               context,
               MaterialPageRoute(
@@ -987,7 +932,6 @@ class _OrgScreenState extends State<OrgScreen> with TickerProviderStateMixin {
             padding: const EdgeInsets.all(24.0),
             child: Row(
               children: [
-                // Organization icon/status
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
@@ -1071,7 +1015,7 @@ class _OrgScreenState extends State<OrgScreen> with TickerProviderStateMixin {
         ),
       ),
     );
-  } // This closing brace was missing!
+  }
 
   Widget _buildEmptyState() {
     final isJoinedTab = _selectedTab == 1;
@@ -1139,9 +1083,9 @@ class _OrgScreenState extends State<OrgScreen> with TickerProviderStateMixin {
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
-                  children: [
+                  children: const [
                     Icon(Icons.explore, size: 20),
-                    const SizedBox(width: 8),
+                    SizedBox(width: 8),
                     Text(
                       'Explore Organizations',
                       style: TextStyle(

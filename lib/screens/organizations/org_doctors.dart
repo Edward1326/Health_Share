@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:health_share/screens/organizations/org_doctors_files.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+// Import service
+import 'package:health_share/services/org_services/org_doctor_service.dart';
+
 class DoctorsScreen extends StatefulWidget {
   final String orgId;
   final String orgName;
@@ -41,78 +44,13 @@ class _DoctorsScreenState extends State<DoctorsScreen>
     setState(() => _isLoading = true);
 
     try {
-      print(
-        'DEBUG: Starting fetchAssignedDoctors for user: ${currentUser.email}',
+      final doctors = await OrgDoctorService.fetchAssignedDoctors(
+        currentUser.id,
+        widget.orgId,
       );
 
-      // Get user's database ID
-      final userResponse =
-          await Supabase.instance.client
-              .from('User')
-              .select('id')
-              .eq('email', currentUser.email!)
-              .single();
-
-      final userId = userResponse['id'];
-      print('DEBUG: User database ID: $userId');
-
-      // First, get the patient record for this user
-      final patientResponse =
-          await Supabase.instance.client
-              .from('Patient')
-              .select('id')
-              .eq('user_id', userId)
-              .single();
-
-      final patientId = patientResponse['id'];
-      print('DEBUG: Patient ID: $patientId');
-
-      // Get doctor assignments for this patient
-      final assignmentResponse = await Supabase.instance.client
-          .from('Doctor_User_Assignment')
-          .select('''
-          id,
-          status,
-          assigned_at,
-          doctor_id,
-          Organization_User!doctor_id(
-            id,
-            position,
-            department,
-            organization_id,
-            User!inner(
-              id,
-              email,
-              Person(
-                first_name,
-                last_name
-              )
-            )
-          )
-        ''')
-          .eq('patient_id', patientId);
-
-      print('DEBUG: Assignment response: $assignmentResponse');
-
-      if (assignmentResponse.isEmpty) {
-        print('DEBUG: No doctor assignments found');
-        setState(() => _assignedDoctors = []);
-        return;
-      }
-
-      // Filter assignments for this specific organization
-      final filteredAssignments =
-          assignmentResponse.where((assignment) {
-            final orgUser = assignment['Organization_User'];
-            return orgUser != null &&
-                orgUser['organization_id'].toString() == widget.orgId &&
-                orgUser['position'] == 'Doctor';
-          }).toList();
-
-      print('DEBUG: Filtered assignments: $filteredAssignments');
-
       setState(() {
-        _assignedDoctors = List<Map<String, dynamic>>.from(filteredAssignments);
+        _assignedDoctors = doctors;
       });
 
       print(
@@ -134,6 +72,8 @@ class _DoctorsScreenState extends State<DoctorsScreen>
       setState(() => _isLoading = false);
     }
   }
+
+  // ===== UI HELPER METHODS (KEPT IN UI) =====
 
   String _getDoctorName(Map<String, dynamic> doctor) {
     final orgUser = doctor['Organization_User'];

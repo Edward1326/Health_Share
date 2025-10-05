@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:health_share/services/files_services/file_preview.dart';
-import 'package:health_share/services/group_services/files_decrypt_group.dart';
-import 'package:health_share/services/group_services/fetch_group_service.dart';
-import 'package:health_share/services/group_services/files_service_group.dart';
+import 'package:health_share/services/group_services/group_files_decrypt.dart';
+import 'package:health_share/services/group_services/group_fetch_service.dart';
+import 'package:health_share/services/group_services/group_files_service.dart';
 import 'package:health_share/services/group_services/group_management_service.dart';
 import 'package:health_share/services/group_services/group_member_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';

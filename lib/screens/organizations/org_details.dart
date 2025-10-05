@@ -2,6 +2,11 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+// Import services
+import 'package:health_share/services/org_services/org_service.dart';
+import 'package:health_share/services/org_services/org_membership_service.dart';
+import 'package:health_share/services/org_services/org_doctor_service.dart';
+
 class OrgDetailsScreen extends StatefulWidget {
   final String orgId;
   final String orgName;
@@ -45,15 +50,10 @@ class _OrgDetailsScreenState extends State<OrgDetailsScreen>
 
   Future<void> _loadOrganizationDetails() async {
     try {
-      final response =
-          await Supabase.instance.client
-              .from('Organization')
-              .select('*')
-              .eq('id', widget.orgId)
-              .single();
+      final orgData = await OrgService.fetchOrgDetails(widget.orgId);
 
       setState(() {
-        _organizationData = response;
+        _organizationData = orgData;
         _isLoading = false;
       });
     } catch (e) {
@@ -82,58 +82,13 @@ class _OrgDetailsScreenState extends State<OrgDetailsScreen>
     setState(() => _isLoadingDoctors = true);
 
     try {
-      // First, get all Organization_User records for doctors in this organization
-      final orgUserResponse = await Supabase.instance.client
-          .from('Organization_User')
-          .select('*')
-          .eq('organization_id', widget.orgId)
-          .eq('position', 'Doctor');
-
-      print('Organization_User response: $orgUserResponse');
-
-      if (orgUserResponse.isEmpty) {
-        print('No doctors found in Organization_User table');
-        setState(() {
-          _doctors = [];
-          _isLoadingDoctors = false;
-        });
-        return;
-      }
-
-      // Extract user IDs
-      final userIds = orgUserResponse.map((doc) => doc['user_id']).toList();
-      print('User IDs to fetch: $userIds');
-
-      // Now fetch the User details with Person information
-      final userResponse = await Supabase.instance.client
-          .from('User')
-          .select('''
-            id,
-            email,
-            Person(first_name, middle_name, last_name)
-          ''')
-          .inFilter('id', userIds);
-
-      print('User response: $userResponse');
-
-      // Combine the data
-      final combinedDoctors = <Map<String, dynamic>>[];
-      for (final orgUser in orgUserResponse) {
-        final user = userResponse.firstWhere(
-          (u) => u['id'] == orgUser['user_id'],
-          orElse: () => <String, dynamic>{},
-        );
-
-        if (user.isNotEmpty) {
-          combinedDoctors.add({...orgUser, 'User': user});
-        }
-      }
+      final doctors = await OrgDoctorService.fetchOrgDoctors(widget.orgId);
 
       setState(() {
-        _doctors = combinedDoctors;
+        _doctors = doctors;
         _isLoadingDoctors = false;
 
-        // Extract unique departments, handle null/empty departments
+        // Extract unique departments
         final departmentSet = <String>{};
         for (final doctor in _doctors) {
           final dept = doctor['department']?.toString().trim();
@@ -148,15 +103,14 @@ class _OrgDetailsScreenState extends State<OrgDetailsScreen>
 
       print('Successfully loaded ${_doctors.length} doctors');
       print('Departments found: $_departments');
-    } catch (e) {
+    } catch (e, stackTrace) {
       print('Error loading doctors: $e');
-      print('Error stack trace: ${e.toString()}');
+      print('Error stack trace: $stackTrace');
       setState(() {
         _isLoadingDoctors = false;
         _doctors = [];
       });
 
-      // Show error to user
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -175,18 +129,15 @@ class _OrgDetailsScreenState extends State<OrgDetailsScreen>
     if (user == null) return;
 
     try {
-      final response =
-          await supabase
-              .from('Patient')
-              .select('status')
-              .eq('user_id', user.id)
-              .eq('organization_id', widget.orgId)
-              .maybeSingle();
+      final status = await OrgMembershipService.checkMembershipStatus(
+        widget.orgId,
+        user.id,
+      );
 
-      if (response != null) {
+      if (status != null) {
         setState(() {
           _hasJoined = true;
-          _membershipStatus = response['status'];
+          _membershipStatus = status;
         });
       }
     } catch (e) {
@@ -212,12 +163,7 @@ class _OrgDetailsScreenState extends State<OrgDetailsScreen>
     }
 
     try {
-      await supabase.from('Patient').insert({
-        'user_id': user.id,
-        'organization_id': widget.orgId,
-        'joined_at': DateTime.now().toIso8601String(),
-        'status': 'pending',
-      });
+      await OrgMembershipService.joinOrg(widget.orgId, user.id);
 
       setState(() {
         _hasJoined = true;
@@ -251,6 +197,8 @@ class _OrgDetailsScreenState extends State<OrgDetailsScreen>
       }
     }
   }
+
+  // ===== UI HELPER METHODS (KEPT IN UI) =====
 
   String _formatFullName(Map<String, dynamic>? user) {
     if (user == null) return 'Unknown Doctor';
@@ -365,7 +313,6 @@ class _OrgDetailsScreenState extends State<OrgDetailsScreen>
               )
               : CustomScrollView(
                 slivers: [
-                  // Modern Sliver App Bar
                   SliverAppBar(
                     expandedHeight: 280,
                     pinned: true,
@@ -375,7 +322,6 @@ class _OrgDetailsScreenState extends State<OrgDetailsScreen>
                       background: Stack(
                         fit: StackFit.expand,
                         children: [
-                          // Background with Image or Gradient
                           _organizationData?['image'] != null
                               ? Stack(
                                 fit: StackFit.expand,
@@ -387,7 +333,6 @@ class _OrgDetailsScreenState extends State<OrgDetailsScreen>
                                         (context, error, stackTrace) =>
                                             _buildGradientBackground(),
                                   ),
-                                  // Dark gradient overlay
                                   Container(
                                     decoration: BoxDecoration(
                                       gradient: LinearGradient(
@@ -403,8 +348,6 @@ class _OrgDetailsScreenState extends State<OrgDetailsScreen>
                                 ],
                               )
                               : _buildGradientBackground(),
-
-                          // Glassmorphism effect at bottom
                           Positioned(
                             bottom: 0,
                             left: 0,
@@ -431,8 +374,6 @@ class _OrgDetailsScreenState extends State<OrgDetailsScreen>
                               ),
                             ),
                           ),
-
-                          // Content
                           Positioned(
                             bottom: 80,
                             left: 24,
@@ -663,8 +604,6 @@ class _OrgDetailsScreenState extends State<OrgDetailsScreen>
                       ),
                     ),
                   ),
-
-                  // Tab Content
                   SliverFillRemaining(
                     child: TabBarView(
                       controller: _tabController,
@@ -701,7 +640,6 @@ class _OrgDetailsScreenState extends State<OrgDetailsScreen>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // About Section
           if (_organizationData?['description'] != null) ...[
             Container(
               padding: const EdgeInsets.all(24),
@@ -762,10 +700,7 @@ class _OrgDetailsScreenState extends State<OrgDetailsScreen>
             ),
             const SizedBox(height: 24),
           ],
-
-          // Quick Info Cards
           _buildQuickInfoCards(),
-
           const SizedBox(height: 32),
         ],
       ),
@@ -892,7 +827,6 @@ class _OrgDetailsScreenState extends State<OrgDetailsScreen>
   Widget _buildDoctorsTab() {
     return Column(
       children: [
-        // Department Filter Pills
         if (_departments.length > 1)
           Container(
             height: 56,
@@ -976,8 +910,6 @@ class _OrgDetailsScreenState extends State<OrgDetailsScreen>
               },
             ),
           ),
-
-        // Doctors List
         Expanded(
           child:
               _isLoadingDoctors
@@ -1103,7 +1035,6 @@ class _OrgDetailsScreenState extends State<OrgDetailsScreen>
     final fullName = _formatFullName(user);
     final initial = fullName.isNotEmpty ? fullName[0].toUpperCase() : 'D';
 
-    // Create gradient colors based on index for variety
     final gradients = [
       [const Color(0xFF3B82F6), const Color(0xFF2563EB)],
       [const Color(0xFF8B5CF6), const Color(0xFF7C3AED)],
@@ -1132,14 +1063,11 @@ class _OrgDetailsScreenState extends State<OrgDetailsScreen>
         color: Colors.transparent,
         child: InkWell(
           borderRadius: BorderRadius.circular(20),
-          onTap: () {
-            // Could add doctor detail view here
-          },
+          onTap: () {},
           child: Padding(
             padding: const EdgeInsets.all(20),
             child: Row(
               children: [
-                // Avatar with gradient
                 Container(
                   width: 60,
                   height: 60,
@@ -1170,8 +1098,6 @@ class _OrgDetailsScreenState extends State<OrgDetailsScreen>
                   ),
                 ),
                 const SizedBox(width: 16),
-
-                // Doctor Info
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -1204,8 +1130,6 @@ class _OrgDetailsScreenState extends State<OrgDetailsScreen>
                         ],
                       ),
                       const SizedBox(height: 6),
-
-                      // Department Badge
                       if (doctor['department'] != null &&
                           doctor['department']
                               .toString()
@@ -1240,8 +1164,6 @@ class _OrgDetailsScreenState extends State<OrgDetailsScreen>
                           ),
                         ),
                       ],
-
-                      // Email
                       if (user?['email'] != null)
                         Row(
                           children: [
@@ -1264,8 +1186,6 @@ class _OrgDetailsScreenState extends State<OrgDetailsScreen>
                           ],
                         ),
                       const SizedBox(height: 6),
-
-                      // Join Date
                       Row(
                         children: [
                           Icon(

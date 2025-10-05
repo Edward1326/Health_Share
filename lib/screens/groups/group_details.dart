@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:health_share/services/group_services/files_service_group.dart';
+import 'package:health_share/services/group_services/group_files_service.dart';
 import 'package:health_share/services/group_services/group_functions.dart';
-import 'package:health_share/services/group_services/fetch_group_service.dart';
+import 'package:health_share/services/group_services/group_fetch_service.dart';
 import 'package:health_share/services/group_services/group_member_service.dart';
 
 class GroupDetailsScreen extends StatefulWidget {

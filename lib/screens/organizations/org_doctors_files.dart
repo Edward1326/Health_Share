@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:health_share/services/files_services/file_preview.dart';
-import 'package:health_share/services/org_services/files_decrypt_org.dart';
+import 'package:health_share/services/org_services/org_files_decrypt.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+
+// Import services
+import 'package:health_share/services/org_services/org_doctor_service.dart';
+import 'package:health_share/services/org_services/org_files_service.dart';
 
 class OrgDoctorsFilesScreen extends StatefulWidget {
   final String doctorId;
@@ -27,7 +31,9 @@ class _OrgDoctorsFilesScreenState extends State<OrgDoctorsFilesScreen>
   late Animation<double> _fadeAnimation;
 
   Map<String, dynamic>? _doctorDetails;
+  List<Map<String, dynamic>> _sharedFiles = [];
   bool _isLoading = false;
+  bool _isLoadingFiles = false;
 
   @override
   void initState() {
@@ -41,15 +47,39 @@ class _OrgDoctorsFilesScreenState extends State<OrgDoctorsFilesScreen>
     );
     _fadeController.forward();
 
-    // Fetch both doctor details and shared files
     _fetchDoctorDetails();
     _fetchSharedFiles();
   }
 
-  List<Map<String, dynamic>> _sharedFiles = [];
-  bool _isLoadingFiles = false;
+  Future<void> _fetchDoctorDetails() async {
+    setState(() => _isLoading = true);
 
-  //-------------------------------------------------------------------------------------------------------------------------------
+    try {
+      final doctorDetails = await OrgDoctorService.fetchDoctorDetails(
+        widget.doctorId,
+      );
+
+      setState(() {
+        _doctorDetails = doctorDetails;
+      });
+
+      print('DEBUG: Successfully loaded doctor details');
+    } catch (e, stackTrace) {
+      print('DEBUG: Error in _fetchDoctorDetails: $e');
+      print('DEBUG: Stack trace: $stackTrace');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error loading doctor details: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      setState(() => _isLoading = false);
+    }
+  }
+
   Future<void> _fetchSharedFiles() async {
     final currentUser = Supabase.instance.client.auth.currentUser;
     if (currentUser == null) {
@@ -60,281 +90,13 @@ class _OrgDoctorsFilesScreenState extends State<OrgDoctorsFilesScreen>
     setState(() => _isLoadingFiles = true);
 
     try {
-      print('=== ENHANCED DEBUG FETCH SHARED FILES ===');
-      print('Current user: ${currentUser.email}');
-      print('Doctor ID from widget: ${widget.doctorId}');
-      print('Doctor name: ${widget.doctorName}');
-
-      // STEP 1: Get current user's database ID
-      print('\n--- Step 1: Fetching user data ---');
-      final userResponse =
-          await Supabase.instance.client
-              .from('User')
-              .select('id, email')
-              .eq('email', currentUser.email!)
-              .maybeSingle();
-
-      if (userResponse == null) {
-        throw Exception('User not found in database: ${currentUser.email}');
-      }
-
-      final userId = userResponse['id'] as String;
-      print('✓ User ID: $userId');
-
-      // STEP 2: Get patient record
-      print('\n--- Step 2: Fetching patient data ---');
-      final patientResponse =
-          await Supabase.instance.client
-              .from('Patient')
-              .select('id, user_id')
-              .eq('user_id', userId)
-              .maybeSingle();
-
-      if (patientResponse == null) {
-        print('❌ No patient record found for user: $userId');
-        setState(() => _sharedFiles = []);
-        return;
-      }
-
-      final patientId = patientResponse['id'] as String;
-      print('✓ Patient ID: $patientId');
-
-      // STEP 3: Get doctor's user ID from Organization_User
-      print('\n--- Step 3: Fetching doctor user data ---');
-      final doctorOrgResponse =
-          await Supabase.instance.client
-              .from('Organization_User')
-              .select('user_id, position, department')
-              .eq('id', widget.doctorId)
-              .maybeSingle();
-
-      if (doctorOrgResponse == null) {
-        throw Exception('Doctor not found: ${widget.doctorId}');
-      }
-
-      final doctorUserId = doctorOrgResponse['user_id'] as String;
-      print('✓ Doctor user ID: $doctorUserId');
-      print('✓ Doctor position: ${doctorOrgResponse['position']}');
-
-      // STEP 4: Get all shared files using multiple approaches
-      print('\n--- Step 4: Querying shared files (comprehensive approach) ---');
-
-      final Map<String, Map<String, dynamic>> allUniqueFiles = {};
-
-      // Approach 1: Direct doctor shares (shared_with_doctor field)
-      print('  Approach 1: Files shared directly to doctor...');
-      final directDoctorShares = await Supabase.instance.client
-          .from('File_Shares')
-          .select('''
-            id,
-            file_id,
-            shared_at,
-            revoked_at,
-            shared_by_user_id,
-            shared_with_user_id,
-            shared_with_doctor,
-            Files!inner(
-              id,
-              filename,
-              file_type,
-              file_size,
-              category,
-              uploaded_at,
-              sha256_hash
-            )
-          ''')
-          .eq('shared_with_doctor', doctorUserId)
-          .isFilter('revoked_at', null);
-
-      print('    Found ${directDoctorShares.length} direct doctor shares');
-      _processShares(directDoctorShares, allUniqueFiles, userId, doctorUserId);
-
-      // Approach 2: User-to-user shares (patient to doctor)
-      print('  Approach 2: Patient to doctor user shares...');
-      final patientToDoctorShares = await Supabase.instance.client
-          .from('File_Shares')
-          .select('''
-            id,
-            file_id,
-            shared_at,
-            revoked_at,
-            shared_by_user_id,
-            shared_with_user_id,
-            shared_with_doctor,
-            Files!inner(
-              id,
-              filename,
-              file_type,
-              file_size,
-              category,
-              uploaded_at,
-              sha256_hash
-            )
-          ''')
-          .eq('shared_by_user_id', userId)
-          .eq('shared_with_user_id', doctorUserId)
-          .isFilter('revoked_at', null);
-
-      print(
-        '    Found ${patientToDoctorShares.length} patient-to-doctor shares',
+      final sharedFiles = await OrgFilesService.fetchSharedFiles(
+        currentUser.id,
+        widget.doctorId,
       );
-      _processShares(
-        patientToDoctorShares,
-        allUniqueFiles,
-        userId,
-        doctorUserId,
-      );
-
-      // Approach 3: Doctor-to-patient shares
-      print('  Approach 3: Doctor to patient user shares...');
-      final doctorToPatientShares = await Supabase.instance.client
-          .from('File_Shares')
-          .select('''
-            id,
-            file_id,
-            shared_at,
-            revoked_at,
-            shared_by_user_id,
-            shared_with_user_id,
-            shared_with_doctor,
-            Files!inner(
-              id,
-              filename,
-              file_type,
-              file_size,
-              category,
-              uploaded_at,
-              sha256_hash
-            )
-          ''')
-          .eq('shared_by_user_id', doctorUserId)
-          .eq('shared_with_user_id', userId)
-          .isFilter('revoked_at', null);
-
-      print(
-        '    Found ${doctorToPatientShares.length} doctor-to-patient shares',
-      );
-      _processShares(
-        doctorToPatientShares,
-        allUniqueFiles,
-        userId,
-        doctorUserId,
-      );
-
-      // Approach 4: Check for files where current user has access via File_Keys
-      // and doctor also has access (indicating shared files)
-      print('  Approach 4: Cross-referencing File_Keys...');
-
-      // Get all files the current user has access to
-      final userFileKeys = await Supabase.instance.client
-          .from('File_Keys')
-          .select('file_id')
-          .eq('recipient_type', 'user')
-          .eq('recipient_id', userId);
-
-      final userFileIds =
-          userFileKeys.map((fk) => fk['file_id'] as String).toList();
-      print('    Current user has access to ${userFileIds.length} files');
-
-      if (userFileIds.isNotEmpty) {
-        // Check which of these files the doctor also has access to
-        final doctorFileKeys = await Supabase.instance.client
-            .from('File_Keys')
-            .select('file_id')
-            .eq('recipient_type', 'user')
-            .eq('recipient_id', doctorUserId)
-            .inFilter('file_id', userFileIds);
-
-        final sharedFileIds =
-            doctorFileKeys.map((fk) => fk['file_id'] as String).toList();
-        print(
-          '    Doctor also has access to ${sharedFileIds.length} of these files',
-        );
-
-        if (sharedFileIds.isNotEmpty) {
-          // Get the file details for these shared files
-          final sharedFilesDetails = await Supabase.instance.client
-              .from('Files')
-              .select('''
-                id,
-                filename,
-                file_type,
-                file_size,
-                category,
-                uploaded_at,
-                sha256_hash
-              ''')
-              .inFilter('id', sharedFileIds);
-
-          // For files found via File_Keys, we need to determine sharing direction
-          for (final file in sharedFilesDetails) {
-            final fileId = file['id'] as String;
-            if (!allUniqueFiles.containsKey(fileId)) {
-              // Try to find the sharing record to determine direction
-              final shareRecord =
-                  await Supabase.instance.client
-                      .from('File_Shares')
-                      .select(
-                        'shared_by_user_id, shared_with_user_id, shared_at, shared_with_doctor',
-                      )
-                      .eq('file_id', fileId)
-                      .or(
-                        'shared_by_user_id.eq.$userId,shared_with_user_id.eq.$userId,shared_with_doctor.eq.$doctorUserId',
-                      )
-                      .isFilter('revoked_at', null)
-                      .limit(1)
-                      .maybeSingle();
-
-              String sharedBy = 'Unknown';
-              String sharedWith = 'Unknown';
-              String sharedAt = DateTime.now().toIso8601String();
-
-              if (shareRecord != null) {
-                sharedAt = shareRecord['shared_at'] ?? sharedAt;
-
-                if (shareRecord['shared_with_doctor'] == doctorUserId) {
-                  sharedBy = 'You';
-                  sharedWith = widget.doctorName;
-                } else if (shareRecord['shared_by_user_id'] == userId) {
-                  sharedBy = 'You';
-                  sharedWith = widget.doctorName;
-                } else if (shareRecord['shared_by_user_id'] == doctorUserId) {
-                  sharedBy = widget.doctorName;
-                  sharedWith = 'You';
-                }
-              }
-
-              allUniqueFiles[fileId] = {
-                ...file,
-                'shared_at': sharedAt,
-                'shared_by': sharedBy,
-                'shared_with': sharedWith,
-              };
-
-              print(
-                '    ✓ Added via File_Keys: ${file['filename']} (Shared by: $sharedBy)',
-              );
-            }
-          }
-        }
-      }
-
-      // STEP 5: Sort and set state
-      final filesList = allUniqueFiles.values.toList();
-      filesList.sort((a, b) {
-        final dateA = DateTime.parse(a['shared_at']);
-        final dateB = DateTime.parse(b['shared_at']);
-        return dateB.compareTo(dateA);
-      });
-
-      print('\n--- Final Results ---');
-      print('Total unique files found: ${filesList.length}');
-      for (final file in filesList) {
-        print('  • ${file['filename']} (Shared by: ${file['shared_by']})');
-      }
 
       setState(() {
-        _sharedFiles = filesList;
+        _sharedFiles = sharedFiles;
       });
 
       print('✅ Successfully loaded ${_sharedFiles.length} shared files');
@@ -356,60 +118,8 @@ class _OrgDoctorsFilesScreenState extends State<OrgDoctorsFilesScreen>
     }
   }
 
-  // Helper method to process shares and avoid duplicates
-  void _processShares(
-    List<Map<String, dynamic>> shares,
-    Map<String, Map<String, dynamic>> allUniqueFiles,
-    String userId,
-    String doctorUserId,
-  ) {
-    for (final share in shares) {
-      final file = share['Files'];
-      if (file == null) {
-        print('    ⚠️  Skipping share with null file data');
-        continue;
-      }
+  // ===== UI HELPER METHODS =====
 
-      final fileId = file['id'] as String;
-
-      if (!allUniqueFiles.containsKey(fileId)) {
-        // Determine sharing context
-        String sharedBy;
-        String sharedWith;
-
-        if (share['shared_with_doctor'] == doctorUserId) {
-          // Direct doctor share
-          sharedBy = 'You';
-          sharedWith = widget.doctorName;
-        } else if (share['shared_by_user_id'] == doctorUserId) {
-          // Doctor shared to patient
-          sharedBy = widget.doctorName;
-          sharedWith = 'You';
-        } else if (share['shared_by_user_id'] == userId) {
-          // Patient shared to doctor
-          sharedBy = 'You';
-          sharedWith = widget.doctorName;
-        } else {
-          // Fallback
-          sharedBy = 'Unknown';
-          sharedWith = 'Unknown';
-        }
-
-        allUniqueFiles[fileId] = {
-          ...file,
-          'share_id': share['id'],
-          'shared_at': share['shared_at'],
-          'shared_by': sharedBy,
-          'shared_with': sharedWith,
-        };
-
-        print('    ✓ Added file: ${file['filename']} (Shared by: $sharedBy)');
-      }
-    }
-  }
-
-  //-------------------------------------------------------------------------------------------------------------------------------
-  // Helper function to format file size
   String _formatFileSize(int bytes) {
     if (bytes < 1024) {
       return '$bytes B';
@@ -422,7 +132,6 @@ class _OrgDoctorsFilesScreenState extends State<OrgDoctorsFilesScreen>
     }
   }
 
-  // Helper function to get file icon
   IconData _getFileIcon(String fileType) {
     switch (fileType.toLowerCase()) {
       case 'pdf':
@@ -445,7 +154,6 @@ class _OrgDoctorsFilesScreenState extends State<OrgDoctorsFilesScreen>
     }
   }
 
-  // Helper function to get file color
   Color _getFileColor(String fileType) {
     switch (fileType.toLowerCase()) {
       case 'pdf':
@@ -468,7 +176,6 @@ class _OrgDoctorsFilesScreenState extends State<OrgDoctorsFilesScreen>
     }
   }
 
-  // Helper function to format shared date
   String _formatSharedDate(String? dateString) {
     if (dateString == null) return 'Unknown date';
     try {
@@ -487,59 +194,6 @@ class _OrgDoctorsFilesScreenState extends State<OrgDoctorsFilesScreen>
       }
     } catch (e) {
       return 'Unknown date';
-    }
-  }
-
-  Future<void> _fetchDoctorDetails() async {
-    setState(() => _isLoading = true);
-
-    try {
-      print('DEBUG: Fetching doctor details for doctor ID: ${widget.doctorId}');
-
-      // Get detailed doctor information
-      final response =
-          await Supabase.instance.client
-              .from('Organization_User')
-              .select('''
-            id,
-            position,
-            department,
-            created_at,
-            User!inner(
-              id,
-              email,
-              Person(
-                first_name,
-                last_name,
-                contact_number,
-                sex
-              )
-            )
-          ''')
-              .eq('id', widget.doctorId)
-              .eq('position', 'Doctor')
-              .single();
-
-      print('DEBUG: Doctor details response: $response');
-
-      setState(() {
-        _doctorDetails = response;
-      });
-
-      print('DEBUG: Successfully loaded doctor details');
-    } catch (e, stackTrace) {
-      print('DEBUG: Error in _fetchDoctorDetails: $e');
-      print('DEBUG: Stack trace: $stackTrace');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error loading doctor details: ${e.toString()}'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    } finally {
-      setState(() => _isLoading = false);
     }
   }
 
@@ -635,7 +289,7 @@ class _OrgDoctorsFilesScreenState extends State<OrgDoctorsFilesScreen>
             child: IconButton(
               onPressed: () async {
                 await _fetchDoctorDetails();
-                await _fetchSharedFiles(); // Also refresh files
+                await _fetchSharedFiles();
                 if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
@@ -870,7 +524,6 @@ class _OrgDoctorsFilesScreenState extends State<OrgDoctorsFilesScreen>
   Widget _buildFilesList() {
     return Column(
       children: [
-        // Files count header
         Container(
           width: double.infinity,
           padding: const EdgeInsets.all(16),
@@ -894,7 +547,6 @@ class _OrgDoctorsFilesScreenState extends State<OrgDoctorsFilesScreen>
           ),
         ),
         const SizedBox(height: 16),
-        // Files list
         ...List.generate(_sharedFiles.length, (index) {
           final file = _sharedFiles[index];
           return Padding(
@@ -926,9 +578,7 @@ class _OrgDoctorsFilesScreenState extends State<OrgDoctorsFilesScreen>
       child: Material(
         color: Colors.transparent,
         child: InkWell(
-          // In OrgDoctorsFilesScreen, update the _buildFileCard method's InkWell onTap:
           onTap: () async {
-            // Show loading dialog
             showDialog(
               context: context,
               barrierDismissible: false,
@@ -946,7 +596,6 @@ class _OrgDoctorsFilesScreenState extends State<OrgDoctorsFilesScreen>
             );
 
             try {
-              // Get file metadata if needed
               final fileMetadata = await OrgFilesDecryptService.getFileMetadata(
                 file['id'],
               );
@@ -955,27 +604,25 @@ class _OrgDoctorsFilesScreenState extends State<OrgDoctorsFilesScreen>
                 throw Exception('File metadata not found');
               }
 
-              // Decrypt the file
               final decryptedBytes =
                   await OrgFilesDecryptService.decryptSharedFileSimple(
                     fileId: file['id'],
                     ipfsCid: fileMetadata['ipfs_cid'],
                   );
 
-              Navigator.of(context).pop(); // Close loading dialog
+              Navigator.of(context).pop();
 
               if (decryptedBytes == null) {
                 throw Exception('Failed to decrypt file');
               }
 
-              // Use your existing preview service
               await EnhancedFilePreviewService.previewFile(
                 context,
                 file['filename'],
                 decryptedBytes,
               );
             } catch (e) {
-              Navigator.of(context).pop(); // Close loading dialog
+              Navigator.of(context).pop();
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
                   content: Text('Error opening file: ${e.toString()}'),
@@ -989,7 +636,6 @@ class _OrgDoctorsFilesScreenState extends State<OrgDoctorsFilesScreen>
             padding: const EdgeInsets.all(16),
             child: Row(
               children: [
-                // File icon
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
@@ -999,7 +645,6 @@ class _OrgDoctorsFilesScreenState extends State<OrgDoctorsFilesScreen>
                   child: Icon(fileIcon, color: fileColor, size: 24),
                 ),
                 const SizedBox(width: 16),
-                // File details
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -1089,7 +734,6 @@ class _OrgDoctorsFilesScreenState extends State<OrgDoctorsFilesScreen>
                     ],
                   ),
                 ),
-                // Action arrow
                 Icon(
                   Icons.arrow_forward_ios,
                   size: 16,
@@ -1143,49 +787,13 @@ class _OrgDoctorsFilesScreenState extends State<OrgDoctorsFilesScreen>
           ),
           const SizedBox(height: 12),
           Text(
-            'No files have been shared between you and ${widget.doctorName} yet. Files will appear here once they are shared.',
+            'No files have been shared between you and ${widget.doctorName} yet. Files will appear here when shared.',
             style: TextStyle(
               fontSize: 16,
               color: Colors.grey[600],
               height: 1.5,
             ),
             textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 24),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              _buildFeatureChip('Prescriptions', Icons.medication),
-              const SizedBox(width: 12),
-              _buildFeatureChip('Lab Results', Icons.science),
-              const SizedBox(width: 12),
-              _buildFeatureChip('Reports', Icons.description),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildFeatureChip(String label, IconData icon) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: Colors.grey[100],
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 16, color: Colors.grey[600]),
-          const SizedBox(width: 6),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 14,
-              color: Colors.grey[600],
-              fontWeight: FontWeight.w500,
-            ),
           ),
         ],
       ),

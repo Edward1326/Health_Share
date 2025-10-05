@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:health_share/screens/groups/group_details.dart';
 import 'package:health_share/components/navbar_main.dart';
 import 'package:health_share/services/group_services/group_functions.dart';
-import 'package:health_share/services/group_services/fetch_group_service.dart';
+import 'package:health_share/services/group_services/group_fetch_service.dart';
 import 'package:health_share/services/group_services/group_management_service.dart';
 import 'package:health_share/services/group_services/group_member_service.dart';
 
