@@ -73,7 +73,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         return;
       }
 
-      // First, get the patient record for this user
       final patientResponse =
           await supabase
               .from('Patient')
@@ -83,7 +82,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
       String? patientId = patientResponse?['id'];
 
-      // Fetch last accessed group from Group_Members table
       final groupMemberResponse =
           await supabase
               .from('Group_Members')
@@ -97,7 +95,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         _lastAccessedGroup = groupMemberResponse['Group'];
       }
 
-      // Fetch last accessed organization from Patient table
       final orgResponse =
           await supabase
               .from('Patient')
@@ -117,7 +114,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         print('DEBUG Home: No accepted organization found');
       }
 
-      // Fetch assigned doctors only if we have a patient ID
       if (patientId != null) {
         final doctorsResponse = await supabase
             .from('Doctor_User_Assignment')
@@ -142,7 +138,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             .eq('status', 'active')
             .limit(2);
 
-        // Process the doctors response
         _assignedDoctors =
             doctorsResponse.map((assignment) {
               final orgUser = assignment['Organization_User'];
@@ -194,7 +189,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: const Color(0xFFF8FAFB),
       body: SafeArea(
         child: FadeTransition(
           opacity: _fadeAnimation,
@@ -202,183 +197,47 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             position: _slideAnimation,
             child:
                 _isLoading
-                    ? const Center(child: CircularProgressIndicator())
-                    : SingleChildScrollView(
-                      padding: const EdgeInsets.all(20.0),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          // Header
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text(
-                                'Welcome, User',
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  color: Colors.grey[400],
-                                  fontWeight: FontWeight.w400,
-                                ),
-                              ),
-                              Icon(
-                                Icons.notifications_outlined,
-                                color: Colors.grey[400],
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 32),
+                    ? Center(
+                      child: CircularProgressIndicator(
+                        valueColor: AlwaysStoppedAnimation<Color>(
+                          const Color(0xFF2D4A3E),
+                        ),
+                      ),
+                    )
+                    : RefreshIndicator(
+                      onRefresh: _loadHomeData,
+                      color: const Color(0xFF2D4A3E),
+                      child: SingleChildScrollView(
+                        physics: const AlwaysScrollableScrollPhysics(),
+                        padding: const EdgeInsets.symmetric(horizontal: 20.0),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const SizedBox(height: 20),
+                            // Enhanced Header
+                            _buildHeader(),
+                            const SizedBox(height: 32),
 
-                          // Quick Access Section
-                          const Text(
-                            'Quick Access',
-                            style: TextStyle(
-                              fontSize: 20,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.black,
+                            // Welcome Card
+                            _buildWelcomeCard(),
+                            const SizedBox(height: 28),
+
+                            // Quick Access Section
+                            _buildSectionHeader('Quick Access', Icons.flash_on),
+                            const SizedBox(height: 16),
+                            _buildQuickAccessGrid(),
+                            const SizedBox(height: 32),
+
+                            // Doctors Assigned Section
+                            _buildSectionHeader(
+                              'Your Care Team',
+                              Icons.medical_services,
                             ),
-                          ),
-                          const SizedBox(height: 16),
-
-                          // Quick Access Cards Grid
-                          Row(
-                            children: [
-                              Expanded(
-                                child: _QuickAccessCard(
-                                  title:
-                                      _lastAccessedGroup?['name'] ??
-                                      'Group name',
-                                  icon: Icons.group,
-                                  onTap: () {
-                                    if (_lastAccessedGroup != null) {
-                                      // Navigate directly to GroupDetailsScreen with proper parameters
-                                      Navigator.push(
-                                        context,
-                                        MaterialPageRoute(
-                                          builder:
-                                              (context) => GroupDetailsScreen(
-                                                groupId:
-                                                    _lastAccessedGroup!['id'],
-                                                groupName:
-                                                    _lastAccessedGroup!['name'] ??
-                                                    'Group',
-                                                groupData: _lastAccessedGroup!,
-                                              ),
-                                        ),
-                                      );
-                                    } else {
-                                      ScaffoldMessenger.of(
-                                        context,
-                                      ).showSnackBar(
-                                        const SnackBar(
-                                          content: Text('No group joined yet'),
-                                        ),
-                                      );
-                                    }
-                                  },
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: _QuickAccessCard(
-                                  title:
-                                      _lastAccessedOrganization?['name'] ??
-                                      'Organization name',
-                                  icon: Icons.business,
-                                  onTap: () {
-                                    if (_lastAccessedOrganization != null) {
-                                      // Navigate to DoctorsScreen (Your Organizations view)
-                                      Navigator.push(
-                                        context,
-                                        MaterialPageRoute(
-                                          builder:
-                                              (context) => DoctorsScreen(
-                                                orgId:
-                                                    _lastAccessedOrganization!['id'],
-                                                orgName:
-                                                    _lastAccessedOrganization!['name'] ??
-                                                    'Organization',
-                                              ),
-                                        ),
-                                      );
-                                    } else {
-                                      ScaffoldMessenger.of(
-                                        context,
-                                      ).showSnackBar(
-                                        const SnackBar(
-                                          content: Text(
-                                            'No organization joined yet',
-                                          ),
-                                        ),
-                                      );
-                                    }
-                                  },
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 12),
-                          // Upload File Card
-                          Center(
-                            child: SizedBox(
-                              width: MediaQuery.of(context).size.width * 0.48,
-                              child: _QuickAccessCard(
-                                title: 'Upload a file',
-                                icon: Icons.upload_file,
-                                onTap: () {
-                                  Navigator.pushNamed(context, '/files');
-                                },
-                              ),
-                            ),
-                          ),
-
-                          const SizedBox(height: 32),
-
-                          // Doctors Assigned Section
-                          const Text(
-                            'Doctors Assigned',
-                            style: TextStyle(
-                              fontSize: 20,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.black,
-                            ),
-                          ),
-                          const SizedBox(height: 16),
-
-                          if (_assignedDoctors.isEmpty)
-                            Container(
-                              padding: const EdgeInsets.all(24),
-                              decoration: BoxDecoration(
-                                color: Colors.grey.shade50,
-                                borderRadius: BorderRadius.circular(16),
-                                border: Border.all(color: Colors.grey.shade200),
-                              ),
-                              child: Center(
-                                child: Text(
-                                  'No doctors assigned yet',
-                                  style: TextStyle(
-                                    fontSize: 14,
-                                    color: Colors.grey[600],
-                                  ),
-                                ),
-                              ),
-                            )
-                          else
-                            ..._assignedDoctors.map(
-                              (doctor) => Padding(
-                                padding: const EdgeInsets.only(bottom: 12),
-                                child: _DoctorCard(
-                                  doctor: doctor,
-                                  onTap: () {
-                                    Navigator.pushNamed(
-                                      context,
-                                      '/doctor-profile',
-                                      arguments: doctor['doctor_id'],
-                                    );
-                                  },
-                                ),
-                              ),
-                            ),
-                        ],
+                            const SizedBox(height: 16),
+                            _buildDoctorsSection(),
+                            const SizedBox(height: 20),
+                          ],
+                        ),
                       ),
                     ),
           ),
@@ -390,74 +249,500 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       ),
     );
   }
+
+  Widget _buildHeader() {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Hello there 👋',
+              style: TextStyle(
+                fontSize: 28,
+                fontWeight: FontWeight.bold,
+                color: const Color(0xFF1A1A1A),
+                height: 1.2,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'How are you feeling today?',
+              style: TextStyle(
+                fontSize: 15,
+                color: Colors.grey[600],
+                fontWeight: FontWeight.w400,
+              ),
+            ),
+          ],
+        ),
+        Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(14),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.04),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: IconButton(
+            icon: Icon(
+              Icons.notifications_outlined,
+              color: const Color(0xFF2D4A3E),
+              size: 24,
+            ),
+            onPressed: () {},
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildWelcomeCard() {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFF2D4A3E), Color(0xFF3D5A4D)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF2D4A3E).withOpacity(0.3),
+            blurRadius: 20,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 6,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: const Text(
+                    'Health Status',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                const Text(
+                  'Your health is our\npriority',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    height: 1.3,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Keep track of your wellness journey',
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.8),
+                    fontSize: 13,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.15),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.favorite_rounded,
+              color: Colors.white,
+              size: 40,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSectionHeader(String title, IconData icon) {
+    return Row(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: const Color(0xFF2D4A3E).withOpacity(0.1),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Icon(icon, size: 20, color: const Color(0xFF2D4A3E)),
+        ),
+        const SizedBox(width: 12),
+        Text(
+          title,
+          style: const TextStyle(
+            fontSize: 22,
+            fontWeight: FontWeight.bold,
+            color: Color(0xFF1A1A1A),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildQuickAccessGrid() {
+    return Column(
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: _QuickAccessCard(
+                title: _lastAccessedGroup?['name'] ?? 'Join a Group',
+                subtitle: 'Connect with others',
+                icon: Icons.group_rounded,
+                gradient: const LinearGradient(
+                  colors: [Color(0xFF667EEA), Color(0xFF764BA2)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                onTap: () {
+                  if (_lastAccessedGroup != null) {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder:
+                            (context) => GroupDetailsScreen(
+                              groupId: _lastAccessedGroup!['id'],
+                              groupName: _lastAccessedGroup!['name'] ?? 'Group',
+                              groupData: _lastAccessedGroup!,
+                            ),
+                      ),
+                    );
+                  } else {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('No group joined yet'),
+                        behavior: SnackBarBehavior.floating,
+                      ),
+                    );
+                  }
+                },
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _QuickAccessCard(
+                title:
+                    _lastAccessedOrganization?['name'] ?? 'Join Organization',
+                subtitle: 'Medical facilities',
+                icon: Icons.local_hospital_rounded,
+                gradient: const LinearGradient(
+                  colors: [Color(0xFFFA709A), Color(0xFFFEE140)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                onTap: () {
+                  if (_lastAccessedOrganization != null) {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder:
+                            (context) => DoctorsScreen(
+                              orgId: _lastAccessedOrganization!['id'],
+                              orgName:
+                                  _lastAccessedOrganization!['name'] ??
+                                  'Organization',
+                            ),
+                      ),
+                    );
+                  } else {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('No organization joined yet'),
+                        behavior: SnackBarBehavior.floating,
+                      ),
+                    );
+                  }
+                },
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        _QuickAccessCard(
+          title: 'Upload Medical Files',
+          subtitle: 'Share your health records securely',
+          icon: Icons.cloud_upload_rounded,
+          gradient: const LinearGradient(
+            colors: [Color(0xFF30CFD0), Color(0xFF330867)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          isFullWidth: true,
+          onTap: () {
+            Navigator.pushNamed(context, '/files');
+          },
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDoctorsSection() {
+    if (_assignedDoctors.isEmpty) {
+      return Container(
+        padding: const EdgeInsets.all(32),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: Colors.grey.shade100),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.03),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Column(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: Colors.grey.shade50,
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons.medical_services_outlined,
+                size: 48,
+                color: Colors.grey.shade400,
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'No doctors assigned yet',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: Colors.grey[800],
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Your assigned doctors will appear here',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 14, color: Colors.grey[500]),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Column(
+      children:
+          _assignedDoctors
+              .map(
+                (doctor) => Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: _DoctorCard(
+                    doctor: doctor,
+                    onTap: () {
+                      Navigator.pushNamed(
+                        context,
+                        '/doctor-profile',
+                        arguments: doctor['doctor_id'],
+                      );
+                    },
+                  ),
+                ),
+              )
+              .toList(),
+    );
+  }
 }
 
-class _QuickAccessCard extends StatelessWidget {
+class _QuickAccessCard extends StatefulWidget {
   final String title;
+  final String subtitle;
   final IconData icon;
+  final Gradient gradient;
   final VoidCallback onTap;
+  final bool isFullWidth;
 
   const _QuickAccessCard({
     required this.title,
+    required this.subtitle,
     required this.icon,
+    required this.gradient,
     required this.onTap,
+    this.isFullWidth = false,
   });
+
+  @override
+  State<_QuickAccessCard> createState() => _QuickAccessCardState();
+}
+
+class _QuickAccessCardState extends State<_QuickAccessCard> {
+  bool _isPressed = false;
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        height: 140,
+      onTapDown: (_) => setState(() => _isPressed = true),
+      onTapUp: (_) {
+        setState(() => _isPressed = false);
+        widget.onTap();
+      },
+      onTapCancel: () => setState(() => _isPressed = false),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        transform: Matrix4.identity()..scale(_isPressed ? 0.97 : 1.0),
+        height: widget.isFullWidth ? 120 : 160,
         decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            colors: [Color(0xFF2D4A3E), Color(0xFF3D2C4A)],
-            begin: Alignment.centerLeft,
-            end: Alignment.centerRight,
-          ),
+          gradient: widget.gradient,
           borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: widget.gradient.colors.first.withOpacity(0.3),
+              blurRadius: _isPressed ? 10 : 15,
+              offset: Offset(0, _isPressed ? 4 : 8),
+            ),
+          ],
         ),
         child: Stack(
           children: [
-            // Decorative illustration
+            // Decorative circles
             Positioned(
-              right: -20,
+              right: -30,
+              top: -30,
+              child: Container(
+                width: 100,
+                height: 100,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Colors.white.withOpacity(0.1),
+                ),
+              ),
+            ),
+            Positioned(
+              right: 20,
               bottom: -20,
-              child: Opacity(
-                opacity: 0.3,
-                child: Icon(
-                  Icons.favorite,
-                  size: 100,
-                  color: Colors.red.shade300,
+              child: Container(
+                width: 80,
+                height: 80,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Colors.white.withOpacity(0.08),
                 ),
               ),
             ),
             Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Icon(icon, color: Colors.white, size: 20),
-                  ),
-                  const Spacer(),
-                  Text(
-                    title,
-                    style: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                    ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
-              ),
+              padding: const EdgeInsets.all(20.0),
+              child:
+                  widget.isFullWidth
+                      ? Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(14),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(0.25),
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                            child: Icon(
+                              widget.icon,
+                              color: Colors.white,
+                              size: 28,
+                            ),
+                          ),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Text(
+                                  widget.title,
+                                  style: const TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.white,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  widget.subtitle,
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    color: Colors.white.withOpacity(0.85),
+                                  ),
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ],
+                            ),
+                          ),
+                          Icon(
+                            Icons.arrow_forward_ios_rounded,
+                            color: Colors.white.withOpacity(0.7),
+                            size: 18,
+                          ),
+                        ],
+                      )
+                      : Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(0.25),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Icon(
+                              widget.icon,
+                              color: Colors.white,
+                              size: 24,
+                            ),
+                          ),
+                          const Spacer(),
+                          Text(
+                            widget.title,
+                            style: const TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            widget.subtitle,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.white.withOpacity(0.85),
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ),
             ),
           ],
         ),
@@ -502,40 +787,51 @@ class _DoctorCard extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(18),
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: Colors.grey.shade200),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: Colors.grey.shade100),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.03),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
+              color: Colors.black.withOpacity(0.04),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
             ),
           ],
         ),
         child: Row(
           children: [
             Container(
-              width: 48,
-              height: 48,
+              width: 56,
+              height: 56,
               decoration: BoxDecoration(
-                color: Colors.blue.shade100,
-                borderRadius: BorderRadius.circular(12),
+                gradient: const LinearGradient(
+                  colors: [Color(0xFF667EEA), Color(0xFF764BA2)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFF667EEA).withOpacity(0.3),
+                    blurRadius: 8,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
               ),
               child: Center(
                 child: Text(
                   doctorName.isNotEmpty ? doctorName[0].toUpperCase() : 'D',
-                  style: TextStyle(
-                    fontSize: 20,
+                  style: const TextStyle(
+                    fontSize: 24,
                     fontWeight: FontWeight.bold,
-                    color: Colors.blue.shade700,
+                    color: Colors.white,
                   ),
                 ),
               ),
             ),
-            const SizedBox(width: 12),
+            const SizedBox(width: 14),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -544,42 +840,58 @@ class _DoctorCard extends StatelessWidget {
                     'Dr. $doctorName',
                     style: const TextStyle(
                       fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.black,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF1A1A1A),
                     ),
                   ),
-                  const SizedBox(height: 2),
+                  const SizedBox(height: 6),
                   if (department != null)
                     Container(
                       padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 2,
+                        horizontal: 10,
+                        vertical: 4,
                       ),
                       decoration: BoxDecoration(
-                        color: Colors.blue.shade50,
-                        borderRadius: BorderRadius.circular(4),
+                        color: const Color(0xFF667EEA).withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(6),
                       ),
                       child: Text(
                         department,
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: Colors.blue.shade700,
-                          fontWeight: FontWeight.w500,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: Color(0xFF667EEA),
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
                     ),
-                  const SizedBox(height: 4),
-                  Text(
-                    email,
-                    style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  Text(
-                    'Joined Aug 9, 2025',
-                    style: TextStyle(fontSize: 12, color: Colors.grey[400]),
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.business_rounded,
+                        size: 14,
+                        color: Colors.grey[500],
+                      ),
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: Text(
+                          organizationName,
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: Colors.grey[600],
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
+            ),
+            Icon(
+              Icons.arrow_forward_ios_rounded,
+              size: 16,
+              color: Colors.grey[400],
             ),
           ],
         ),

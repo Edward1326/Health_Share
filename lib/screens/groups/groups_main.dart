@@ -73,122 +73,35 @@ class _GroupsScreenState extends State<GroupsScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
+      backgroundColor: Colors.white,
       appBar: AppBar(
-        backgroundColor: Colors.transparent,
+        backgroundColor: Colors.white,
         elevation: 0,
         automaticallyImplyLeading: false,
-        title: Text(
+        title: const Text(
           'Groups',
           style: TextStyle(
-            color: Colors.grey[800],
-            fontWeight: FontWeight.w600,
-            fontSize: 20,
+            color: Colors.black,
+            fontWeight: FontWeight.bold,
+            fontSize: 24,
           ),
         ),
       ),
       body: FadeTransition(
         opacity: _fadeAnimation,
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.all(20.0),
-              child: Column(
-                children: [
-                  _buildSearchBar(),
-                  const SizedBox(height: 16),
-                  _buildCreateGroupButton(),
-                ],
-              ),
-            ),
-            Expanded(
-              child:
-                  _isLoading
-                      ? const Center(child: CircularProgressIndicator())
-                      : _buildGroupsList(),
-            ),
-          ],
-        ),
+        child:
+            _isLoading
+                ? const Center(child: CircularProgressIndicator())
+                : _buildGroupsList(),
       ),
       bottomNavigationBar: MainNavBar(
         selectedIndex: _selectedIndex,
         onItemTapped: (index) => setState(() => _selectedIndex = index),
       ),
-    );
-  }
-
-  Widget _buildSearchBar() {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.grey.withOpacity(0.08)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.02),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: TextFormField(
-        controller: _searchController,
-        onChanged: (value) => setState(() => _searchQuery = value),
-        decoration: InputDecoration(
-          hintText: 'Search for groups...',
-          hintStyle: TextStyle(color: Colors.grey[500]),
-          prefixIcon: Icon(Icons.search, color: Colors.grey[400], size: 22),
-          suffixIcon:
-              _searchQuery.isNotEmpty
-                  ? IconButton(
-                    icon: Icon(Icons.clear, color: Colors.grey[400], size: 20),
-                    onPressed: () {
-                      _searchController.clear();
-                      setState(() => _searchQuery = '');
-                    },
-                  )
-                  : null,
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
-            borderSide: BorderSide.none,
-          ),
-          filled: true,
-          fillColor: Colors.white,
-          contentPadding: const EdgeInsets.symmetric(
-            horizontal: 16,
-            vertical: 16,
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildCreateGroupButton() {
-    return SizedBox(
-      width: double.infinity,
-      child: ElevatedButton(
+      floatingActionButton: FloatingActionButton(
         onPressed: _showCreateGroupDialog,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: const Color(0xFF667EEA),
-          foregroundColor: Colors.white,
-          elevation: 0,
-          padding: const EdgeInsets.symmetric(vertical: 16),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-          shadowColor: const Color(0xFF667EEA).withOpacity(0.3),
-        ),
-        child: const Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.add, size: 20),
-            SizedBox(width: 8),
-            Text(
-              'Create a Group',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-            ),
-          ],
-        ),
+        backgroundColor: const Color(0xFF4CAF50),
+        child: const Icon(Icons.add, color: Colors.white),
       ),
     );
   }
@@ -199,7 +112,7 @@ class _GroupsScreenState extends State<GroupsScreen>
       return _buildEmptyState();
     }
     return ListView.builder(
-      padding: const EdgeInsets.symmetric(horizontal: 20.0),
+      padding: const EdgeInsets.all(16.0),
       itemCount: filteredGroups.length,
       itemBuilder: (context, index) {
         final group = filteredGroups[index];
@@ -216,53 +129,49 @@ class _GroupsScreenState extends State<GroupsScreen>
       color: Colors.transparent,
       child: InkWell(
         onTap: () => _navigateToGroupDetails(group),
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(24),
         child: Container(
+          height: 160,
           decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: Colors.grey.withOpacity(0.08)),
+            gradient: const LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [Color(0xFF2D5A3D), Color(0xFF1E3A4C)],
+            ),
+            borderRadius: BorderRadius.circular(24),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.02),
-                blurRadius: 8,
-                offset: const Offset(0, 2),
+                color: Colors.black.withOpacity(0.1),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
               ),
             ],
           ),
-          child: Padding(
-            padding: const EdgeInsets.all(20.0),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        group['name'] ?? 'No Name',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.grey[800],
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      FutureBuilder<int>(
-                        future: GroupFunctions.getMemberCount(group['id']),
-                        builder: (context, snapshot) {
-                          return Text(
-                            '${snapshot.data ?? 0} members',
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: Colors.grey[600],
-                            ),
-                          );
-                        },
-                      ),
-                    ],
+          child: Stack(
+            children: [
+              // Calendar icon in top left
+              Positioned(
+                top: 16,
+                left: 16,
+                child: Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(
+                    Icons.calendar_today,
+                    color: Colors.white,
+                    size: 20,
                   ),
                 ),
-                PopupMenuButton<String>(
+              ),
+              // Menu button in top right
+              Positioned(
+                top: 8,
+                right: 8,
+                child: PopupMenuButton<String>(
                   onSelected: (value) {
                     if (value == 'add_member') {
                       _showAddMemberDialog(group['id']);
@@ -276,7 +185,7 @@ class _GroupsScreenState extends State<GroupsScreen>
                           value: 'add_member',
                           child: Row(
                             children: [
-                              Icon(Icons.person_add, size: 16),
+                              Icon(Icons.person_add, size: 18),
                               SizedBox(width: 8),
                               Text('Add Member'),
                             ],
@@ -286,17 +195,64 @@ class _GroupsScreenState extends State<GroupsScreen>
                           value: 'members',
                           child: Row(
                             children: [
-                              Icon(Icons.people, size: 16),
+                              Icon(Icons.people, size: 18),
                               SizedBox(width: 8),
                               Text('View Members'),
                             ],
                           ),
                         ),
                       ],
-                  child: Icon(Icons.more_vert, color: Colors.grey[600]),
+                  icon: const Icon(Icons.more_vert, color: Colors.white),
                 ),
-              ],
-            ),
+              ),
+              // Illustration (placeholder circle)
+              Positioned(
+                right: -20,
+                top: 20,
+                child: Container(
+                  width: 120,
+                  height: 120,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Colors.white.withOpacity(0.1),
+                  ),
+                ),
+              ),
+              // Group name and description
+              Positioned(
+                left: 16,
+                bottom: 16,
+                right: 140,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      group['name'] ?? 'No Name',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 4),
+                    FutureBuilder<int>(
+                      future: GroupFunctions.getMemberCount(group['id']),
+                      builder: (context, snapshot) {
+                        return Text(
+                          '${snapshot.data ?? 0} members',
+                          style: TextStyle(
+                            color: Colors.white.withOpacity(0.8),
+                            fontSize: 14,
+                          ),
+                        );
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
         ),
       ),
@@ -397,7 +353,7 @@ class _GroupsScreenState extends State<GroupsScreen>
                             }
                           },
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF667EEA),
+                    backgroundColor: const Color(0xFF4CAF50),
                     foregroundColor: Colors.white,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(8),
@@ -498,7 +454,7 @@ class _GroupsScreenState extends State<GroupsScreen>
                             }
                           },
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF667EEA),
+                    backgroundColor: const Color(0xFF4CAF50),
                     foregroundColor: Colors.white,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(8),
@@ -550,7 +506,7 @@ class _GroupsScreenState extends State<GroupsScreen>
                     final member = members[index];
                     return ListTile(
                       leading: CircleAvatar(
-                        backgroundColor: const Color(0xFF667EEA),
+                        backgroundColor: const Color(0xFF4CAF50),
                         child: Text(
                           member['User']['email'][0].toUpperCase(),
                           style: const TextStyle(color: Colors.white),
@@ -592,7 +548,7 @@ class _GroupsScreenState extends State<GroupsScreen>
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(message),
-          backgroundColor: const Color(0xFF667EEA),
+          backgroundColor: const Color(0xFF4CAF50),
         ),
       );
     }

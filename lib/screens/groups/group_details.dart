@@ -86,113 +86,196 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        leading: IconButton(
-          icon: Icon(Icons.arrow_back, color: Colors.grey[800]),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              widget.groupName,
-              style: TextStyle(
-                color: Colors.grey[800],
-                fontWeight: FontWeight.w600,
-                fontSize: 18,
+      backgroundColor: const Color(0xFFF5F7FA),
+      body: CustomScrollView(
+        slivers: [
+          SliverAppBar(
+            expandedHeight: 180,
+            pinned: true,
+            backgroundColor: const Color(0xFF4CAF50),
+            leading: IconButton(
+              icon: const Icon(Icons.arrow_back, color: Colors.white),
+              onPressed: () => Navigator.pop(context),
+            ),
+            actions: [
+              PopupMenuButton<String>(
+                icon: const Icon(Icons.more_vert, color: Colors.white),
+                onSelected: (value) {
+                  if (value == 'add_member') {
+                    _showAddMemberDialog();
+                  } else if (value == 'leave') {
+                    _showLeaveGroupDialog();
+                  } else if (value == 'refresh') {
+                    _refreshData();
+                  }
+                },
+                itemBuilder:
+                    (context) => [
+                      const PopupMenuItem(
+                        value: 'add_member',
+                        child: Row(
+                          children: [
+                            Icon(Icons.person_add, size: 18),
+                            SizedBox(width: 12),
+                            Text('Add Members'),
+                          ],
+                        ),
+                      ),
+                      const PopupMenuItem(
+                        value: 'refresh',
+                        child: Row(
+                          children: [
+                            Icon(Icons.refresh, size: 18),
+                            SizedBox(width: 12),
+                            Text('Refresh'),
+                          ],
+                        ),
+                      ),
+                      const PopupMenuItem(
+                        value: 'leave',
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.exit_to_app,
+                              size: 18,
+                              color: Colors.red,
+                            ),
+                            SizedBox(width: 12),
+                            Text(
+                              'Leave Group',
+                              style: TextStyle(color: Colors.red),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+              ),
+            ],
+            flexibleSpace: FlexibleSpaceBar(
+              background: Container(
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [Color(0xFF4CAF50), Color(0xFF2E7D32)],
+                  ),
+                ),
+                child: Stack(
+                  children: [
+                    Positioned(
+                      right: -40,
+                      top: 40,
+                      child: Container(
+                        width: 150,
+                        height: 150,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: Colors.white.withOpacity(0.1),
+                        ),
+                      ),
+                    ),
+                    Positioned(
+                      bottom: 30,
+                      left: 20,
+                      right: 20,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            widget.groupName,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 28,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Row(
+                            children: [
+                              const Icon(
+                                Icons.people,
+                                color: Colors.white70,
+                                size: 16,
+                              ),
+                              const SizedBox(width: 6),
+                              Text(
+                                '${_members.length} members',
+                                style: const TextStyle(
+                                  color: Colors.white70,
+                                  fontSize: 14,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
-            Text(
-              '${_members.length} members',
-              style: TextStyle(color: Colors.grey[600], fontSize: 12),
+            bottom: PreferredSize(
+              preferredSize: const Size.fromHeight(48),
+              child: Container(
+                color: Colors.white,
+                child: TabBar(
+                  controller: _tabController,
+                  labelColor: const Color(0xFF4CAF50),
+                  unselectedLabelColor: Colors.grey[600],
+                  indicatorColor: const Color(0xFF4CAF50),
+                  indicatorWeight: 3,
+                  labelStyle: const TextStyle(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 15,
+                  ),
+                  tabs: const [Tab(text: 'Members'), Tab(text: 'Shared Files')],
+                ),
+              ),
             ),
-          ],
-        ),
-        actions: [
-          PopupMenuButton<String>(
-            onSelected: (value) {
-              if (value == 'add_member') {
-                _showAddMemberDialog();
-              } else if (value == 'leave') {
-                _showLeaveGroupDialog();
-              } else if (value == 'refresh') {
-                _refreshData();
-              }
-            },
-            itemBuilder:
-                (context) => [
-                  const PopupMenuItem(
-                    value: 'add_member',
-                    child: Row(
-                      children: [
-                        Icon(Icons.person_add, size: 16),
-                        SizedBox(width: 8),
-                        Text('Add Members'),
-                      ],
-                    ),
-                  ),
-                  const PopupMenuItem(
-                    value: 'refresh',
-                    child: Row(
-                      children: [
-                        Icon(Icons.refresh, size: 16),
-                        SizedBox(width: 8),
-                        Text('Refresh'),
-                      ],
-                    ),
-                  ),
-                  const PopupMenuItem(
-                    value: 'leave',
-                    child: Row(
-                      children: [
-                        Icon(Icons.exit_to_app, size: 16, color: Colors.red),
-                        SizedBox(width: 8),
-                        Text(
-                          'Leave Group',
-                          style: TextStyle(color: Colors.red),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
+          ),
+          SliverFillRemaining(
+            child: TabBarView(
+              controller: _tabController,
+              children: [_buildMembersTab(), _buildFilesTab()],
+            ),
           ),
         ],
-        bottom: TabBar(
-          controller: _tabController,
-          labelColor: const Color(0xFF667EEA),
-          unselectedLabelColor: Colors.grey[600],
-          indicatorColor: const Color(0xFF667EEA),
-          tabs: const [Tab(text: 'Members'), Tab(text: 'Shared Files')],
-        ),
-      ),
-      body: TabBarView(
-        controller: _tabController,
-        children: [_buildMembersTab(), _buildFilesTab()],
       ),
     );
   }
 
   Widget _buildMembersTab() {
     if (_isLoading) {
-      return const Center(child: CircularProgressIndicator());
+      return const Center(
+        child: CircularProgressIndicator(color: Color(0xFF4CAF50)),
+      );
     }
 
     if (_members.isEmpty) {
-      return const Center(
+      return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.people_outline, size: 64, color: Colors.grey),
-            SizedBox(height: 16),
-            Text(
+            Container(
+              width: 80,
+              height: 80,
+              decoration: BoxDecoration(
+                color: const Color(0xFF4CAF50).withOpacity(0.1),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: const Icon(
+                Icons.people_outline,
+                size: 40,
+                color: Color(0xFF4CAF50),
+              ),
+            ),
+            const SizedBox(height: 20),
+            const Text(
               'No members found',
               style: TextStyle(
                 fontSize: 18,
                 color: Colors.grey,
-                fontWeight: FontWeight.w500,
+                fontWeight: FontWeight.w600,
               ),
             ),
           ],
@@ -215,7 +298,7 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen>
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
               color: Colors.red.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(16),
               border: Border.all(color: Colors.red.withOpacity(0.3)),
             ),
             child: const Text(
@@ -231,82 +314,115 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen>
           margin: const EdgeInsets.only(bottom: 12),
           decoration: BoxDecoration(
             color: Colors.white,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: Colors.grey.withOpacity(0.1)),
+            borderRadius: BorderRadius.circular(16),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.02),
-                blurRadius: 4,
-                offset: const Offset(0, 1),
+                color: Colors.black.withOpacity(0.05),
+                blurRadius: 10,
+                offset: const Offset(0, 2),
               ),
             ],
           ),
-          child: ListTile(
-            contentPadding: const EdgeInsets.all(16),
-            leading: CircleAvatar(
-              backgroundColor: const Color(0xFF667EEA),
-              radius: 24,
-              child: Text(
-                email.isNotEmpty ? email[0].toUpperCase() : 'U',
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w600,
-                  fontSize: 18,
-                ),
-              ),
-            ),
-            title: Row(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
               children: [
+                Container(
+                  width: 50,
+                  height: 50,
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFF4CAF50), Color(0xFF66BB6A)],
+                    ),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Center(
+                    child: Text(
+                      email.isNotEmpty ? email[0].toUpperCase() : 'U',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 20,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 16),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        email,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.w600,
-                          fontSize: 16,
-                        ),
-                      ),
-                      if (isCurrentUser)
-                        Text(
-                          'You',
-                          style: TextStyle(
-                            color: Colors.grey[600],
-                            fontSize: 12,
-                            fontStyle: FontStyle.italic,
+                      Row(
+                        children: [
+                          Flexible(
+                            child: Text(
+                              email,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w600,
+                                fontSize: 15,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
                           ),
-                        ),
+                          if (isCurrentUser) ...[
+                            const SizedBox(width: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 2,
+                              ),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF4CAF50).withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: const Text(
+                                'You',
+                                style: TextStyle(
+                                  color: Color(0xFF4CAF50),
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Joined ${member['added_at'] != null ? GroupFunctions.formatDate(member['added_at']) : 'Unknown'}',
+                        style: TextStyle(color: Colors.grey[600], fontSize: 12),
+                      ),
                     ],
                   ),
                 ),
                 if (isOwner)
                   Container(
                     padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 4,
+                      horizontal: 12,
+                      vertical: 6,
                     ),
                     decoration: BoxDecoration(
-                      color: Colors.orange.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(12),
+                      color: Colors.amber.withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: Colors.amber.withOpacity(0.3)),
                     ),
-                    child: const Text(
-                      'Owner',
-                      style: TextStyle(
-                        color: Colors.orange,
-                        fontSize: 10,
-                        fontWeight: FontWeight.w600,
-                      ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.star, color: Colors.amber, size: 14),
+                        SizedBox(width: 4),
+                        Text(
+                          'Owner',
+                          style: TextStyle(
+                            color: Colors.amber,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
               ],
-            ),
-            subtitle: Padding(
-              padding: const EdgeInsets.only(top: 4),
-              child: Text(
-                'Joined: ${member['added_at'] != null ? GroupFunctions.formatDate(member['added_at']) : 'Unknown'}',
-                style: TextStyle(color: Colors.grey[600], fontSize: 12),
-              ),
             ),
           ),
         );
@@ -316,7 +432,9 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen>
 
   Widget _buildFilesTab() {
     if (_isLoading) {
-      return const Center(child: CircularProgressIndicator());
+      return const Center(
+        child: CircularProgressIndicator(color: Color(0xFF4CAF50)),
+      );
     }
 
     return _filesByUser.isEmpty
@@ -324,14 +442,26 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen>
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(Icons.folder_open, size: 64, color: Colors.grey[400]),
-              const SizedBox(height: 16),
-              Text(
+              Container(
+                width: 80,
+                height: 80,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF4CAF50).withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: const Icon(
+                  Icons.folder_open,
+                  size: 40,
+                  color: Color(0xFF4CAF50),
+                ),
+              ),
+              const SizedBox(height: 20),
+              const Text(
                 'No files shared yet',
                 style: TextStyle(
                   fontSize: 18,
-                  color: Colors.grey[600],
-                  fontWeight: FontWeight.w500,
+                  color: Colors.grey,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
               const SizedBox(height: 8),
@@ -344,6 +474,7 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen>
           ),
         )
         : RefreshIndicator(
+          color: const Color(0xFF4CAF50),
           onRefresh: _fetchSharedFiles,
           child: ListView.builder(
             padding: const EdgeInsets.all(16),
@@ -364,59 +495,72 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen>
     List<Map<String, dynamic>> userFiles,
   ) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 20),
+      margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey.withOpacity(0.1)),
+        borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.02),
-            blurRadius: 4,
-            offset: const Offset(0, 1),
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
           ),
         ],
       ),
-      child: ExpansionTile(
-        title: Row(
-          children: [
-            CircleAvatar(
-              backgroundColor: const Color(0xFF667EEA),
-              radius: 20,
-              child: Text(
-                firstName.isNotEmpty ? firstName[0].toUpperCase() : 'U',
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w600,
-                  fontSize: 16,
+      child: Theme(
+        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+        child: ExpansionTile(
+          tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          childrenPadding: const EdgeInsets.only(bottom: 12),
+          title: Row(
+            children: [
+              Container(
+                width: 45,
+                height: 45,
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFF4CAF50), Color(0xFF66BB6A)],
+                  ),
+                  borderRadius: BorderRadius.circular(12),
                 ),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    '$firstName Files',
+                child: Center(
+                  child: Text(
+                    firstName.isNotEmpty ? firstName[0].toUpperCase() : 'U',
                     style: const TextStyle(
-                      fontWeight: FontWeight.w600,
-                      fontSize: 16,
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 18,
                     ),
                   ),
-                  Text(
-                    '${userFiles.length} file${userFiles.length == 1 ? '' : 's'}',
-                    style: TextStyle(color: Colors.grey[600], fontSize: 12),
-                  ),
-                ],
+                ),
               ),
-            ),
-          ],
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '$firstName\'s Files',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 16,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '${userFiles.length} file${userFiles.length == 1 ? '' : 's'}',
+                      style: TextStyle(color: Colors.grey[600], fontSize: 13),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          children:
+              userFiles
+                  .map((shareRecord) => _buildSharedFileCard(shareRecord))
+                  .toList(),
         ),
-        children:
-            userFiles
-                .map((shareRecord) => _buildSharedFileCard(shareRecord))
-                .toList(),
       ),
     );
   }
@@ -427,7 +571,6 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen>
     final fileType = GroupFunctions.getFileType(fileName);
     final fileSize = GroupFunctions.formatFileSize(fileData['file_size'] ?? 0);
     final sharedDate = GroupFunctions.formatDate(shareRecord['shared_at']);
-    final uploadDate = GroupFunctions.formatDate(fileData['uploaded_at'] ?? '');
 
     final canRemoveShare = GroupFunctions.canUserRemoveShare(
       isGroupOwner: _isGroupOwner,
@@ -436,25 +579,24 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen>
     );
 
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
-        color: Colors.grey[50],
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.grey.withOpacity(0.1)),
+        color: const Color(0xFFF8F9FA),
+        borderRadius: BorderRadius.circular(12),
       ),
       child: ListTile(
-        contentPadding: const EdgeInsets.all(12),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         leading: Container(
-          width: 40,
-          height: 40,
+          width: 45,
+          height: 45,
           decoration: BoxDecoration(
             color: GroupFunctions.getFileIconColor(fileType),
-            borderRadius: BorderRadius.circular(6),
+            borderRadius: BorderRadius.circular(10),
           ),
           child: Icon(
             GroupFunctions.getFileIcon(fileType),
             color: Colors.white,
-            size: 20,
+            size: 22,
           ),
         ),
         title: Text(
@@ -463,19 +605,21 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen>
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
         ),
-        subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const SizedBox(height: 2),
-            Text(
-              fileSize,
-              style: TextStyle(color: Colors.grey[600], fontSize: 11),
-            ),
-            Text(
-              'Shared: $sharedDate • Uploaded: $uploadDate',
-              style: TextStyle(color: Colors.grey[500], fontSize: 10),
-            ),
-          ],
+        subtitle: Padding(
+          padding: const EdgeInsets.only(top: 4),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                fileSize,
+                style: TextStyle(color: Colors.grey[700], fontSize: 12),
+              ),
+              Text(
+                'Shared $sharedDate',
+                style: TextStyle(color: Colors.grey[500], fontSize: 11),
+              ),
+            ],
+          ),
         ),
         trailing: PopupMenuButton<String>(
           onSelected: (value) {
@@ -493,8 +637,8 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen>
                   value: 'preview',
                   child: Row(
                     children: [
-                      Icon(Icons.visibility, size: 16),
-                      SizedBox(width: 8),
+                      Icon(Icons.visibility, size: 18),
+                      SizedBox(width: 12),
                       Text('Preview'),
                     ],
                   ),
@@ -503,8 +647,8 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen>
                   value: 'info',
                   child: Row(
                     children: [
-                      Icon(Icons.info_outline, size: 16),
-                      SizedBox(width: 8),
+                      Icon(Icons.info_outline, size: 18),
+                      SizedBox(width: 12),
                       Text('File Info'),
                     ],
                   ),
@@ -514,8 +658,8 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen>
                     value: 'remove',
                     child: Row(
                       children: [
-                        Icon(Icons.remove_circle, size: 16, color: Colors.red),
-                        SizedBox(width: 8),
+                        Icon(Icons.remove_circle, size: 18, color: Colors.red),
+                        SizedBox(width: 12),
                         Text(
                           'Remove Share',
                           style: TextStyle(color: Colors.red),
@@ -557,7 +701,7 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen>
       builder:
           (context) => AlertDialog(
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(20),
             ),
             title: const Text('Remove File Share'),
             content: Text(
@@ -566,11 +710,19 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen>
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(context, false),
-                child: const Text('Cancel'),
+                child: Text(
+                  'Cancel',
+                  style: TextStyle(color: Colors.grey[700]),
+                ),
               ),
               ElevatedButton(
                 onPressed: () => Navigator.pop(context, true),
-                style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.red,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
                 child: const Text(
                   'Remove',
                   style: TextStyle(color: Colors.white),
@@ -609,9 +761,20 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen>
       builder:
           (context) => AlertDialog(
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(20),
             ),
-            title: Text(fileData['filename'] ?? 'File Info'),
+            title: Row(
+              children: [
+                const Icon(Icons.info_outline, color: Color(0xFF4CAF50)),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    fileData['filename'] ?? 'File Info',
+                    style: const TextStyle(fontSize: 18),
+                  ),
+                ),
+              ],
+            ),
             content: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -636,7 +799,10 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen>
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(context),
-                child: const Text('Close'),
+                child: const Text(
+                  'Close',
+                  style: TextStyle(color: Color(0xFF4CAF50)),
+                ),
               ),
             ],
           ),
@@ -645,22 +811,26 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen>
 
   Widget _buildInfoRow(String label, String value) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
+      padding: const EdgeInsets.symmetric(vertical: 6),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SizedBox(
-            width: 80,
+            width: 90,
             child: Text(
               '$label:',
-              style: TextStyle(
-                fontWeight: FontWeight.w500,
-                color: Colors.grey[700],
+              style: const TextStyle(
+                fontWeight: FontWeight.w600,
+                color: Colors.black87,
+                fontSize: 13,
               ),
             ),
           ),
           Expanded(
-            child: Text(value, style: TextStyle(color: Colors.grey[800])),
+            child: Text(
+              value,
+              style: TextStyle(color: Colors.grey[700], fontSize: 13),
+            ),
           ),
         ],
       ),
@@ -678,7 +848,7 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen>
           builder: (context, setDialogState) {
             return AlertDialog(
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: BorderRadius.circular(20),
               ),
               title: const Text('Add Member'),
               content: TextField(
@@ -689,6 +859,10 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen>
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
                   ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: Color(0xFF4CAF50)),
+                  ),
                 ),
                 keyboardType: TextInputType.emailAddress,
               ),
@@ -697,7 +871,7 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen>
                   onPressed: isAdding ? null : () => Navigator.pop(context),
                   child: Text(
                     'Cancel',
-                    style: TextStyle(color: Colors.grey[600]),
+                    style: TextStyle(color: Colors.grey[700]),
                   ),
                 ),
                 ElevatedButton(
@@ -715,7 +889,7 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen>
                                 await _fetchMembers();
                                 Navigator.pop(context);
                                 _showSuccess(
-                                  '${emailController.text} added to group successfully',
+                                  '${emailController.text} added successfully',
                                 );
                               } catch (e) {
                                 setDialogState(() => isAdding = false);
@@ -726,10 +900,10 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen>
                             }
                           },
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF667EEA),
+                    backgroundColor: const Color(0xFF4CAF50),
                     foregroundColor: Colors.white,
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
+                      borderRadius: BorderRadius.circular(10),
                     ),
                   ),
                   child:
@@ -760,7 +934,7 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen>
       builder:
           (context) => AlertDialog(
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(20),
             ),
             title: const Text('Leave Group'),
             content: Text(
@@ -769,7 +943,10 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen>
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(context),
-                child: const Text('Cancel'),
+                child: Text(
+                  'Cancel',
+                  style: TextStyle(color: Colors.grey[700]),
+                ),
               ),
               ElevatedButton(
                 onPressed: () async {
@@ -779,6 +956,9 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen>
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.red,
                   foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
                 ),
                 child: const Text('Leave'),
               ),
@@ -821,7 +1001,11 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen>
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(message),
-          backgroundColor: const Color(0xFF667EEA),
+          backgroundColor: const Color(0xFF4CAF50),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
         ),
       );
     }
