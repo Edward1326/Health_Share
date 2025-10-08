@@ -160,11 +160,7 @@ class _GroupsScreenState extends State<GroupsScreen>
                     color: Colors.white.withOpacity(0.2),
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  child: const Icon(
-                    Icons.calendar_today,
-                    color: Colors.white,
-                    size: 20,
-                  ),
+                  child: const Icon(Icons.group, color: Colors.white, size: 20),
                 ),
               ),
               // Menu button in top right

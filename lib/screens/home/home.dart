@@ -158,90 +158,88 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     }
   }
 
-  void _checkPublicKey() {
-    try {
-      final wifPostingKey = dotenv.env['HIVE_POSTING_WIF'];
-
-      if (wifPostingKey == null || wifPostingKey.isEmpty) {
-        throw Exception('HIVE_POSTING_WIF not found in .env file');
-      }
-
-      final pubKey = deriveHivePublicKey(wifPostingKey);
-
-      print("Public Key: $pubKey");
-      print("Account Name: ${dotenv.env['HIVE_ACCOUNT_NAME']}");
-      print("Node URL: ${dotenv.env['HIVE_NODE_URL']}");
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text("Public key printed to console"),
-          duration: Duration(seconds: 2),
-        ),
-      );
-    } catch (e) {
-      print("Error deriving public key: $e");
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Error: $e"), backgroundColor: Colors.red),
-      );
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFB),
-      body: SafeArea(
-        child: FadeTransition(
-          opacity: _fadeAnimation,
-          child: SlideTransition(
-            position: _slideAnimation,
-            child:
-                _isLoading
-                    ? Center(
-                      child: CircularProgressIndicator(
-                        valueColor: AlwaysStoppedAnimation<Color>(
-                          const Color(0xFF2D4A3E),
-                        ),
-                      ),
-                    )
-                    : RefreshIndicator(
-                      onRefresh: _loadHomeData,
-                      color: const Color(0xFF2D4A3E),
-                      child: SingleChildScrollView(
-                        physics: const AlwaysScrollableScrollPhysics(),
-                        padding: const EdgeInsets.symmetric(horizontal: 20.0),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const SizedBox(height: 20),
-                            // Enhanced Header
-                            _buildHeader(),
-                            const SizedBox(height: 32),
+      body: Stack(
+        children: [
+          // Beautiful backdrop
+          _buildBackdrop(),
 
-                            // Welcome Card
-                            _buildWelcomeCard(),
-                            const SizedBox(height: 28),
-
-                            // Quick Access Section
-                            _buildSectionHeader('Quick Access', Icons.flash_on),
-                            const SizedBox(height: 16),
-                            _buildQuickAccessGrid(),
-                            const SizedBox(height: 32),
-
-                            // Doctors Assigned Section
-                            _buildSectionHeader(
-                              'Your Care Team',
-                              Icons.medical_services,
+          // Main content
+          SafeArea(
+            child: FadeTransition(
+              opacity: _fadeAnimation,
+              child: SlideTransition(
+                position: _slideAnimation,
+                child:
+                    _isLoading
+                        ? Center(
+                          child: CircularProgressIndicator(
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                              Colors.white,
                             ),
-                            const SizedBox(height: 16),
-                            _buildDoctorsSection(),
-                            const SizedBox(height: 20),
-                          ],
+                          ),
+                        )
+                        : RefreshIndicator(
+                          onRefresh: _loadHomeData,
+                          color: const Color(0xFF4A7C59),
+                          child: SingleChildScrollView(
+                            physics: const AlwaysScrollableScrollPhysics(),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                // Header section with backdrop
+                                _buildHeaderSection(),
+
+                                // Content with white background
+                                Container(
+                                  decoration: const BoxDecoration(
+                                    color: Color(0xFFF8FAFB),
+                                    borderRadius: BorderRadius.only(
+                                      topLeft: Radius.circular(30),
+                                      topRight: Radius.circular(30),
+                                    ),
+                                  ),
+                                  child: Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 20.0,
+                                    ),
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        const SizedBox(height: 28),
+
+                                        // Quick Access Section
+                                        _buildSectionHeader(
+                                          'Quick Access',
+                                          Icons.dashboard_rounded,
+                                        ),
+                                        const SizedBox(height: 16),
+                                        _buildQuickAccessGrid(),
+                                        const SizedBox(height: 32),
+
+                                        // Doctors Assigned Section
+                                        _buildSectionHeader(
+                                          'Your Care Team',
+                                          Icons.medical_services_rounded,
+                                        ),
+                                        const SizedBox(height: 16),
+                                        _buildDoctorsSection(),
+                                        const SizedBox(height: 20),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
                         ),
-                      ),
-                    ),
+              ),
+            ),
           ),
-        ),
+        ],
       ),
       bottomNavigationBar: MainNavBar(
         selectedIndex: _selectedIndex,
@@ -250,133 +248,148 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     );
   }
 
-  Widget _buildHeader() {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Hello there 👋',
-              style: TextStyle(
-                fontSize: 28,
-                fontWeight: FontWeight.bold,
-                color: const Color(0xFF1A1A1A),
-                height: 1.2,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              'How are you feeling today?',
-              style: TextStyle(
-                fontSize: 15,
-                color: Colors.grey[600],
-                fontWeight: FontWeight.w400,
-              ),
-            ),
-          ],
-        ),
-        Container(
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(14),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.04),
-                blurRadius: 10,
-                offset: const Offset(0, 4),
-              ),
-            ],
-          ),
-          child: IconButton(
-            icon: Icon(
-              Icons.notifications_outlined,
-              color: const Color(0xFF2D4A3E),
-              size: 24,
-            ),
-            onPressed: () {},
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildWelcomeCard() {
+  Widget _buildBackdrop() {
     return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFF2D4A3E), Color(0xFF3D5A4D)],
+      height: 340,
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
+          colors: [Color(0xFF4A7C59), Color(0xFF5D9B6D), Color(0xFF6BAE7A)],
         ),
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF2D4A3E).withOpacity(0.3),
-            blurRadius: 20,
-            offset: const Offset(0, 10),
+      ),
+      child: Stack(
+        children: [
+          // Decorative circles
+          Positioned(
+            top: -100,
+            right: -100,
+            child: Container(
+              width: 300,
+              height: 300,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.white.withOpacity(0.05),
+              ),
+            ),
+          ),
+          Positioned(
+            top: 100,
+            left: -50,
+            child: Container(
+              width: 200,
+              height: 200,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.white.withOpacity(0.05),
+              ),
+            ),
+          ),
+          Positioned(
+            bottom: -50,
+            right: 50,
+            child: Container(
+              width: 150,
+              height: 150,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.white.withOpacity(0.08),
+              ),
+            ),
+          ),
+          // Pattern overlay
+          Positioned.fill(
+            child: CustomPaint(painter: _BackdropPatternPainter()),
           ),
         ],
       ),
-      child: Row(
+    );
+  }
+
+  Widget _buildHeaderSection() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 20, 20, 40),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 6,
+          // Top bar
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 8,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(
+                    color: Colors.white.withOpacity(0.3),
+                    width: 1,
                   ),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.2),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: const Text(
-                    'Health Status',
-                    style: TextStyle(
+                ),
+                child: const Row(
+                  children: [
+                    Icon(
+                      Icons.health_and_safety_rounded,
                       color: Colors.white,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
+                      size: 18,
                     ),
+                    SizedBox(width: 6),
+                    Text(
+                      'HealthShare',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 14,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                    color: Colors.white.withOpacity(0.3),
+                    width: 1,
                   ),
                 ),
-                const SizedBox(height: 12),
-                const Text(
-                  'Your health is our\npriority',
-                  style: TextStyle(
+                child: IconButton(
+                  icon: const Icon(
+                    Icons.notifications_outlined,
                     color: Colors.white,
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                    height: 1.3,
+                    size: 24,
                   ),
+                  onPressed: () {},
                 ),
-                const SizedBox(height: 8),
-                Text(
-                  'Keep track of your wellness journey',
-                  style: TextStyle(
-                    color: Colors.white.withOpacity(0.8),
-                    fontSize: 13,
-                  ),
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.15),
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(
-              Icons.favorite_rounded,
+          const SizedBox(height: 32),
+
+          // Welcome message
+          const Text(
+            'Welcome Back! 👋',
+            style: TextStyle(
+              fontSize: 32,
+              fontWeight: FontWeight.bold,
               color: Colors.white,
-              size: 40,
+              height: 1.2,
             ),
           ),
+          const SizedBox(height: 8),
+          Text(
+            'How are you feeling today?',
+            style: TextStyle(
+              fontSize: 16,
+              color: Colors.white.withOpacity(0.9),
+              fontWeight: FontWeight.w400,
+            ),
+          ),
+          const SizedBox(height: 28),
         ],
       ),
     );
@@ -386,12 +399,21 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     return Row(
       children: [
         Container(
-          padding: const EdgeInsets.all(8),
+          padding: const EdgeInsets.all(10),
           decoration: BoxDecoration(
-            color: const Color(0xFF2D4A3E).withOpacity(0.1),
-            borderRadius: BorderRadius.circular(10),
+            gradient: const LinearGradient(
+              colors: [Color(0xFF4A7C59), Color(0xFF5D9B6D)],
+            ),
+            borderRadius: BorderRadius.circular(12),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF4A7C59).withOpacity(0.3),
+                blurRadius: 8,
+                offset: const Offset(0, 4),
+              ),
+            ],
           ),
-          child: Icon(icon, size: 20, color: const Color(0xFF2D4A3E)),
+          child: Icon(icon, size: 20, color: Colors.white),
         ),
         const SizedBox(width: 12),
         Text(
@@ -417,7 +439,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 subtitle: 'Connect with others',
                 icon: Icons.group_rounded,
                 gradient: const LinearGradient(
-                  colors: [Color(0xFF667EEA), Color(0xFF764BA2)],
+                  colors: [Color(0xFF4A7C59), Color(0xFF6BAE7A)],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),
@@ -453,7 +475,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 subtitle: 'Medical facilities',
                 icon: Icons.local_hospital_rounded,
                 gradient: const LinearGradient(
-                  colors: [Color(0xFFFA709A), Color(0xFFFEE140)],
+                  colors: [Color(0xFF3B9C9C), Color(0xFF5EC1C1)],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),
@@ -490,7 +512,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           subtitle: 'Share your health records securely',
           icon: Icons.cloud_upload_rounded,
           gradient: const LinearGradient(
-            colors: [Color(0xFF30CFD0), Color(0xFF330867)],
+            colors: [Color(0xFF667EEA), Color(0xFF764BA2)],
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
           ),
@@ -506,15 +528,14 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   Widget _buildDoctorsSection() {
     if (_assignedDoctors.isEmpty) {
       return Container(
-        padding: const EdgeInsets.all(32),
+        padding: const EdgeInsets.all(36),
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: Colors.grey.shade100),
+          borderRadius: BorderRadius.circular(24),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.03),
-              blurRadius: 10,
+              color: Colors.black.withOpacity(0.04),
+              blurRadius: 20,
               offset: const Offset(0, 4),
             ),
           ],
@@ -522,31 +543,31 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         child: Column(
           children: [
             Container(
-              padding: const EdgeInsets.all(20),
+              padding: const EdgeInsets.all(24),
               decoration: BoxDecoration(
-                color: Colors.grey.shade50,
+                color: const Color(0xFF4A7C59).withOpacity(0.1),
                 shape: BoxShape.circle,
               ),
-              child: Icon(
-                Icons.medical_services_outlined,
+              child: const Icon(
+                Icons.medical_services_rounded,
                 size: 48,
-                color: Colors.grey.shade400,
+                color: Color(0xFF4A7C59),
               ),
             ),
-            const SizedBox(height: 16),
-            Text(
+            const SizedBox(height: 20),
+            const Text(
               'No doctors assigned yet',
               style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-                color: Colors.grey[800],
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF1A1A1A),
               ),
             ),
             const SizedBox(height: 8),
             Text(
               'Your assigned doctors will appear here',
               textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 14, color: Colors.grey[500]),
+              style: TextStyle(fontSize: 14, color: Colors.grey[600]),
             ),
           ],
         ),
@@ -574,6 +595,26 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               .toList(),
     );
   }
+}
+
+class _BackdropPatternPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint =
+        Paint()
+          ..color = Colors.white.withOpacity(0.03)
+          ..style = PaintingStyle.fill;
+
+    // Draw subtle pattern dots
+    for (var i = 0; i < 15; i++) {
+      for (var j = 0; j < 8; j++) {
+        canvas.drawCircle(Offset(i * 40.0, j * 40.0), 2, paint);
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
 class _QuickAccessCard extends StatefulWidget {
@@ -612,7 +653,7 @@ class _QuickAccessCardState extends State<_QuickAccessCard> {
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 150),
         transform: Matrix4.identity()..scale(_isPressed ? 0.97 : 1.0),
-        height: widget.isFullWidth ? 120 : 160,
+        height: widget.isFullWidth ? 110 : 150,
         decoration: BoxDecoration(
           gradient: widget.gradient,
           borderRadius: BorderRadius.circular(20),
@@ -652,7 +693,7 @@ class _QuickAccessCardState extends State<_QuickAccessCard> {
               ),
             ),
             Padding(
-              padding: const EdgeInsets.all(20.0),
+              padding: const EdgeInsets.all(18.0),
               child:
                   widget.isFullWidth
                       ? Row(
@@ -690,7 +731,7 @@ class _QuickAccessCardState extends State<_QuickAccessCard> {
                                   widget.subtitle,
                                   style: TextStyle(
                                     fontSize: 13,
-                                    color: Colors.white.withOpacity(0.85),
+                                    color: Colors.white.withOpacity(0.9),
                                   ),
                                   maxLines: 2,
                                   overflow: TextOverflow.ellipsis,
@@ -736,7 +777,7 @@ class _QuickAccessCardState extends State<_QuickAccessCard> {
                             widget.subtitle,
                             style: TextStyle(
                               fontSize: 12,
-                              color: Colors.white.withOpacity(0.85),
+                              color: Colors.white.withOpacity(0.9),
                             ),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
@@ -790,12 +831,11 @@ class _DoctorCard extends StatelessWidget {
         padding: const EdgeInsets.all(18),
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: Colors.grey.shade100),
+          borderRadius: BorderRadius.circular(20),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.04),
-              blurRadius: 10,
+              color: Colors.black.withOpacity(0.06),
+              blurRadius: 15,
               offset: const Offset(0, 4),
             ),
           ],
@@ -803,18 +843,18 @@ class _DoctorCard extends StatelessWidget {
         child: Row(
           children: [
             Container(
-              width: 56,
-              height: 56,
+              width: 60,
+              height: 60,
               decoration: BoxDecoration(
                 gradient: const LinearGradient(
-                  colors: [Color(0xFF667EEA), Color(0xFF764BA2)],
+                  colors: [Color(0xFF4A7C59), Color(0xFF6BAE7A)],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),
                 borderRadius: BorderRadius.circular(16),
                 boxShadow: [
                   BoxShadow(
-                    color: const Color(0xFF667EEA).withOpacity(0.3),
+                    color: const Color(0xFF4A7C59).withOpacity(0.3),
                     blurRadius: 8,
                     offset: const Offset(0, 4),
                   ),
@@ -824,14 +864,14 @@ class _DoctorCard extends StatelessWidget {
                 child: Text(
                   doctorName.isNotEmpty ? doctorName[0].toUpperCase() : 'D',
                   style: const TextStyle(
-                    fontSize: 24,
+                    fontSize: 26,
                     fontWeight: FontWeight.bold,
                     color: Colors.white,
                   ),
                 ),
               ),
             ),
-            const SizedBox(width: 14),
+            const SizedBox(width: 16),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -852,14 +892,14 @@ class _DoctorCard extends StatelessWidget {
                         vertical: 4,
                       ),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF667EEA).withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(6),
+                        color: const Color(0xFF4A7C59).withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(8),
                       ),
                       child: Text(
                         department,
                         style: const TextStyle(
                           fontSize: 12,
-                          color: Color(0xFF667EEA),
+                          color: Color(0xFF4A7C59),
                           fontWeight: FontWeight.w600,
                         ),
                       ),
@@ -888,10 +928,17 @@ class _DoctorCard extends StatelessWidget {
                 ],
               ),
             ),
-            Icon(
-              Icons.arrow_forward_ios_rounded,
-              size: 16,
-              color: Colors.grey[400],
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: const Color(0xFF4A7C59).withOpacity(0.1),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(
+                Icons.arrow_forward_ios_rounded,
+                size: 16,
+                color: const Color(0xFF4A7C59),
+              ),
             ),
           ],
         ),
