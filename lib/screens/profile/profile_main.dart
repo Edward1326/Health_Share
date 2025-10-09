@@ -26,6 +26,13 @@ class _ProfileScreenState extends State<ProfileScreen>
   bool _isLoading = true;
   String? _errorMessage;
 
+  // Color Scheme
+  static const Color primaryGreen = Color(0xFF4A7C59);
+  static const Color lightGreen = Color(0xFF6B9B7A);
+  static const Color paleGreen = Color(0xFFE8F5E9);
+  static const Color accentGreen = Color(0xFF2E5C3F);
+  static const Color darkGreen = Color(0xFF1B4332);
+
   @override
   void initState() {
     super.initState();
@@ -92,6 +99,19 @@ class _ProfileScreenState extends State<ProfileScreen>
     ].where((name) => name.isNotEmpty).join(' ');
   }
 
+  String _getInitials() {
+    if (_userData == null) return 'U';
+
+    final firstName = _userData!['first_name'] ?? '';
+    final lastName = _userData!['last_name'] ?? '';
+
+    String initials = '';
+    if (firstName.isNotEmpty) initials += firstName[0];
+    if (lastName.isNotEmpty) initials += lastName[0];
+
+    return initials.isNotEmpty ? initials.toUpperCase() : 'U';
+  }
+
   String _getUserEmail() {
     return _supabase.auth.currentUser?.email ?? 'No email';
   }
@@ -99,48 +119,25 @@ class _ProfileScreenState extends State<ProfileScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        automaticallyImplyLeading: false,
-        title: Text(
-          'Profile',
-          style: TextStyle(
-            color: Colors.grey[800],
-            fontWeight: FontWeight.w600,
-            fontSize: 20,
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              paleGreen.withOpacity(0.4),
+              Colors.white,
+              paleGreen.withOpacity(0.2),
+            ],
+            stops: const [0.0, 0.5, 1.0],
           ),
         ),
-        actions: [
-          if (_userData != null)
-            TextButton(
-              onPressed: () async {
-                final result = await Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder:
-                        (context) => EditProfileScreen(userData: _userData!),
-                  ),
-                );
-
-                if (result == true) {
-                  _loadUserData(); // Reload data after edit
-                }
-              },
-              child: const Text(
-                'Edit',
-                style: TextStyle(
-                  color: Color(0xFF667EEA),
-                  fontWeight: FontWeight.w600,
-                  fontSize: 16,
-                ),
-              ),
-            ),
-          const SizedBox(width: 8),
-        ],
+        child: SafeArea(
+          child: Column(
+            children: [_buildHeader(), Expanded(child: _buildBody())],
+          ),
+        ),
       ),
-      body: _buildBody(),
       bottomNavigationBar: MainNavBar(
         selectedIndex: _selectedIndex,
         onItemTapped: (index) => setState(() => _selectedIndex = index),
@@ -148,31 +145,158 @@ class _ProfileScreenState extends State<ProfileScreen>
     );
   }
 
+  Widget _buildHeader() {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [primaryGreen, lightGreen],
+        ),
+        borderRadius: const BorderRadius.only(
+          bottomLeft: Radius.circular(32),
+          bottomRight: Radius.circular(32),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: primaryGreen.withOpacity(0.3),
+            blurRadius: 20,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          const Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'My Profile',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 28,
+                  letterSpacing: 0.5,
+                ),
+              ),
+              SizedBox(height: 4),
+              Text(
+                'Manage your account',
+                style: TextStyle(color: Colors.white70, fontSize: 15),
+              ),
+            ],
+          ),
+          if (_userData != null)
+            Container(
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.2),
+                borderRadius: BorderRadius.circular(14),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.1),
+                    blurRadius: 8,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: IconButton(
+                onPressed: () async {
+                  final result = await Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder:
+                          (context) => EditProfileScreen(userData: _userData!),
+                    ),
+                  );
+
+                  if (result == true) {
+                    _loadUserData();
+                  }
+                },
+                icon: const Icon(Icons.edit, color: Colors.white, size: 22),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildBody() {
     if (_isLoading) {
-      return const Center(
-        child: CircularProgressIndicator(color: Color(0xFF667EEA)),
+      return Center(
+        child: CircularProgressIndicator(color: primaryGreen, strokeWidth: 3),
       );
     }
 
     if (_errorMessage != null) {
       return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.error_outline, size: 64, color: Colors.red[300]),
-            const SizedBox(height: 16),
-            Text(
-              _errorMessage!,
-              style: TextStyle(color: Colors.red[600]),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 16),
-            ElevatedButton(
-              onPressed: _loadUserData,
-              child: const Text('Retry'),
-            ),
-          ],
+        child: Padding(
+          padding: const EdgeInsets.all(40.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  color: Colors.red[50],
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  Icons.error_outline,
+                  size: 64,
+                  color: Colors.red[400],
+                ),
+              ),
+              const SizedBox(height: 24),
+              Text(
+                'Oops!',
+                style: TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.grey[800],
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                _errorMessage!,
+                style: TextStyle(fontSize: 16, color: Colors.grey[600]),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 32),
+              ElevatedButton(
+                onPressed: _loadUserData,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: primaryGreen,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 32,
+                    vertical: 16,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  elevation: 8,
+                  shadowColor: primaryGreen.withOpacity(0.4),
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.refresh, size: 20),
+                    SizedBox(width: 8),
+                    Text(
+                      'Retry',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       );
     }
@@ -180,17 +304,16 @@ class _ProfileScreenState extends State<ProfileScreen>
     return FadeTransition(
       opacity: _fadeAnimation,
       child: SingleChildScrollView(
+        physics: const BouncingScrollPhysics(),
         padding: const EdgeInsets.all(20.0),
         child: Column(
           children: [
-            // Profile Picture Section
-            _buildProfilePictureSection(),
-            const SizedBox(height: 32),
-
-            // Personal Information Section
+            _buildProfileCard(),
+            const SizedBox(height: 20),
             _buildSectionCard(
               title: 'Personal Information',
               icon: Icons.person_outline,
+              gradient: [primaryGreen, lightGreen],
               children: [
                 _buildInfoRow('Full Name', _getFullName()),
                 const SizedBox(height: 12),
@@ -207,13 +330,11 @@ class _ProfileScreenState extends State<ProfileScreen>
                 ),
               ],
             ),
-
-            const SizedBox(height: 24),
-
-            // Medical Information Section
+            const SizedBox(height: 20),
             _buildSectionCard(
               title: 'Medical Information',
               icon: Icons.medical_information_outlined,
+              gradient: [const Color(0xFF8B5CF6), const Color(0xFF7C3AED)],
               children: [
                 _buildInfoRow(
                   'Blood Type',
@@ -237,41 +358,8 @@ class _ProfileScreenState extends State<ProfileScreen>
                 _buildArrayInfoRow('Disabilities', _userData!['disabilities']),
               ],
             ),
-
-            const SizedBox(height: 24),
-
-            // Account Actions Section
-            _buildSectionCard(
-              title: 'Account Actions',
-              icon: Icons.settings_outlined,
-              children: [
-                _buildActionButton(
-                  title: 'Change Password',
-                  subtitle: 'Update your account password',
-                  icon: Icons.lock_outline,
-                  color: const Color(0xFF667EEA),
-                  onTap: () {
-                    // Navigate to change password
-                  },
-                ),
-                const SizedBox(height: 12),
-                _buildActionButton(
-                  title: 'Privacy Settings',
-                  subtitle: 'Manage your privacy preferences',
-                  icon: Icons.privacy_tip_outlined,
-                  color: const Color(0xFF11998E),
-                  onTap: () {
-                    // Navigate to privacy settings
-                  },
-                ),
-              ],
-            ),
-
-            const SizedBox(height: 32),
-
-            // Logout Button
+            const SizedBox(height: 20),
             _buildLogoutButton(),
-
             const SizedBox(height: 20),
           ],
         ),
@@ -279,91 +367,169 @@ class _ProfileScreenState extends State<ProfileScreen>
     );
   }
 
-  Widget _buildProfilePictureSection() {
-    return Column(
-      children: [
-        Stack(
-          children: [
-            Container(
-              width: 120,
-              height: 120,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: const LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [Color(0xFF667EEA), Color(0xFF764BA2)],
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: const Color(0xFF667EEA).withOpacity(0.3),
-                    blurRadius: 20,
-                    offset: const Offset(0, 8),
-                  ),
-                ],
-              ),
-              child: const Icon(Icons.person, color: Colors.white, size: 60),
-            ),
-          ],
+  Widget _buildProfileCard() {
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Colors.white, paleGreen.withOpacity(0.3)],
         ),
-        const SizedBox(height: 16),
-        Text(
-          _getFullName(),
-          style: TextStyle(
-            fontSize: 24,
-            fontWeight: FontWeight.bold,
-            color: Colors.grey[800],
+        borderRadius: BorderRadius.circular(28),
+        border: Border.all(color: paleGreen, width: 2),
+        boxShadow: [
+          BoxShadow(
+            color: primaryGreen.withOpacity(0.15),
+            blurRadius: 25,
+            offset: const Offset(0, 12),
           ),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          _getUserEmail(),
-          style: TextStyle(fontSize: 16, color: Colors.grey[600]),
-        ),
-      ],
+        ],
+      ),
+      child: Column(
+        children: [
+          Stack(
+            children: [
+              Container(
+                width: 100,
+                height: 100,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [primaryGreen, lightGreen],
+                  ),
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.white, width: 4),
+                  boxShadow: [
+                    BoxShadow(
+                      color: primaryGreen.withOpacity(0.4),
+                      blurRadius: 20,
+                      offset: const Offset(0, 8),
+                    ),
+                  ],
+                ),
+                child: Center(
+                  child: Text(
+                    _getInitials(),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 36,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 1,
+                    ),
+                  ),
+                ),
+              ),
+              Positioned(
+                right: 0,
+                bottom: 0,
+                child: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(colors: [accentGreen, darkGreen]),
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.white, width: 3),
+                    boxShadow: [
+                      BoxShadow(
+                        color: accentGreen.withOpacity(0.4),
+                        blurRadius: 8,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: const Icon(
+                    Icons.verified,
+                    color: Colors.white,
+                    size: 18,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+          Text(
+            _getFullName(),
+            style: TextStyle(
+              fontSize: 24,
+              fontWeight: FontWeight.bold,
+              color: Colors.grey[800],
+              letterSpacing: 0.3,
+            ),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 12),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.email_outlined, size: 16, color: Colors.grey[600]),
+              const SizedBox(width: 8),
+              Flexible(
+                child: Text(
+                  _getUserEmail(),
+                  style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 
   Widget _buildSectionCard({
     required String title,
     required IconData icon,
+    required List<Color> gradient,
     required List<Widget> children,
   }) {
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.grey.withOpacity(0.08)),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Colors.white, gradient[0].withOpacity(0.05)],
+        ),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: gradient[0].withOpacity(0.2), width: 2),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.02),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
+            color: gradient[0].withOpacity(0.1),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
           ),
         ],
       ),
       child: Padding(
-        padding: const EdgeInsets.all(24.0),
+        padding: const EdgeInsets.all(20.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [
                 Container(
-                  width: 32,
-                  height: 32,
+                  width: 48,
+                  height: 48,
                   decoration: BoxDecoration(
-                    color: const Color(0xFF667EEA).withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(8),
+                    gradient: LinearGradient(colors: gradient),
+                    borderRadius: BorderRadius.circular(14),
+                    boxShadow: [
+                      BoxShadow(
+                        color: gradient[0].withOpacity(0.3),
+                        blurRadius: 12,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
                   ),
-                  child: Icon(icon, color: const Color(0xFF667EEA), size: 18),
+                  child: Icon(icon, color: Colors.white, size: 24),
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: 14),
                 Text(
                   title,
                   style: TextStyle(
                     fontSize: 18,
-                    fontWeight: FontWeight.w600,
+                    fontWeight: FontWeight.bold,
                     color: Colors.grey[800],
                   ),
                 ),
@@ -382,12 +548,12 @@ class _ProfileScreenState extends State<ProfileScreen>
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         SizedBox(
-          width: 120,
+          width: 130,
           child: Text(
             label,
             style: TextStyle(
               fontSize: 14,
-              fontWeight: FontWeight.w500,
+              fontWeight: FontWeight.w600,
               color: Colors.grey[600],
             ),
           ),
@@ -395,7 +561,11 @@ class _ProfileScreenState extends State<ProfileScreen>
         Expanded(
           child: Text(
             value,
-            style: TextStyle(fontSize: 14, color: Colors.grey[800]),
+            style: TextStyle(
+              fontSize: 14,
+              color: Colors.grey[800],
+              fontWeight: FontWeight.w500,
+            ),
           ),
         ),
       ],
@@ -415,33 +585,47 @@ class _ProfileScreenState extends State<ProfileScreen>
     required String title,
     required String subtitle,
     required IconData icon,
-    required Color color,
+    required List<Color> gradient,
     required VoidCallback onTap,
   }) {
     return Material(
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(16),
         child: Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: color.withOpacity(0.05),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: color.withOpacity(0.1)),
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                gradient[0].withOpacity(0.1),
+                gradient[1].withOpacity(0.05),
+              ],
+            ),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: gradient[0].withOpacity(0.3), width: 1.5),
           ),
           child: Row(
             children: [
               Container(
-                width: 40,
-                height: 40,
+                width: 44,
+                height: 44,
                 decoration: BoxDecoration(
-                  color: color.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(10),
+                  gradient: LinearGradient(colors: gradient),
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: [
+                    BoxShadow(
+                      color: gradient[0].withOpacity(0.3),
+                      blurRadius: 8,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
                 ),
-                child: Icon(icon, color: color, size: 20),
+                child: Icon(icon, color: Colors.white, size: 22),
               ),
-              const SizedBox(width: 16),
+              const SizedBox(width: 14),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -449,20 +633,31 @@ class _ProfileScreenState extends State<ProfileScreen>
                     Text(
                       title,
                       style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
+                        fontSize: 15,
+                        fontWeight: FontWeight.bold,
                         color: Colors.grey[800],
                       ),
                     ),
-                    const SizedBox(height: 2),
+                    const SizedBox(height: 3),
                     Text(
                       subtitle,
-                      style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+                      style: TextStyle(fontSize: 13, color: Colors.grey[600]),
                     ),
                   ],
                 ),
               ),
-              Icon(Icons.arrow_forward_ios, color: Colors.grey[400], size: 16),
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: gradient[0].withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(
+                  Icons.arrow_forward_ios,
+                  color: gradient[0],
+                  size: 14,
+                ),
+              ),
             ],
           ),
         ),
@@ -471,32 +666,61 @@ class _ProfileScreenState extends State<ProfileScreen>
   }
 
   Widget _buildLogoutButton() {
-    return SizedBox(
-      width: double.infinity,
-      child: ElevatedButton(
-        onPressed: () {
-          _showLogoutDialog();
-        },
-        style: ElevatedButton.styleFrom(
-          backgroundColor: Colors.red.withOpacity(0.1),
-          foregroundColor: Colors.red,
-          elevation: 0,
-          padding: const EdgeInsets.symmetric(vertical: 16),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-            side: BorderSide(color: Colors.red.withOpacity(0.2)),
-          ),
-        ),
-        child: const Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.logout, size: 20),
-            SizedBox(width: 8),
-            Text(
-              'Logout',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: _showLogoutDialog,
+        borderRadius: BorderRadius.circular(20),
+        child: Container(
+          padding: const EdgeInsets.all(18),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [Colors.red[50]!, Colors.red[100]!.withOpacity(0.5)],
             ),
-          ],
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: Colors.red[200]!, width: 2),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.red.withOpacity(0.15),
+                blurRadius: 20,
+                offset: const Offset(0, 8),
+              ),
+            ],
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [Colors.red[600]!, Colors.red[700]!],
+                  ),
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.red.withOpacity(0.3),
+                      blurRadius: 8,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: const Icon(Icons.logout, color: Colors.white, size: 20),
+              ),
+              const SizedBox(width: 14),
+              Text(
+                'Logout',
+                style: TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.red[700],
+                  letterSpacing: 0.3,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -508,14 +732,45 @@ class _ProfileScreenState extends State<ProfileScreen>
       builder: (BuildContext context) {
         return AlertDialog(
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(24),
           ),
-          title: const Text('Logout'),
-          content: const Text('Are you sure you want to logout?'),
+          title: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.red[50],
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Icon(Icons.logout, color: Colors.red[700], size: 24),
+              ),
+              const SizedBox(width: 16),
+              const Text(
+                'Logout',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+            ],
+          ),
+          content: const Text(
+            'Are you sure you want to logout from your account?',
+            style: TextStyle(fontSize: 15),
+          ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: Text('Cancel', style: TextStyle(color: Colors.grey[600])),
+              style: TextButton.styleFrom(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24,
+                  vertical: 12,
+                ),
+              ),
+              child: Text(
+                'Cancel',
+                style: TextStyle(
+                  color: Colors.grey[600],
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
             ),
             ElevatedButton(
               onPressed: () async {
@@ -529,23 +784,45 @@ class _ProfileScreenState extends State<ProfileScreen>
                   }
                 } catch (e) {
                   if (mounted) {
+                    Navigator.pop(context);
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
-                        content: Text('Error signing out: $e'),
-                        backgroundColor: Colors.red,
+                        content: Row(
+                          children: [
+                            const Icon(
+                              Icons.error_outline,
+                              color: Colors.white,
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(child: Text('Error signing out: $e')),
+                          ],
+                        ),
+                        backgroundColor: Colors.red[700],
+                        behavior: SnackBarBehavior.floating,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
                       ),
                     );
                   }
                 }
               },
               style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.red,
+                backgroundColor: Colors.red[600],
                 foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24,
+                  vertical: 12,
                 ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                elevation: 0,
               ),
-              child: const Text('Logout'),
+              child: const Text(
+                'Logout',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
             ),
           ],
         );

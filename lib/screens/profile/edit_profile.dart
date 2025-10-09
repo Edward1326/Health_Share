@@ -43,6 +43,13 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
   bool _isLoading = false;
 
+  // Color Scheme
+  static const Color primaryGreen = Color(0xFF4A7C59);
+  static const Color lightGreen = Color(0xFF6B9B7A);
+  static const Color paleGreen = Color(0xFFE8F5E9);
+  static const Color accentGreen = Color(0xFF2E5C3F);
+  static const Color darkGreen = Color(0xFF1B4332);
+
   @override
   void initState() {
     super.initState();
@@ -139,9 +146,19 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Profile updated successfully!'),
-            backgroundColor: Colors.green,
+          SnackBar(
+            content: const Row(
+              children: [
+                Icon(Icons.check_circle, color: Colors.white),
+                SizedBox(width: 12),
+                Text('Profile updated successfully!'),
+              ],
+            ),
+            backgroundColor: primaryGreen,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
           ),
         );
         Navigator.pop(context, true); // Return true to indicate success
@@ -150,8 +167,18 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error updating profile: $e'),
-            backgroundColor: Colors.red,
+            content: Row(
+              children: [
+                const Icon(Icons.error_outline, color: Colors.white),
+                const SizedBox(width: 12),
+                Expanded(child: Text('Error updating profile: $e')),
+              ],
+            ),
+            backgroundColor: Colors.red[700],
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
           ),
         );
       }
@@ -167,153 +194,119 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        title: Text(
-          'Edit Profile',
-          style: TextStyle(
-            color: Colors.grey[800],
-            fontWeight: FontWeight.w600,
-            fontSize: 20,
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              paleGreen.withOpacity(0.4),
+              Colors.white,
+              paleGreen.withOpacity(0.2),
+            ],
+            stops: const [0.0, 0.5, 1.0],
           ),
         ),
-        actions: [
-          TextButton(
-            onPressed: _isLoading ? null : _saveProfile,
-            child:
-                _isLoading
-                    ? const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: Color(0xFF667EEA),
-                      ),
-                    )
-                    : const Text(
-                      'Save',
-                      style: TextStyle(
-                        color: Color(0xFF667EEA),
-                        fontWeight: FontWeight.w600,
-                        fontSize: 16,
-                      ),
-                    ),
-          ),
-          const SizedBox(width: 8),
-        ],
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20.0),
-        child: Form(
-          key: _formKey,
+        child: SafeArea(
           child: Column(
             children: [
-              // Contact Information Section
-              _buildSectionCard(
-                title: 'Contact Information',
-                icon: Icons.contact_phone_outlined,
-                children: [
-                  _buildTextField(
-                    'Address',
-                    _addressController,
-                    Icons.location_on_outlined,
-                    maxLines: 2,
-                  ),
-                  const SizedBox(height: 16),
-                  _buildTextField(
-                    'Contact Number',
-                    _contactController,
-                    Icons.phone_outlined,
-                    keyboardType: TextInputType.phone,
-                  ),
-                ],
-              ),
-
-              const SizedBox(height: 24),
-
-              // Medical Information Section
-              _buildSectionCard(
-                title: 'Medical Information',
-                icon: Icons.medical_information_outlined,
-                children: [
-                  _buildDropdownField(
-                    'Blood Type',
-                    _selectedBloodType,
-                    _bloodTypes,
-                    Icons.bloodtype_outlined,
-                    (value) => setState(() => _selectedBloodType = value),
-                  ),
-                  const SizedBox(height: 16),
-                  _buildDropdownField(
-                    'Sex',
-                    _selectedSex,
-                    _sexOptions,
-                    Icons.person_outline,
-                    (value) => setState(() => _selectedSex = value),
-                  ),
-                  const SizedBox(height: 16),
-                  _buildTextField(
-                    'Allergies (comma-separated)',
-                    _allergiesController,
-                    Icons.warning_amber_outlined,
-                    maxLines: 2,
-                    hintText: 'e.g., Peanuts, Shellfish, Penicillin',
-                  ),
-                  const SizedBox(height: 16),
-                  _buildTextField(
-                    'Medical Conditions (comma-separated)',
-                    _medicalConditionsController,
-                    Icons.medical_services_outlined,
-                    maxLines: 2,
-                    hintText: 'e.g., Diabetes, Hypertension',
-                  ),
-                  const SizedBox(height: 16),
-                  _buildTextField(
-                    'Current Medications (comma-separated)',
-                    _currentMedicationsController,
-                    Icons.medication_outlined,
-                    maxLines: 2,
-                    hintText: 'e.g., Aspirin, Metformin',
-                  ),
-                  const SizedBox(height: 16),
-                  _buildTextField(
-                    'Disabilities (comma-separated)',
-                    _disabilitiesController,
-                    Icons.accessible_outlined,
-                    maxLines: 2,
-                    hintText: 'e.g., Visual impairment, Mobility issues',
-                  ),
-                ],
-              ),
-
-              const SizedBox(height: 32),
-
-              // Cancel Button
-              SizedBox(
-                width: double.infinity,
-                child: OutlinedButton(
-                  onPressed: _isLoading ? null : () => Navigator.pop(context),
-                  style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    side: BorderSide(color: Colors.grey.withOpacity(0.3)),
-                  ),
-                  child: const Text(
-                    'Cancel',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.grey,
+              _buildHeader(),
+              Expanded(
+                child: SingleChildScrollView(
+                  physics: const BouncingScrollPhysics(),
+                  padding: const EdgeInsets.all(20.0),
+                  child: Form(
+                    key: _formKey,
+                    child: Column(
+                      children: [
+                        _buildSectionCard(
+                          title: 'Contact Information',
+                          icon: Icons.contact_phone_outlined,
+                          gradient: [primaryGreen, lightGreen],
+                          children: [
+                            _buildTextField(
+                              'Address',
+                              _addressController,
+                              Icons.location_on_outlined,
+                              maxLines: 2,
+                            ),
+                            const SizedBox(height: 16),
+                            _buildTextField(
+                              'Contact Number',
+                              _contactController,
+                              Icons.phone_outlined,
+                              keyboardType: TextInputType.phone,
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 20),
+                        _buildSectionCard(
+                          title: 'Medical Information',
+                          icon: Icons.medical_information_outlined,
+                          gradient: [
+                            const Color(0xFF8B5CF6),
+                            const Color(0xFF7C3AED),
+                          ],
+                          children: [
+                            _buildDropdownField(
+                              'Blood Type',
+                              _selectedBloodType,
+                              _bloodTypes,
+                              Icons.bloodtype_outlined,
+                              (value) =>
+                                  setState(() => _selectedBloodType = value),
+                            ),
+                            const SizedBox(height: 16),
+                            _buildDropdownField(
+                              'Sex',
+                              _selectedSex,
+                              _sexOptions,
+                              Icons.person_outline,
+                              (value) => setState(() => _selectedSex = value),
+                            ),
+                            const SizedBox(height: 16),
+                            _buildTextField(
+                              'Allergies (comma-separated)',
+                              _allergiesController,
+                              Icons.warning_amber_outlined,
+                              maxLines: 2,
+                              hintText: 'e.g., Peanuts, Shellfish, Penicillin',
+                            ),
+                            const SizedBox(height: 16),
+                            _buildTextField(
+                              'Medical Conditions (comma-separated)',
+                              _medicalConditionsController,
+                              Icons.medical_services_outlined,
+                              maxLines: 2,
+                              hintText: 'e.g., Diabetes, Hypertension',
+                            ),
+                            const SizedBox(height: 16),
+                            _buildTextField(
+                              'Current Medications (comma-separated)',
+                              _currentMedicationsController,
+                              Icons.medication_outlined,
+                              maxLines: 2,
+                              hintText: 'e.g., Aspirin, Metformin',
+                            ),
+                            const SizedBox(height: 16),
+                            _buildTextField(
+                              'Disabilities (comma-separated)',
+                              _disabilitiesController,
+                              Icons.accessible_outlined,
+                              maxLines: 2,
+                              hintText:
+                                  'e.g., Visual impairment, Mobility issues',
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 24),
+                        _buildCancelButton(),
+                        const SizedBox(height: 20),
+                      ],
                     ),
                   ),
                 ),
               ),
-
-              const SizedBox(height: 20),
             ],
           ),
         ),
@@ -321,46 +314,156 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     );
   }
 
+  Widget _buildHeader() {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [primaryGreen, lightGreen],
+        ),
+        borderRadius: const BorderRadius.only(
+          bottomLeft: Radius.circular(32),
+          bottomRight: Radius.circular(32),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: primaryGreen.withOpacity(0.3),
+            blurRadius: 20,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.2),
+              borderRadius: BorderRadius.circular(14),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.1),
+                  blurRadius: 8,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: IconButton(
+              onPressed: _isLoading ? null : () => Navigator.pop(context),
+              icon: const Icon(
+                Icons.arrow_back_ios_new,
+                color: Colors.white,
+                size: 20,
+              ),
+            ),
+          ),
+          const SizedBox(width: 16),
+          const Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Edit Profile',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 24,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+                SizedBox(height: 4),
+                Text(
+                  'Update your information',
+                  style: TextStyle(color: Colors.white70, fontSize: 14),
+                ),
+              ],
+            ),
+          ),
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.2),
+              borderRadius: BorderRadius.circular(14),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.1),
+                  blurRadius: 8,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: IconButton(
+              onPressed: _isLoading ? null : _saveProfile,
+              icon:
+                  _isLoading
+                      ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2.5,
+                          color: Colors.white,
+                        ),
+                      )
+                      : const Icon(Icons.check, color: Colors.white, size: 24),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildSectionCard({
     required String title,
     required IconData icon,
+    required List<Color> gradient,
     required List<Widget> children,
   }) {
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.grey.withOpacity(0.08)),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Colors.white, gradient[0].withOpacity(0.05)],
+        ),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: gradient[0].withOpacity(0.2), width: 2),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.02),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
+            color: gradient[0].withOpacity(0.1),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
           ),
         ],
       ),
       child: Padding(
-        padding: const EdgeInsets.all(24.0),
+        padding: const EdgeInsets.all(20.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [
                 Container(
-                  width: 32,
-                  height: 32,
+                  width: 48,
+                  height: 48,
                   decoration: BoxDecoration(
-                    color: const Color(0xFF667EEA).withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(8),
+                    gradient: LinearGradient(colors: gradient),
+                    borderRadius: BorderRadius.circular(14),
+                    boxShadow: [
+                      BoxShadow(
+                        color: gradient[0].withOpacity(0.3),
+                        blurRadius: 12,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
                   ),
-                  child: Icon(icon, color: const Color(0xFF667EEA), size: 18),
+                  child: Icon(icon, color: Colors.white, size: 24),
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: 14),
                 Text(
                   title,
                   style: TextStyle(
                     fontSize: 18,
-                    fontWeight: FontWeight.w600,
+                    fontWeight: FontWeight.bold,
                     color: Colors.grey[800],
                   ),
                 ),
@@ -389,7 +492,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           label,
           style: TextStyle(
             fontSize: 14,
-            fontWeight: FontWeight.w500,
+            fontWeight: FontWeight.w600,
             color: Colors.grey[700],
           ),
         ),
@@ -398,24 +501,38 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           controller: controller,
           maxLines: maxLines,
           keyboardType: keyboardType,
+          style: TextStyle(
+            fontSize: 15,
+            color: Colors.grey[800],
+            fontWeight: FontWeight.w500,
+          ),
           decoration: InputDecoration(
-            prefixIcon: Icon(icon, color: Colors.grey[400], size: 20),
+            prefixIcon: Icon(
+              icon,
+              color: primaryGreen.withOpacity(0.6),
+              size: 22,
+            ),
             hintText: hintText,
+            hintStyle: TextStyle(color: Colors.grey[400], fontSize: 14),
             border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: Colors.grey.withOpacity(0.2)),
+              borderRadius: BorderRadius.circular(16),
+              borderSide: BorderSide(color: paleGreen, width: 2),
             ),
             enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: Colors.grey.withOpacity(0.2)),
+              borderRadius: BorderRadius.circular(16),
+              borderSide: BorderSide(color: paleGreen, width: 2),
             ),
             focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: Color(0xFF667EEA), width: 2),
+              borderRadius: BorderRadius.circular(16),
+              borderSide: BorderSide(color: primaryGreen, width: 2.5),
             ),
             errorBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: Colors.red, width: 1),
+              borderRadius: BorderRadius.circular(16),
+              borderSide: BorderSide(color: Colors.red[300]!, width: 2),
+            ),
+            focusedErrorBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(16),
+              borderSide: const BorderSide(color: Colors.red, width: 2.5),
             ),
             filled: true,
             fillColor: Colors.white,
@@ -443,7 +560,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           label,
           style: TextStyle(
             fontSize: 14,
-            fontWeight: FontWeight.w500,
+            fontWeight: FontWeight.w600,
             color: Colors.grey[700],
           ),
         ),
@@ -451,23 +568,32 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         DropdownButtonFormField<String>(
           value: value,
           onChanged: onChanged,
+          style: TextStyle(
+            fontSize: 15,
+            color: Colors.grey[800],
+            fontWeight: FontWeight.w500,
+          ),
           decoration: InputDecoration(
-            prefixIcon: Icon(icon, color: Colors.grey[400], size: 20),
+            prefixIcon: Icon(
+              icon,
+              color: primaryGreen.withOpacity(0.6),
+              size: 22,
+            ),
             border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: Colors.grey.withOpacity(0.2)),
+              borderRadius: BorderRadius.circular(16),
+              borderSide: BorderSide(color: paleGreen, width: 2),
             ),
             enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: Colors.grey.withOpacity(0.2)),
+              borderRadius: BorderRadius.circular(16),
+              borderSide: BorderSide(color: paleGreen, width: 2),
             ),
             focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: Color(0xFF667EEA), width: 2),
+              borderRadius: BorderRadius.circular(16),
+              borderSide: BorderSide(color: primaryGreen, width: 2.5),
             ),
             errorBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: Colors.red, width: 1),
+              borderRadius: BorderRadius.circular(16),
+              borderSide: BorderSide(color: Colors.red[300]!, width: 2),
             ),
             filled: true,
             fillColor: Colors.white,
@@ -485,10 +611,47 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               }).toList(),
           hint: Text(
             'Select $label',
-            style: TextStyle(color: Colors.grey[500]),
+            style: TextStyle(color: Colors.grey[400], fontSize: 14),
+          ),
+          dropdownColor: Colors.white,
+          icon: Icon(
+            Icons.keyboard_arrow_down_rounded,
+            color: primaryGreen.withOpacity(0.6),
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildCancelButton() {
+    return SizedBox(
+      width: double.infinity,
+      child: OutlinedButton(
+        onPressed: _isLoading ? null : () => Navigator.pop(context),
+        style: OutlinedButton.styleFrom(
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          side: BorderSide(color: Colors.grey[300]!, width: 2),
+          backgroundColor: Colors.white,
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.close, color: Colors.grey[600], size: 20),
+            const SizedBox(width: 8),
+            Text(
+              'Cancel',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: Colors.grey[700],
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
