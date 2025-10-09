@@ -32,6 +32,12 @@ class _OrgScreenState extends State<OrgScreen> with TickerProviderStateMixin {
 
   int _selectedTab = 0;
 
+  // Color Scheme
+  static const Color primaryGreen = Color(0xFF4A7C59);
+  static const Color lightGreen = Color(0xFF6B9B7A);
+  static const Color paleGreen = Color(0xFFE8F5E9);
+  static const Color accentGreen = Color(0xFF2E5C3F);
+
   @override
   void initState() {
     super.initState();
@@ -77,7 +83,11 @@ class _OrgScreenState extends State<OrgScreen> with TickerProviderStateMixin {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Error loading organizations: ${e.toString()}'),
-            backgroundColor: Colors.red,
+            backgroundColor: Colors.red[700],
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
           ),
         );
       }
@@ -110,7 +120,11 @@ class _OrgScreenState extends State<OrgScreen> with TickerProviderStateMixin {
             content: Text(
               'Error loading joined organizations: ${e.toString()}',
             ),
-            backgroundColor: Colors.red,
+            backgroundColor: Colors.red[700],
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
           ),
         );
       }
@@ -135,7 +149,11 @@ class _OrgScreenState extends State<OrgScreen> with TickerProviderStateMixin {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Error loading invitations: ${e.toString()}'),
-            backgroundColor: Colors.red,
+            backgroundColor: Colors.red[700],
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
           ),
         );
       }
@@ -158,13 +176,26 @@ class _OrgScreenState extends State<OrgScreen> with TickerProviderStateMixin {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(
-              status == 'accepted'
-                  ? 'Invitation accepted successfully!'
-                  : 'Invitation declined',
+            content: Row(
+              children: [
+                Icon(
+                  status == 'accepted' ? Icons.check_circle : Icons.info,
+                  color: Colors.white,
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  status == 'accepted'
+                      ? 'Invitation accepted successfully!'
+                      : 'Invitation declined',
+                ),
+              ],
             ),
             backgroundColor:
-                status == 'accepted' ? Colors.green : Colors.orange,
+                status == 'accepted' ? primaryGreen : Colors.orange[700],
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
           ),
         );
       }
@@ -173,7 +204,11 @@ class _OrgScreenState extends State<OrgScreen> with TickerProviderStateMixin {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Error: ${e.toString()}'),
-            backgroundColor: Colors.red,
+            backgroundColor: Colors.red[700],
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
           ),
         );
       }
@@ -186,34 +221,46 @@ class _OrgScreenState extends State<OrgScreen> with TickerProviderStateMixin {
       builder: (BuildContext context) {
         return Dialog(
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
+            borderRadius: BorderRadius.circular(24),
           ),
-          child: SizedBox(
+          child: Container(
             width: MediaQuery.of(context).size.width * 0.9,
             height: MediaQuery.of(context).size.height * 0.7,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [Colors.white, paleGreen.withOpacity(0.3)],
+              ),
+              borderRadius: BorderRadius.circular(24),
+            ),
             child: Column(
               children: [
                 Container(
                   padding: const EdgeInsets.all(24.0),
                   decoration: BoxDecoration(
-                    color: Colors.blue[50],
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [primaryGreen, lightGreen],
+                    ),
                     borderRadius: const BorderRadius.only(
-                      topLeft: Radius.circular(20),
-                      topRight: Radius.circular(20),
+                      topLeft: Radius.circular(24),
+                      topRight: Radius.circular(24),
                     ),
                   ),
                   child: Row(
                     children: [
                       Container(
-                        padding: const EdgeInsets.all(8),
+                        padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
-                          color: Colors.blue[100],
-                          borderRadius: BorderRadius.circular(12),
+                          color: Colors.white.withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(16),
                         ),
-                        child: Icon(
+                        child: const Icon(
                           Icons.mail,
-                          color: Colors.blue[600],
-                          size: 24,
+                          color: Colors.white,
+                          size: 28,
                         ),
                       ),
                       const SizedBox(width: 16),
@@ -221,19 +268,19 @@ class _OrgScreenState extends State<OrgScreen> with TickerProviderStateMixin {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
-                              'Organization Invitations',
+                            const Text(
+                              'Invitations',
                               style: TextStyle(
-                                fontSize: 20,
+                                fontSize: 22,
                                 fontWeight: FontWeight.bold,
-                                color: Colors.grey[800],
+                                color: Colors.white,
                               ),
                             ),
                             Text(
-                              '${_invitations.length} pending invitations',
+                              '${_invitations.length} pending',
                               style: TextStyle(
                                 fontSize: 14,
-                                color: Colors.grey[600],
+                                color: Colors.white.withOpacity(0.9),
                               ),
                             ),
                           ],
@@ -241,11 +288,11 @@ class _OrgScreenState extends State<OrgScreen> with TickerProviderStateMixin {
                       ),
                       IconButton(
                         onPressed: () => Navigator.pop(context),
-                        icon: Icon(Icons.close, color: Colors.grey[600]),
+                        icon: const Icon(Icons.close, color: Colors.white),
                         style: IconButton.styleFrom(
-                          backgroundColor: Colors.white,
+                          backgroundColor: Colors.white.withOpacity(0.2),
                           shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10),
+                            borderRadius: BorderRadius.circular(12),
                           ),
                         ),
                       ),
@@ -262,29 +309,29 @@ class _OrgScreenState extends State<OrgScreen> with TickerProviderStateMixin {
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
                                   Container(
-                                    padding: const EdgeInsets.all(20),
+                                    padding: const EdgeInsets.all(24),
                                     decoration: BoxDecoration(
-                                      color: Colors.grey[100],
+                                      color: paleGreen,
                                       shape: BoxShape.circle,
                                     ),
                                     child: Icon(
                                       Icons.check_circle_outline,
-                                      size: 48,
-                                      color: Colors.grey[400],
+                                      size: 64,
+                                      color: primaryGreen,
                                     ),
                                   ),
                                   const SizedBox(height: 24),
                                   Text(
                                     'All caught up!',
                                     style: TextStyle(
-                                      fontSize: 20,
+                                      fontSize: 24,
                                       fontWeight: FontWeight.bold,
-                                      color: Colors.grey[700],
+                                      color: Colors.grey[800],
                                     ),
                                   ),
                                   const SizedBox(height: 8),
                                   Text(
-                                    'You don\'t have any pending invitations',
+                                    'No pending invitations',
                                     style: TextStyle(
                                       fontSize: 16,
                                       color: Colors.grey[600],
@@ -308,15 +355,16 @@ class _OrgScreenState extends State<OrgScreen> with TickerProviderStateMixin {
                                 margin: const EdgeInsets.only(bottom: 16),
                                 decoration: BoxDecoration(
                                   color: Colors.white,
-                                  borderRadius: BorderRadius.circular(16),
+                                  borderRadius: BorderRadius.circular(20),
                                   border: Border.all(
-                                    color: Colors.grey.withOpacity(0.1),
+                                    color: paleGreen,
+                                    width: 2,
                                   ),
                                   boxShadow: [
                                     BoxShadow(
-                                      color: Colors.black.withOpacity(0.05),
-                                      blurRadius: 10,
-                                      offset: const Offset(0, 4),
+                                      color: primaryGreen.withOpacity(0.1),
+                                      blurRadius: 15,
+                                      offset: const Offset(0, 5),
                                     ),
                                   ],
                                 ),
@@ -329,19 +377,24 @@ class _OrgScreenState extends State<OrgScreen> with TickerProviderStateMixin {
                                       Row(
                                         children: [
                                           Container(
-                                            padding: const EdgeInsets.all(8),
+                                            padding: const EdgeInsets.all(12),
                                             decoration: BoxDecoration(
-                                              color: Colors.blue[50],
+                                              gradient: LinearGradient(
+                                                colors: [
+                                                  primaryGreen,
+                                                  lightGreen,
+                                                ],
+                                              ),
                                               borderRadius:
-                                                  BorderRadius.circular(10),
+                                                  BorderRadius.circular(14),
                                             ),
-                                            child: Icon(
+                                            child: const Icon(
                                               Icons.business,
-                                              color: Colors.blue[600],
-                                              size: 20,
+                                              color: Colors.white,
+                                              size: 24,
                                             ),
                                           ),
-                                          const SizedBox(width: 12),
+                                          const SizedBox(width: 16),
                                           Expanded(
                                             child: Column(
                                               crossAxisAlignment:
@@ -355,10 +408,11 @@ class _OrgScreenState extends State<OrgScreen> with TickerProviderStateMixin {
                                                     color: Colors.grey[800],
                                                   ),
                                                 ),
+                                                const SizedBox(height: 4),
                                                 Text(
                                                   'Invited ${_formatDate(invitation['created_at'])}',
                                                   style: TextStyle(
-                                                    fontSize: 14,
+                                                    fontSize: 13,
                                                     color: Colors.grey[600],
                                                   ),
                                                 ),
@@ -380,15 +434,15 @@ class _OrgScreenState extends State<OrgScreen> with TickerProviderStateMixin {
                                                 Navigator.pop(context);
                                               },
                                               style: ElevatedButton.styleFrom(
-                                                backgroundColor: Colors.green,
+                                                backgroundColor: primaryGreen,
                                                 foregroundColor: Colors.white,
                                                 padding:
                                                     const EdgeInsets.symmetric(
-                                                      vertical: 14,
+                                                      vertical: 16,
                                                     ),
                                                 shape: RoundedRectangleBorder(
                                                   borderRadius:
-                                                      BorderRadius.circular(12),
+                                                      BorderRadius.circular(14),
                                                 ),
                                                 elevation: 0,
                                               ),
@@ -396,13 +450,14 @@ class _OrgScreenState extends State<OrgScreen> with TickerProviderStateMixin {
                                                 mainAxisAlignment:
                                                     MainAxisAlignment.center,
                                                 children: [
-                                                  Icon(Icons.check, size: 18),
+                                                  Icon(Icons.check, size: 20),
                                                   SizedBox(width: 8),
                                                   Text(
                                                     'Accept',
                                                     style: TextStyle(
                                                       fontWeight:
                                                           FontWeight.w600,
+                                                      fontSize: 15,
                                                     ),
                                                   ),
                                                 ],
@@ -420,31 +475,33 @@ class _OrgScreenState extends State<OrgScreen> with TickerProviderStateMixin {
                                                 Navigator.pop(context);
                                               },
                                               style: OutlinedButton.styleFrom(
-                                                foregroundColor: Colors.red,
-                                                side: const BorderSide(
-                                                  color: Colors.red,
+                                                foregroundColor:
+                                                    Colors.red[600],
+                                                side: BorderSide(
+                                                  color: Colors.red[600]!,
                                                   width: 2,
                                                 ),
                                                 padding:
                                                     const EdgeInsets.symmetric(
-                                                      vertical: 14,
+                                                      vertical: 16,
                                                     ),
                                                 shape: RoundedRectangleBorder(
                                                   borderRadius:
-                                                      BorderRadius.circular(12),
+                                                      BorderRadius.circular(14),
                                                 ),
                                               ),
                                               child: const Row(
                                                 mainAxisAlignment:
                                                     MainAxisAlignment.center,
                                                 children: [
-                                                  Icon(Icons.close, size: 18),
+                                                  Icon(Icons.close, size: 20),
                                                   SizedBox(width: 8),
                                                   Text(
                                                     'Decline',
                                                     style: TextStyle(
                                                       fontWeight:
                                                           FontWeight.w600,
+                                                      fontSize: 15,
                                                     ),
                                                   ),
                                                 ],
@@ -467,8 +524,6 @@ class _OrgScreenState extends State<OrgScreen> with TickerProviderStateMixin {
       },
     );
   }
-
-  // ===== UI HELPER METHODS =====
 
   String _formatDate(String? dateString) {
     if (dateString == null) return 'Unknown date';
@@ -517,351 +572,457 @@ class _OrgScreenState extends State<OrgScreen> with TickerProviderStateMixin {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        automaticallyImplyLeading: false,
-        title: Text(
-          'Organizations',
-          style: TextStyle(
-            color: Colors.grey[800],
-            fontWeight: FontWeight.bold,
-            fontSize: 24,
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              paleGreen.withOpacity(0.3),
+              Colors.white,
+              paleGreen.withOpacity(0.2),
+            ],
+            stops: const [0.0, 0.5, 1.0],
           ),
         ),
-        actions: [
-          Container(
-            margin: const EdgeInsets.only(right: 8),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(12),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.1),
-                  blurRadius: 8,
-                  offset: const Offset(0, 2),
-                ),
-              ],
-            ),
-            child: IconButton(
-              onPressed: () async {
-                await _fetchAllData();
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Organizations refreshed'),
-                      duration: Duration(seconds: 2),
-                    ),
-                  );
-                }
-              },
-              icon: Icon(Icons.refresh, color: Colors.grey[600], size: 22),
-            ),
-          ),
-          Stack(
+        child: SafeArea(
+          child: Column(
             children: [
-              Container(
-                margin: const EdgeInsets.only(right: 12),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.1),
-                      blurRadius: 8,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
-                ),
-                child: IconButton(
-                  onPressed: _showInvitationsDialog,
-                  icon: Icon(
-                    Icons.mail_outline,
-                    color:
-                        _invitationCount > 0
-                            ? Colors.blue[600]
-                            : Colors.grey[600],
-                    size: 22,
+              _buildHeader(),
+              Expanded(
+                child: FadeTransition(
+                  opacity: _fadeAnimation,
+                  child: Column(
+                    children: [
+                      _buildTabSelector(),
+                      _buildSearchBar(),
+                      const SizedBox(height: 20),
+                      Expanded(
+                        child:
+                            _isLoading
+                                ? Center(
+                                  child: CircularProgressIndicator(
+                                    color: primaryGreen,
+                                  ),
+                                )
+                                : _buildOrganizationsList(),
+                      ),
+                    ],
                   ),
                 ),
               ),
-              if (_invitationCount > 0)
-                Positioned(
-                  right: 8,
-                  top: 8,
-                  child: Container(
-                    padding: const EdgeInsets.all(6),
-                    decoration: BoxDecoration(
-                      color: Colors.red,
-                      borderRadius: BorderRadius.circular(12),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.red.withOpacity(0.3),
-                          blurRadius: 4,
-                          offset: const Offset(0, 2),
-                        ),
-                      ],
-                    ),
-                    constraints: const BoxConstraints(
-                      minWidth: 20,
-                      minHeight: 20,
-                    ),
-                    child: Text(
-                      '$_invitationCount',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 11,
-                        fontWeight: FontWeight.bold,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                  ),
-                ),
             ],
           ),
-          const SizedBox(width: 8),
-        ],
-      ),
-      body: FadeTransition(
-        opacity: _fadeAnimation,
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 20.0,
-                vertical: 16.0,
-              ),
-              child: Container(
-                padding: const EdgeInsets.all(4),
-                decoration: BoxDecoration(
-                  color: Colors.grey[100],
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: GestureDetector(
-                        onTap: () {
-                          if (_selectedTab != 0) {
-                            setState(() {
-                              _selectedTab = 0;
-                              _searchController.clear();
-                              _searchQuery = '';
-                            });
-                          }
-                        },
-                        child: AnimatedContainer(
-                          duration: const Duration(milliseconds: 200),
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          decoration: BoxDecoration(
-                            color:
-                                _selectedTab == 0
-                                    ? Colors.white
-                                    : Colors.transparent,
-                            borderRadius: BorderRadius.circular(12),
-                            boxShadow:
-                                _selectedTab == 0
-                                    ? [
-                                      BoxShadow(
-                                        color: Colors.black.withOpacity(0.1),
-                                        blurRadius: 8,
-                                        offset: const Offset(0, 2),
-                                      ),
-                                    ]
-                                    : [],
-                          ),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              const SizedBox(width: 8),
-                              Text(
-                                'All Organizations',
-                                style: TextStyle(
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 16,
-                                  color:
-                                      _selectedTab == 0
-                                          ? Colors.blue[600]
-                                          : Colors.grey[600],
-                                ),
-                              ),
-                              if (_selectedTab == 0 &&
-                                  _allOrganizations.isNotEmpty) ...[
-                                const SizedBox(width: 8),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 8,
-                                    vertical: 2,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: Colors.blue[100],
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                  child: Text(
-                                    '${_allOrganizations.length}',
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w600,
-                                      color: Colors.blue[700],
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                    Expanded(
-                      child: GestureDetector(
-                        onTap: () {
-                          if (_selectedTab != 1) {
-                            setState(() {
-                              _selectedTab = 1;
-                              _searchController.clear();
-                              _searchQuery = '';
-                            });
-                            if (_joinedOrganizations.isEmpty) {
-                              _fetchJoinedOrganizations();
-                            }
-                          }
-                        },
-                        child: AnimatedContainer(
-                          duration: const Duration(milliseconds: 200),
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          decoration: BoxDecoration(
-                            color:
-                                _selectedTab == 1
-                                    ? Colors.white
-                                    : Colors.transparent,
-                            borderRadius: BorderRadius.circular(12),
-                            boxShadow:
-                                _selectedTab == 1
-                                    ? [
-                                      BoxShadow(
-                                        color: Colors.black.withOpacity(0.1),
-                                        blurRadius: 8,
-                                        offset: const Offset(0, 2),
-                                      ),
-                                    ]
-                                    : [],
-                          ),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              const SizedBox(width: 8),
-                              Text(
-                                'Your Organizations',
-                                style: TextStyle(
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 16,
-                                  color:
-                                      _selectedTab == 1
-                                          ? Colors.blue[600]
-                                          : Colors.grey[600],
-                                ),
-                              ),
-                              if (_selectedTab == 1 &&
-                                  _joinedOrganizations.isNotEmpty) ...[
-                                const SizedBox(width: 8),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 8,
-                                    vertical: 2,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: Colors.green[100],
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                  child: Text(
-                                    '${_joinedOrganizations.length}',
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w600,
-                                      color: Colors.green[700],
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20.0),
-              child: Container(
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.05),
-                      blurRadius: 10,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
-                ),
-                child: TextFormField(
-                  controller: _searchController,
-                  onChanged: (value) => setState(() => _searchQuery = value),
-                  decoration: InputDecoration(
-                    hintText:
-                        _selectedTab == 0
-                            ? 'Search all organizations...'
-                            : 'Search your organizations...',
-                    hintStyle: TextStyle(color: Colors.grey[500], fontSize: 16),
-                    prefixIcon: Icon(
-                      Icons.search,
-                      color: Colors.grey[400],
-                      size: 22,
-                    ),
-                    suffixIcon:
-                        _searchQuery.isNotEmpty
-                            ? IconButton(
-                              icon: Icon(
-                                Icons.clear,
-                                color: Colors.grey[400],
-                                size: 20,
-                              ),
-                              onPressed: () {
-                                _searchController.clear();
-                                setState(() => _searchQuery = '');
-                              },
-                            )
-                            : null,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(16),
-                      borderSide: BorderSide.none,
-                    ),
-                    filled: true,
-                    fillColor: Colors.white,
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 20,
-                      vertical: 18,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(height: 20),
-            Expanded(
-              child:
-                  _isLoading
-                      ? const Center(child: CircularProgressIndicator())
-                      : _buildOrganizationsList(),
-            ),
-          ],
         ),
       ),
       bottomNavigationBar: MainNavBar(
         selectedIndex: _selectedIndex,
         onItemTapped: (index) => setState(() => _selectedIndex = index),
+      ),
+    );
+  }
+
+  Widget _buildHeader() {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [primaryGreen, lightGreen],
+        ),
+        borderRadius: const BorderRadius.only(
+          bottomLeft: Radius.circular(32),
+          bottomRight: Radius.circular(32),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: primaryGreen.withOpacity(0.3),
+            blurRadius: 20,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Organizations',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 28,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                  SizedBox(height: 4),
+                  Text(
+                    'Discover & Connect',
+                    style: TextStyle(color: Colors.white70, fontSize: 15),
+                  ),
+                ],
+              ),
+              Row(
+                children: [
+                  Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(14),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.1),
+                          blurRadius: 8,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: IconButton(
+                      onPressed: () async {
+                        await _fetchAllData();
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: const Row(
+                                children: [
+                                  Icon(Icons.check_circle, color: Colors.white),
+                                  SizedBox(width: 12),
+                                  Text('Organizations refreshed'),
+                                ],
+                              ),
+                              backgroundColor: primaryGreen,
+                              behavior: SnackBarBehavior.floating,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              duration: const Duration(seconds: 2),
+                            ),
+                          );
+                        }
+                      },
+                      icon: const Icon(
+                        Icons.refresh,
+                        color: Colors.white,
+                        size: 24,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Stack(
+                    children: [
+                      Container(
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(14),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.1),
+                              blurRadius: 8,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                        ),
+                        child: IconButton(
+                          onPressed: _showInvitationsDialog,
+                          icon: Icon(
+                            Icons.mail_outline,
+                            color:
+                                _invitationCount > 0
+                                    ? Colors.white
+                                    : Colors.white70,
+                            size: 24,
+                          ),
+                        ),
+                      ),
+                      if (_invitationCount > 0)
+                        Positioned(
+                          right: 0,
+                          top: 0,
+                          child: Container(
+                            padding: const EdgeInsets.all(6),
+                            decoration: BoxDecoration(
+                              color: Colors.red[600],
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: Colors.white, width: 2),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.red.withOpacity(0.4),
+                                  blurRadius: 8,
+                                  offset: const Offset(0, 2),
+                                ),
+                              ],
+                            ),
+                            constraints: const BoxConstraints(
+                              minWidth: 22,
+                              minHeight: 22,
+                            ),
+                            child: Text(
+                              '$_invitationCount',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTabSelector() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 20.0),
+      child: Container(
+        padding: const EdgeInsets.all(6),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: primaryGreen.withOpacity(0.1),
+              blurRadius: 15,
+              offset: const Offset(0, 5),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: GestureDetector(
+                onTap: () {
+                  if (_selectedTab != 0) {
+                    setState(() {
+                      _selectedTab = 0;
+                      _searchController.clear();
+                      _searchQuery = '';
+                    });
+                  }
+                },
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 250),
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  decoration: BoxDecoration(
+                    gradient:
+                        _selectedTab == 0
+                            ? LinearGradient(colors: [primaryGreen, lightGreen])
+                            : null,
+                    color: _selectedTab == 0 ? null : Colors.transparent,
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow:
+                        _selectedTab == 0
+                            ? [
+                              BoxShadow(
+                                color: primaryGreen.withOpacity(0.3),
+                                blurRadius: 12,
+                                offset: const Offset(0, 4),
+                              ),
+                            ]
+                            : [],
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.explore,
+                        size: 20,
+                        color:
+                            _selectedTab == 0 ? Colors.white : Colors.grey[600],
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        'All',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 16,
+                          color:
+                              _selectedTab == 0
+                                  ? Colors.white
+                                  : Colors.grey[600],
+                        ),
+                      ),
+                      if (_selectedTab == 0 &&
+                          _allOrganizations.isNotEmpty) ...[
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.3),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Text(
+                            '${_allOrganizations.length}',
+                            style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            Expanded(
+              child: GestureDetector(
+                onTap: () {
+                  if (_selectedTab != 1) {
+                    setState(() {
+                      _selectedTab = 1;
+                      _searchController.clear();
+                      _searchQuery = '';
+                    });
+                    if (_joinedOrganizations.isEmpty) {
+                      _fetchJoinedOrganizations();
+                    }
+                  }
+                },
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 250),
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  decoration: BoxDecoration(
+                    gradient:
+                        _selectedTab == 1
+                            ? LinearGradient(colors: [primaryGreen, lightGreen])
+                            : null,
+                    color: _selectedTab == 1 ? null : Colors.transparent,
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow:
+                        _selectedTab == 1
+                            ? [
+                              BoxShadow(
+                                color: primaryGreen.withOpacity(0.3),
+                                blurRadius: 12,
+                                offset: const Offset(0, 4),
+                              ),
+                            ]
+                            : [],
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.check_circle,
+                        size: 20,
+                        color:
+                            _selectedTab == 1 ? Colors.white : Colors.grey[600],
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Joined',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 16,
+                          color:
+                              _selectedTab == 1
+                                  ? Colors.white
+                                  : Colors.grey[600],
+                        ),
+                      ),
+                      if (_selectedTab == 1 &&
+                          _joinedOrganizations.isNotEmpty) ...[
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.3),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Text(
+                            '${_joinedOrganizations.length}',
+                            style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSearchBar() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20.0),
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: paleGreen, width: 2),
+          boxShadow: [
+            BoxShadow(
+              color: primaryGreen.withOpacity(0.1),
+              blurRadius: 15,
+              offset: const Offset(0, 5),
+            ),
+          ],
+        ),
+        child: TextFormField(
+          controller: _searchController,
+          onChanged: (value) => setState(() => _searchQuery = value),
+          style: TextStyle(color: Colors.grey[800], fontSize: 16),
+          decoration: InputDecoration(
+            hintText:
+                _selectedTab == 0
+                    ? 'Search all organizations...'
+                    : 'Search your organizations...',
+            hintStyle: TextStyle(color: Colors.grey[400], fontSize: 16),
+            prefixIcon: Icon(Icons.search, color: primaryGreen, size: 24),
+            suffixIcon:
+                _searchQuery.isNotEmpty
+                    ? IconButton(
+                      icon: Icon(
+                        Icons.clear,
+                        color: Colors.grey[400],
+                        size: 22,
+                      ),
+                      onPressed: () {
+                        _searchController.clear();
+                        setState(() => _searchQuery = '');
+                      },
+                    )
+                    : null,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(18),
+              borderSide: BorderSide.none,
+            ),
+            filled: true,
+            fillColor: Colors.white,
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 20,
+              vertical: 18,
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -915,33 +1076,55 @@ class _OrgScreenState extends State<OrgScreen> with TickerProviderStateMixin {
             );
           }
         },
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(24),
         child: Container(
           decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(20),
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [Colors.white, paleGreen.withOpacity(0.2)],
+            ),
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(
+              color: isJoined ? primaryGreen.withOpacity(0.3) : paleGreen,
+              width: 2,
+            ),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.05),
-                blurRadius: 15,
-                offset: const Offset(0, 5),
+                color: primaryGreen.withOpacity(0.15),
+                blurRadius: 20,
+                offset: const Offset(0, 8),
               ),
             ],
           ),
           child: Padding(
-            padding: const EdgeInsets.all(24.0),
+            padding: const EdgeInsets.all(20.0),
             child: Row(
               children: [
                 Container(
-                  padding: const EdgeInsets.all(12),
+                  padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: isJoined ? Colors.green[50] : Colors.blue[50],
-                    borderRadius: BorderRadius.circular(16),
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors:
+                          isJoined
+                              ? [primaryGreen, lightGreen]
+                              : [paleGreen, lightGreen.withOpacity(0.3)],
+                    ),
+                    borderRadius: BorderRadius.circular(18),
+                    boxShadow: [
+                      BoxShadow(
+                        color: primaryGreen.withOpacity(0.2),
+                        blurRadius: 10,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
                   ),
                   child: Icon(
-                    isJoined ? Icons.check_circle : Icons.business,
-                    color: isJoined ? Colors.green[600] : Colors.blue[600],
-                    size: 24,
+                    isJoined ? Icons.verified : Icons.business,
+                    color: isJoined ? Colors.white : primaryGreen,
+                    size: 28,
                   ),
                 ),
                 const SizedBox(width: 16),
@@ -955,40 +1138,50 @@ class _OrgScreenState extends State<OrgScreen> with TickerProviderStateMixin {
                             child: Text(
                               org['name'] ?? 'No Name',
                               style: TextStyle(
-                                fontSize: 18,
+                                fontSize: 19,
                                 fontWeight: FontWeight.bold,
                                 color: Colors.grey[800],
+                                letterSpacing: 0.3,
                               ),
                             ),
                           ),
                           if (isJoined)
                             Container(
                               padding: const EdgeInsets.symmetric(
-                                horizontal: 12,
+                                horizontal: 14,
                                 vertical: 6,
                               ),
                               decoration: BoxDecoration(
-                                color: Colors.green[100],
+                                gradient: LinearGradient(
+                                  colors: [primaryGreen, lightGreen],
+                                ),
                                 borderRadius: BorderRadius.circular(20),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: primaryGreen.withOpacity(0.3),
+                                    blurRadius: 8,
+                                    offset: const Offset(0, 3),
+                                  ),
+                                ],
                               ),
-                              child: Text(
-                                'Joined',
+                              child: const Text(
+                                'Member',
                                 style: TextStyle(
                                   fontSize: 12,
-                                  fontWeight: FontWeight.w600,
-                                  color: Colors.green[700],
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
                                 ),
                               ),
                             ),
                         ],
                       ),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: 10),
                       Text(
                         org['description'] ?? 'No description available',
                         style: TextStyle(
                           fontSize: 15,
                           color: Colors.grey[600],
-                          height: 1.4,
+                          height: 1.5,
                         ),
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
@@ -998,15 +1191,15 @@ class _OrgScreenState extends State<OrgScreen> with TickerProviderStateMixin {
                 ),
                 const SizedBox(width: 12),
                 Container(
-                  padding: const EdgeInsets.all(8),
+                  padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color: Colors.grey[100],
-                    borderRadius: BorderRadius.circular(12),
+                    color: paleGreen,
+                    borderRadius: BorderRadius.circular(14),
                   ),
                   child: Icon(
                     Icons.arrow_forward_ios,
-                    color: Colors.grey[400],
-                    size: 16,
+                    color: primaryGreen,
+                    size: 18,
                   ),
                 ),
               ],
@@ -1026,18 +1219,29 @@ class _OrgScreenState extends State<OrgScreen> with TickerProviderStateMixin {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Container(
-              padding: const EdgeInsets.all(24),
+              padding: const EdgeInsets.all(32),
               decoration: BoxDecoration(
-                color: Colors.grey[100],
-                borderRadius: BorderRadius.circular(24),
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [paleGreen, paleGreen.withOpacity(0.5)],
+                ),
+                borderRadius: BorderRadius.circular(32),
+                boxShadow: [
+                  BoxShadow(
+                    color: primaryGreen.withOpacity(0.1),
+                    blurRadius: 20,
+                    offset: const Offset(0, 10),
+                  ),
+                ],
               ),
               child: Icon(
                 isJoinedTab ? Icons.business_outlined : Icons.search_off,
-                color: Colors.grey[400],
-                size: 48,
+                color: primaryGreen,
+                size: 64,
               ),
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 32),
             Text(
               isJoinedTab
                   ? 'No organizations joined yet'
@@ -1045,52 +1249,54 @@ class _OrgScreenState extends State<OrgScreen> with TickerProviderStateMixin {
                   ? 'No organizations found'
                   : 'No organizations available',
               style: TextStyle(
-                fontSize: 22,
+                fontSize: 24,
                 fontWeight: FontWeight.bold,
-                color: Colors.grey[700],
+                color: Colors.grey[800],
               ),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 12),
             Text(
               isJoinedTab
-                  ? 'Accept invitations from organizations to see them here'
+                  ? 'Accept invitations or explore\norganizations to get started'
                   : _searchQuery.isNotEmpty
                   ? 'Try searching with different keywords'
                   : 'Check back later for new organizations',
               style: TextStyle(
                 fontSize: 16,
                 color: Colors.grey[600],
-                height: 1.5,
+                height: 1.6,
               ),
               textAlign: TextAlign.center,
             ),
             if (isJoinedTab) ...[
-              const SizedBox(height: 32),
+              const SizedBox(height: 40),
               ElevatedButton(
                 onPressed: () => setState(() => _selectedTab = 0),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.blue[600],
+                  backgroundColor: primaryGreen,
                   foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(
-                    horizontal: 32,
-                    vertical: 16,
+                    horizontal: 36,
+                    vertical: 18,
                   ),
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
+                    borderRadius: BorderRadius.circular(18),
                   ),
-                  elevation: 0,
+                  elevation: 8,
+                  shadowColor: primaryGreen.withOpacity(0.4),
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: const [
-                    Icon(Icons.explore, size: 20),
-                    SizedBox(width: 8),
+                    Icon(Icons.explore, size: 22),
+                    SizedBox(width: 12),
                     Text(
                       'Explore Organizations',
                       style: TextStyle(
-                        fontWeight: FontWeight.w600,
+                        fontWeight: FontWeight.bold,
                         fontSize: 16,
+                        letterSpacing: 0.5,
                       ),
                     ),
                   ],

@@ -369,11 +369,6 @@ class _FilesScreenState extends State<FilesScreen> {
                   ),
                 ),
                 const SizedBox(width: 8),
-                IconButton(
-                  icon: const Icon(Icons.notifications_outlined),
-                  onPressed: () {},
-                  color: Colors.black87,
-                ),
               ],
             ],
           ),
