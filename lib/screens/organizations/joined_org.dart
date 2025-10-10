@@ -23,6 +23,13 @@ class _JoinedOrgScreenState extends State<JoinedOrgScreen>
   List<Map<String, dynamic>> _joinedOrganizations = [];
   bool _isLoading = false;
 
+  // Color Scheme
+  static const Color primaryGreen = Color(0xFF4A7C59);
+  static const Color lightGreen = Color(0xFF6B9B7A);
+  static const Color paleGreen = Color(0xFFE8F5E9);
+  static const Color accentGreen = Color(0xFF2E5C3F);
+  static const Color darkGreen = Color(0xFF1B4332);
+
   @override
   void initState() {
     super.initState();
@@ -67,8 +74,20 @@ class _JoinedOrgScreenState extends State<JoinedOrgScreen>
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error loading organizations: ${e.toString()}'),
-            backgroundColor: Colors.red,
+            content: Row(
+              children: [
+                const Icon(Icons.error_outline, color: Colors.white),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text('Error loading organizations: ${e.toString()}'),
+                ),
+              ],
+            ),
+            backgroundColor: Colors.red[700],
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
           ),
         );
       }
@@ -96,109 +115,220 @@ class _JoinedOrgScreenState extends State<JoinedOrgScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        leading: IconButton(
-          icon: Icon(Icons.arrow_back, color: Colors.grey[800]),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: Text(
-          'Your Organizations',
-          style: TextStyle(
-            color: Colors.grey[800],
-            fontWeight: FontWeight.w600,
-            fontSize: 20,
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              paleGreen.withOpacity(0.4),
+              Colors.white,
+              paleGreen.withOpacity(0.2),
+            ],
+            stops: const [0.0, 0.5, 1.0],
           ),
         ),
-        actions: [
-          Container(
-            margin: const EdgeInsets.only(right: 8),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(12),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.1),
-                  blurRadius: 8,
-                  offset: const Offset(0, 2),
+        child: SafeArea(
+          child: Column(
+            children: [
+              _buildHeader(),
+              Expanded(
+                child: FadeTransition(
+                  opacity: _fadeAnimation,
+                  child: Column(
+                    children: [
+                      _buildSearchBar(),
+                      const SizedBox(height: 20),
+                      Expanded(
+                        child:
+                            _isLoading
+                                ? Center(
+                                  child: CircularProgressIndicator(
+                                    color: primaryGreen,
+                                    strokeWidth: 3,
+                                  ),
+                                )
+                                : _buildOrganizationsList(),
+                      ),
+                    ],
+                  ),
                 ),
-              ],
-            ),
-            child: IconButton(
-              onPressed: _fetchJoinedOrganizations,
-              icon: Icon(Icons.refresh, color: Colors.grey[600], size: 22),
-            ),
+              ),
+            ],
           ),
-          const SizedBox(width: 8),
-        ],
-      ),
-      body: FadeTransition(
-        opacity: _fadeAnimation,
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.all(20.0),
-              child: _buildSearchBar(),
-            ),
-            Expanded(
-              child:
-                  _isLoading
-                      ? const Center(child: CircularProgressIndicator())
-                      : _buildOrganizationsList(),
-            ),
-          ],
         ),
       ),
     );
   }
 
-  Widget _buildSearchBar() {
+  Widget _buildHeader() {
     return Container(
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [primaryGreen, lightGreen],
+        ),
+        borderRadius: const BorderRadius.only(
+          bottomLeft: Radius.circular(32),
+          bottomRight: Radius.circular(32),
+        ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
+            color: primaryGreen.withOpacity(0.3),
+            blurRadius: 20,
+            offset: const Offset(0, 10),
           ),
         ],
       ),
-      child: TextFormField(
-        controller: _searchController,
-        onChanged: (value) {
-          setState(() {
-            _searchQuery = value;
-          });
-        },
-        decoration: InputDecoration(
-          hintText: 'Search your organizations...',
-          hintStyle: TextStyle(color: Colors.grey[500], fontSize: 16),
-          prefixIcon: Icon(Icons.search, color: Colors.grey[400], size: 22),
-          suffixIcon:
-              _searchQuery.isNotEmpty
-                  ? IconButton(
-                    icon: Icon(Icons.clear, color: Colors.grey[400], size: 20),
-                    onPressed: () {
-                      _searchController.clear();
-                      setState(() {
-                        _searchQuery = '';
-                      });
-                    },
-                  )
-                  : null,
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
-            borderSide: BorderSide.none,
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Container(
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(14),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.1),
+                      blurRadius: 8,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: IconButton(
+                  onPressed: () => Navigator.pop(context),
+                  icon: const Icon(
+                    Icons.arrow_back_ios_new,
+                    color: Colors.white,
+                    size: 20,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Your Organizations',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 24,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '${_joinedOrganizations.length} ${_joinedOrganizations.length == 1 ? 'organization' : 'organizations'}',
+                      style: const TextStyle(
+                        color: Colors.white70,
+                        fontSize: 14,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(14),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.1),
+                      blurRadius: 8,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: IconButton(
+                  onPressed: () async {
+                    await _fetchJoinedOrganizations();
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: const Row(
+                            children: [
+                              Icon(Icons.check_circle, color: Colors.white),
+                              SizedBox(width: 12),
+                              Text('Organizations refreshed'),
+                            ],
+                          ),
+                          backgroundColor: primaryGreen,
+                          behavior: SnackBarBehavior.floating,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          duration: const Duration(seconds: 2),
+                        ),
+                      );
+                    }
+                  },
+                  icon: const Icon(
+                    Icons.refresh,
+                    color: Colors.white,
+                    size: 24,
+                  ),
+                ),
+              ),
+            ],
           ),
-          filled: true,
-          fillColor: Colors.white,
-          contentPadding: const EdgeInsets.symmetric(
-            horizontal: 20,
-            vertical: 18,
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSearchBar() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20.0),
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: paleGreen, width: 2),
+          boxShadow: [
+            BoxShadow(
+              color: primaryGreen.withOpacity(0.1),
+              blurRadius: 15,
+              offset: const Offset(0, 5),
+            ),
+          ],
+        ),
+        child: TextFormField(
+          controller: _searchController,
+          onChanged: (value) => setState(() => _searchQuery = value),
+          style: TextStyle(color: Colors.grey[800], fontSize: 16),
+          decoration: InputDecoration(
+            hintText: 'Search your organizations...',
+            hintStyle: TextStyle(color: Colors.grey[400], fontSize: 16),
+            prefixIcon: Icon(Icons.search, color: primaryGreen, size: 24),
+            suffixIcon:
+                _searchQuery.isNotEmpty
+                    ? IconButton(
+                      icon: Icon(
+                        Icons.clear,
+                        color: Colors.grey[400],
+                        size: 22,
+                      ),
+                      onPressed: () {
+                        _searchController.clear();
+                        setState(() => _searchQuery = '');
+                      },
+                    )
+                    : null,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(18),
+              borderSide: BorderSide.none,
+            ),
+            filled: true,
+            fillColor: Colors.white,
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 20,
+              vertical: 18,
+            ),
           ),
         ),
       ),
@@ -212,6 +342,7 @@ class _JoinedOrgScreenState extends State<JoinedOrgScreen>
     }
     return ListView.builder(
       padding: const EdgeInsets.symmetric(horizontal: 20.0),
+      physics: const BouncingScrollPhysics(),
       itemCount: filteredOrgs.length,
       itemBuilder: (context, index) {
         final org = filteredOrgs[index];
@@ -239,33 +370,49 @@ class _JoinedOrgScreenState extends State<JoinedOrgScreen>
             ),
           );
         },
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(24),
         child: Container(
           decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(20),
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [Colors.white, paleGreen.withOpacity(0.2)],
+            ),
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: primaryGreen.withOpacity(0.3), width: 2),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.05),
-                blurRadius: 15,
-                offset: const Offset(0, 5),
+                color: primaryGreen.withOpacity(0.15),
+                blurRadius: 20,
+                offset: const Offset(0, 8),
               ),
             ],
           ),
           child: Padding(
-            padding: const EdgeInsets.all(24.0),
+            padding: const EdgeInsets.all(20.0),
             child: Row(
               children: [
                 Container(
-                  padding: const EdgeInsets.all(12),
+                  padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: Colors.green[50],
-                    borderRadius: BorderRadius.circular(16),
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [primaryGreen, lightGreen],
+                    ),
+                    borderRadius: BorderRadius.circular(18),
+                    boxShadow: [
+                      BoxShadow(
+                        color: primaryGreen.withOpacity(0.3),
+                        blurRadius: 12,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
                   ),
-                  child: Icon(
-                    Icons.check_circle,
-                    color: Colors.green[600],
-                    size: 24,
+                  child: const Icon(
+                    Icons.verified,
+                    color: Colors.white,
+                    size: 28,
                   ),
                 ),
                 const SizedBox(width: 16),
@@ -279,39 +426,49 @@ class _JoinedOrgScreenState extends State<JoinedOrgScreen>
                             child: Text(
                               org['name'] ?? 'No Name',
                               style: TextStyle(
-                                fontSize: 18,
+                                fontSize: 19,
                                 fontWeight: FontWeight.bold,
                                 color: Colors.grey[800],
+                                letterSpacing: 0.3,
                               ),
                             ),
                           ),
                           Container(
                             padding: const EdgeInsets.symmetric(
-                              horizontal: 12,
+                              horizontal: 14,
                               vertical: 6,
                             ),
                             decoration: BoxDecoration(
-                              color: Colors.green[100],
+                              gradient: LinearGradient(
+                                colors: [primaryGreen, lightGreen],
+                              ),
                               borderRadius: BorderRadius.circular(20),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: primaryGreen.withOpacity(0.3),
+                                  blurRadius: 8,
+                                  offset: const Offset(0, 3),
+                                ),
+                              ],
                             ),
-                            child: Text(
-                              'Joined',
+                            child: const Text(
+                              'Member',
                               style: TextStyle(
                                 fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                                color: Colors.green[700],
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
                               ),
                             ),
                           ),
                         ],
                       ),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: 10),
                       Text(
                         org['description'] ?? 'No description available',
                         style: TextStyle(
                           fontSize: 15,
                           color: Colors.grey[600],
-                          height: 1.4,
+                          height: 1.5,
                         ),
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
@@ -321,15 +478,15 @@ class _JoinedOrgScreenState extends State<JoinedOrgScreen>
                 ),
                 const SizedBox(width: 12),
                 Container(
-                  padding: const EdgeInsets.all(8),
+                  padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color: Colors.grey[100],
-                    borderRadius: BorderRadius.circular(12),
+                    color: paleGreen,
+                    borderRadius: BorderRadius.circular(14),
                   ),
                   child: Icon(
                     Icons.arrow_forward_ios,
-                    color: Colors.grey[400],
-                    size: 16,
+                    color: primaryGreen,
+                    size: 18,
                   ),
                 ),
               ],
@@ -348,64 +505,88 @@ class _JoinedOrgScreenState extends State<JoinedOrgScreen>
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Container(
-              padding: const EdgeInsets.all(24),
+              padding: const EdgeInsets.all(32),
               decoration: BoxDecoration(
-                color: Colors.grey[100],
-                borderRadius: BorderRadius.circular(24),
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [paleGreen, paleGreen.withOpacity(0.5)],
+                ),
+                borderRadius: BorderRadius.circular(32),
+                boxShadow: [
+                  BoxShadow(
+                    color: primaryGreen.withOpacity(0.1),
+                    blurRadius: 20,
+                    offset: const Offset(0, 10),
+                  ),
+                ],
               ),
               child: Icon(
-                Icons.business_outlined,
-                color: Colors.grey[400],
-                size: 48,
+                _searchQuery.isNotEmpty
+                    ? Icons.search_off
+                    : Icons.business_outlined,
+                color: primaryGreen,
+                size: 64,
               ),
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 32),
             Text(
-              'No organizations joined yet',
+              _searchQuery.isNotEmpty
+                  ? 'No organizations found'
+                  : 'No organizations joined yet',
               style: TextStyle(
-                fontSize: 22,
+                fontSize: 24,
                 fontWeight: FontWeight.bold,
-                color: Colors.grey[700],
+                color: Colors.grey[800],
               ),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 12),
             Text(
-              'Accept invitations from organizations to see them here',
+              _searchQuery.isNotEmpty
+                  ? 'Try searching with different keywords'
+                  : 'Accept invitations or explore\norganizations to get started',
               style: TextStyle(
                 fontSize: 16,
                 color: Colors.grey[600],
-                height: 1.5,
+                height: 1.6,
               ),
               textAlign: TextAlign.center,
             ),
-            const SizedBox(height: 32),
-            ElevatedButton(
-              onPressed: () => Navigator.pop(context),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.blue[600],
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 32,
-                  vertical: 16,
-                ),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                elevation: 0,
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.explore, size: 20),
-                  const SizedBox(width: 8),
-                  Text(
-                    'Explore Organizations',
-                    style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
+            if (_searchQuery.isEmpty) ...[
+              const SizedBox(height: 40),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(context),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: primaryGreen,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 36,
+                    vertical: 18,
                   ),
-                ],
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(18),
+                  ),
+                  elevation: 8,
+                  shadowColor: primaryGreen.withOpacity(0.4),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: const [
+                    Icon(Icons.explore, size: 22),
+                    SizedBox(width: 12),
+                    Text(
+                      'Explore Organizations',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
+            ],
           ],
         ),
       ),
