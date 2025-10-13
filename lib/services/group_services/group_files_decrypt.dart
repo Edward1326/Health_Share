@@ -441,9 +441,11 @@ class FilesDecryptGroup {
   /// Downloads file from IPFS using CID
   static Future<Uint8List?> _downloadFromIPFS(String cid) async {
     try {
-      print('Downloading from IPFS: https://gateway.pinata.cloud/ipfs/$cid');
+      print(
+        'Downloading from IPFS: https://apricot-delicate-vole-342.mypinata.cloud/ipfs/$cid',
+      );
       final response = await http.get(
-        Uri.parse('https://gateway.pinata.cloud/ipfs/$cid'),
+        Uri.parse('https://apricot-delicate-vole-342.mypinata.cloud/ipfs/$cid'),
         headers: {'Accept': '*/*'},
       );
 

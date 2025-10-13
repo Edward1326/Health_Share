@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:health_share/screens/groups/user_files_screen.dart';
 import 'package:health_share/services/group_services/group_files_service.dart';
 import 'package:health_share/services/group_services/group_functions.dart';
 import 'package:health_share/services/group_services/group_fetch_service.dart';
@@ -350,45 +351,64 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen>
             itemCount: _filesByUser.keys.length,
             itemBuilder: (context, index) {
               final userKey = _filesByUser.keys.elementAt(index);
+              final parts = userKey.split('|');
+              final userId = parts[0];
+              final firstName = parts.length > 1 ? parts[1] : 'Unknown';
               final userFiles = _filesByUser[userKey]!;
-              final firstName = userKey.split('|')[1];
 
-              return _buildUserFileFolder(firstName, userFiles);
+              return _buildUserFileFolder(userId, firstName, userFiles);
             },
           ),
         );
   }
 
   Widget _buildUserFileFolder(
+    String userId,
     String firstName,
     List<Map<String, dynamic>> userFiles,
   ) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey.withOpacity(0.1)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.02),
-            blurRadius: 4,
-            offset: const Offset(0, 1),
+    return InkWell(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder:
+                (context) => UserFilesScreen(
+                  groupId: widget.groupId,
+                  memberId: userId,
+                  memberName: firstName,
+                  memberFiles: userFiles,
+                ),
           ),
-        ],
-      ),
-      child: ExpansionTile(
-        title: Row(
+        );
+      },
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 20),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.grey.withOpacity(0.1)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.02),
+              blurRadius: 4,
+              offset: const Offset(0, 1),
+            ),
+          ],
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        child: Row(
           children: [
             CircleAvatar(
               backgroundColor: const Color(0xFF667EEA),
-              radius: 20,
+              radius: 22,
               child: Text(
                 firstName.isNotEmpty ? firstName[0].toUpperCase() : 'U',
                 style: const TextStyle(
                   color: Colors.white,
                   fontWeight: FontWeight.w600,
-                  fontSize: 16,
+                  fontSize: 18,
                 ),
               ),
             ),
@@ -398,25 +418,22 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen>
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    '$firstName Files',
+                    '$firstName\'s Files',
                     style: const TextStyle(
                       fontWeight: FontWeight.w600,
                       fontSize: 16,
                     ),
                   ),
                   Text(
-                    '${userFiles.length} file${userFiles.length == 1 ? '' : 's'}',
+                    '${userFiles.length} file${userFiles.length == 1 ? '' : 's'} shared',
                     style: TextStyle(color: Colors.grey[600], fontSize: 12),
                   ),
                 ],
               ),
             ),
+            Icon(Icons.chevron_right, color: Colors.grey[600]),
           ],
         ),
-        children:
-            userFiles
-                .map((shareRecord) => _buildSharedFileCard(shareRecord))
-                .toList(),
       ),
     );
   }

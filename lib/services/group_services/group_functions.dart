@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:health_share/services/files_services/file_preview.dart';
+import 'package:health_share/services/files_services/fullscreen_file_preview.dart';
 import 'package:health_share/services/group_services/group_files_decrypt.dart';
 import 'package:health_share/services/group_services/group_fetch_service.dart';
 import 'package:health_share/services/group_services/group_files_service.dart';
@@ -141,7 +142,7 @@ class GroupFunctions {
     return GroupFileService.organizeFilesByUser(sharedFiles);
   }
 
-  /// Preview a shared file
+  /// Preview a shared file using fullscreen preview
   static Future<void> previewSharedFile({
     required BuildContext context,
     required Map<String, dynamic> shareRecord,
@@ -184,10 +185,15 @@ class GroupFunctions {
         throw Exception('Failed to decrypt file or access denied');
       }
 
-      await EnhancedFilePreviewService.previewFile(
-        context,
-        fileName,
-        decryptedBytes,
+      // Navigate to fullscreen preview
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder:
+              (context) => FullscreenFilePreview(
+                fileName: fileName,
+                bytes: decryptedBytes,
+              ),
+        ),
       );
     } catch (e) {
       Navigator.of(context).pop(); // Ensure dialog is closed

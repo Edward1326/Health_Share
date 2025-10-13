@@ -18,7 +18,7 @@ class MainNavBar extends StatelessWidget {
         0: '/home',
         1: '/files',
         2: '/groups',
-        3: '/organizations', // Add this route
+        3: '/organizations',
         4: '/profile',
       };
 
@@ -30,57 +30,64 @@ class MainNavBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isCompact = screenWidth < 400;
+
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.08),
-            blurRadius: 20,
-            offset: const Offset(0, -2),
+            color: Colors.black.withOpacity(0.06),
+            blurRadius: 24,
+            offset: const Offset(0, -4),
           ),
         ],
       ),
       child: SafeArea(
+        top: false,
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+          padding: EdgeInsets.symmetric(
+            horizontal: isCompact ? 8 : 16,
+            vertical: isCompact ? 8 : 12,
+          ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
               _buildNavItem(
                 context: context,
-                icon: Icons.home_outlined,
-                activeIcon: Icons.home,
+                icon: Icons.home_rounded,
                 label: 'Home',
                 index: 0,
+                isCompact: isCompact,
               ),
               _buildNavItem(
                 context: context,
-                icon: Icons.folder_outlined,
-                activeIcon: Icons.folder,
+                icon: Icons.folder_rounded,
                 label: 'Files',
                 index: 1,
+                isCompact: isCompact,
               ),
               _buildNavItem(
                 context: context,
-                icon: Icons.group_outlined,
-                activeIcon: Icons.group,
+                icon: Icons.group_rounded,
                 label: 'Groups',
                 index: 2,
+                isCompact: isCompact,
               ),
               _buildNavItem(
                 context: context,
-                icon: Icons.apartment_outlined,
-                activeIcon: Icons.apartment,
-                label: 'Organizations',
+                icon: Icons.apartment_rounded,
+                label: 'Orgs',
                 index: 3,
+                isCompact: isCompact,
               ),
               _buildNavItem(
                 context: context,
-                icon: Icons.person_outline,
-                activeIcon: Icons.person,
+                icon: Icons.person_rounded,
                 label: 'Profile',
                 index: 4,
+                isCompact: isCompact,
               ),
             ],
           ),
@@ -92,47 +99,78 @@ class MainNavBar extends StatelessWidget {
   Widget _buildNavItem({
     required BuildContext context,
     required IconData icon,
-    required IconData activeIcon,
     required String label,
     required int index,
+    required bool isCompact,
   }) {
     final isSelected = selectedIndex == index;
+    final primaryColor = const Color(0xFF416240);
 
-    return GestureDetector(
-      onTap: () => _handleNavigation(context, index),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        decoration: BoxDecoration(
-          color:
-              isSelected
-                  ? const Color(0xFF667EEA).withOpacity(0.1)
-                  : Colors.transparent,
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            AnimatedSwitcher(
-              duration: const Duration(milliseconds: 200),
-              child: Icon(
-                isSelected ? activeIcon : icon,
-                key: ValueKey(isSelected),
-                color: isSelected ? const Color(0xFF667EEA) : Colors.grey[600],
-                size: 24,
+    return Expanded(
+      child: GestureDetector(
+        onTap: () => _handleNavigation(context, index),
+        behavior: HitTestBehavior.opaque,
+        child: Container(
+          padding: EdgeInsets.symmetric(
+            horizontal: isCompact ? 4 : 8,
+            vertical: 8,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Icon container with animated background
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 300),
+                curve: Curves.easeInOut,
+                padding: EdgeInsets.all(isCompact ? 8 : 10),
+                decoration: BoxDecoration(
+                  color:
+                      isSelected
+                          ? primaryColor.withOpacity(0.15)
+                          : Colors.transparent,
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: AnimatedScale(
+                  duration: const Duration(milliseconds: 200),
+                  scale: isSelected ? 1.1 : 1.0,
+                  child: Icon(
+                    icon,
+                    color: isSelected ? primaryColor : Colors.grey[600],
+                    size: isCompact ? 22 : 26,
+                  ),
+                ),
               ),
-            ),
-            const SizedBox(height: 4),
-            AnimatedDefaultTextStyle(
-              duration: const Duration(milliseconds: 200),
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
-                color: isSelected ? const Color(0xFF667EEA) : Colors.grey[600],
+              SizedBox(height: isCompact ? 2 : 4),
+              // Label with animated color and weight
+              AnimatedDefaultTextStyle(
+                duration: const Duration(milliseconds: 200),
+                curve: Curves.easeInOut,
+                style: TextStyle(
+                  fontSize: isCompact ? 10 : 11,
+                  fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                  color: isSelected ? primaryColor : Colors.grey[600],
+                  letterSpacing: 0.2,
+                ),
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
-              child: Text(label),
-            ),
-          ],
+              // Active indicator
+              SizedBox(height: isCompact ? 3 : 4),
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 300),
+                curve: Curves.easeInOut,
+                height: 3,
+                width: isSelected ? (isCompact ? 20 : 24) : 0,
+                decoration: BoxDecoration(
+                  color: primaryColor,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

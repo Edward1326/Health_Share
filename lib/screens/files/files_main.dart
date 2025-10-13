@@ -1,6 +1,7 @@
 import 'package:health_share/services/files_services/file_preview.dart';
 import 'package:health_share/services/files_services/file_share_to_group.dart';
 import 'package:health_share/services/files_services/files_share_to_org.dart';
+import 'package:health_share/services/files_services/fullscreen_file_preview.dart';
 
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter/material.dart';
@@ -19,29 +20,14 @@ class FilesScreen extends StatefulWidget {
 
 class _FilesScreenState extends State<FilesScreen> {
   int _selectedIndex = 1;
-  Set<int> _selectedFiles = {}; // Track selected files
+  Set<int> _selectedFiles = {};
   bool _isSelectionMode = false;
-  bool _isLoading = true; // Add loading state
+  bool _isLoading = true;
 
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
+  String _selectedFilter = 'All';
 
-  // Add sort and filter options
-  String _selectedFileType = 'All';
-  String _sortBy = 'dateDesc'; // Options: dateDesc, dateAsc, nameAsc, nameDesc
-
-  // List of available file types for filter
-  final List<String> _fileTypes = [
-    'All',
-    'PDF',
-    'IMAGE',
-    'DOCUMENT',
-    'TXT',
-    'DOC',
-    'DOCX',
-  ];
-
-  // Replace static items with real data from Supabase
   List<FileItem> items = [];
 
   @override
@@ -50,20 +36,21 @@ class _FilesScreenState extends State<FilesScreen> {
     _loadFiles();
   }
 
-  /// Load files from Supabase
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
   Future<void> _loadFiles() async {
-    setState(() {
-      _isLoading = true;
-    });
+    setState(() => _isLoading = true);
 
     try {
       final supabase = Supabase.instance.client;
       final user = supabase.auth.currentUser;
 
       if (user == null) {
-        setState(() {
-          _isLoading = false;
-        });
+        setState(() => _isLoading = false);
         return;
       }
 
@@ -72,7 +59,7 @@ class _FilesScreenState extends State<FilesScreen> {
       final loadedItems =
           fileData.map((file) {
             return FileItem(
-              id: file['id'] as String, // Changed from int to String
+              id: file['id'] as String,
               name: file['filename'] ?? 'Unknown file',
               type: file['file_type'] ?? 'UNKNOWN',
               size: _formatFileSize(file['file_size'] ?? 0),
@@ -90,14 +77,8 @@ class _FilesScreenState extends State<FilesScreen> {
         items = loadedItems;
         _isLoading = false;
       });
-
-      print('Loaded ${items.length} files from database');
     } catch (e) {
-      print('Error loading files: $e');
-      setState(() {
-        _isLoading = false;
-      });
-
+      setState(() => _isLoading = false);
       if (mounted) {
         ScaffoldMessenger.of(
           context,
@@ -106,7 +87,6 @@ class _FilesScreenState extends State<FilesScreen> {
     }
   }
 
-  /// Format file size in human readable format
   String _formatFileSize(int bytes) {
     if (bytes < 1024) return '$bytes B';
     if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
@@ -116,83 +96,115 @@ class _FilesScreenState extends State<FilesScreen> {
     return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(1)} GB';
   }
 
-  /// Get appropriate icon for file type
+  bool _isDocumentType(String fileType) {
+    const documentTypes = [
+      'PDF',
+      'DOC',
+      'DOCX',
+      'XLS',
+      'XLSX',
+      'PPT',
+      'PPTX',
+      'TXT',
+      'RTF',
+      'CSV',
+      'ODT',
+      'DOCUMENT',
+    ];
+    return documentTypes.contains(fileType.toUpperCase());
+  }
+
+  bool _isImageType(String fileType) {
+    const imageTypes = [
+      'JPG',
+      'JPEG',
+      'PNG',
+      'GIF',
+      'BMP',
+      'TIFF',
+      'TIF',
+      'WEBP',
+      'HEIC',
+      'SVG',
+      'IMAGE',
+    ];
+    return imageTypes.contains(fileType.toUpperCase());
+  }
+
+  bool _isAudioType(String fileType) {
+    const audioTypes = ['MP3', 'WAV', 'M4A', 'AAC', 'OGG', 'AUDIO'];
+    return audioTypes.contains(fileType.toUpperCase());
+  }
+
+  bool _isVideoType(String fileType) {
+    const videoTypes = ['MP4', 'MOV', 'AVI', 'MKV', 'WEBM', 'VIDEO'];
+    return videoTypes.contains(fileType.toUpperCase());
+  }
+
+  bool _isCompressedType(String fileType) {
+    const compressedTypes = ['ZIP', 'RAR', '7Z', 'ARCHIVE'];
+    return compressedTypes.contains(fileType.toUpperCase());
+  }
+
   IconData _getFileIcon(String fileType) {
-    switch (fileType.toUpperCase()) {
-      case 'PDF':
-        return Icons.picture_as_pdf;
-      case 'JPG':
-      case 'JPEG':
-      case 'PNG':
-      case 'GIF':
-      case 'IMAGE':
-        return Icons.image;
-      case 'DOC':
-      case 'DOCX':
-      case 'DOCUMENT':
-        return Icons.description;
-      case 'TXT':
-        return Icons.text_snippet;
-      case 'XLS':
-      case 'XLSX':
-        return Icons.table_chart;
-      case 'PPT':
-      case 'PPTX':
-        return Icons.slideshow;
-      default:
-        return Icons.insert_drive_file;
+    final type = fileType.toUpperCase();
+
+    if (_isDocumentType(type)) {
+      if (type == 'PDF') return Icons.picture_as_pdf_rounded;
+      if (type == 'TXT') return Icons.text_snippet_rounded;
+      if (['XLS', 'XLSX', 'CSV'].contains(type))
+        return Icons.table_chart_rounded;
+      if (['PPT', 'PPTX'].contains(type)) return Icons.slideshow_rounded;
+      return Icons.description_rounded;
+    } else if (_isImageType(type)) {
+      return Icons.image_rounded;
+    } else if (_isAudioType(type)) {
+      return Icons.audio_file_rounded;
+    } else if (_isVideoType(type)) {
+      return Icons.video_file_rounded;
+    } else if (_isCompressedType(type)) {
+      return Icons.folder_zip_rounded;
+    } else {
+      return Icons.insert_drive_file_rounded;
     }
   }
 
-  /// Get appropriate color for file type
   Color _getFileColor(String fileType) {
-    switch (fileType.toUpperCase()) {
-      case 'PDF':
-        return const Color(0xFFE53E3E);
-      case 'JPG':
-      case 'JPEG':
-      case 'PNG':
-      case 'GIF':
-      case 'IMAGE':
-        return const Color(0xFF11998E);
-      case 'DOC':
-      case 'DOCX':
-      case 'DOCUMENT':
-        return const Color(0xFF2B6CB0);
-      case 'TXT':
-        return const Color(0xFF38A169);
-      case 'XLS':
-      case 'XLSX':
-        return const Color(0xFF22C35E);
-      case 'PPT':
-      case 'PPTX':
-        return const Color(0xFFE53E3E);
-      default:
-        return const Color(0xFF718096);
+    final type = fileType.toUpperCase();
+
+    if (_isDocumentType(type)) {
+      if (type == 'PDF') return const Color(0xFFE53E3E);
+      if (type == 'TXT') return const Color(0xFF48BB78);
+      if (['XLS', 'XLSX', 'CSV'].contains(type)) return const Color(0xFF38A169);
+      if (['PPT', 'PPTX'].contains(type)) return const Color(0xFFED8936);
+      return const Color(0xFF4299E1);
+    } else if (_isImageType(type)) {
+      return const Color(0xFF667EEA);
+    } else if (_isAudioType(type)) {
+      return const Color(0xFF9F7AEA);
+    } else if (_isVideoType(type)) {
+      return const Color(0xFFED64A6);
+    } else if (_isCompressedType(type)) {
+      return const Color(0xFFECC94B);
+    } else {
+      return const Color(0xFF718096);
     }
   }
 
-  // Fetch assigned doctors using the new service
   Future<List<Map<String, dynamic>>> _fetchAssignedDoctors() async {
     try {
       final user = Supabase.instance.client.auth.currentUser;
-      if (user == null) {
-        throw Exception('User not logged in');
-      }
-
+      if (user == null) throw Exception('User not logged in');
       return await FileShareToOrgService.fetchAssignedDoctors(user.id);
     } catch (e) {
-      print('Error fetching assigned doctors: $e');
       return [];
     }
   }
 
-  // Helper method to fetch user groups using the new service
   Future<List<Map<String, dynamic>>> _fetchUserGroups(String userId) async {
     return await FileShareToGroupService.fetchUserGroups(userId);
   }
 
-  // Enhanced sharing dialog with both groups and doctors
   Future<void> _showShareSelectionDialog(List<FileItem> filesToShare) async {
     try {
       final supabase = Supabase.instance.client;
@@ -203,14 +215,11 @@ class _FilesScreenState extends State<FilesScreen> {
         return;
       }
 
-      // Fetch both groups and doctors
-      final Future<List<Map<String, dynamic>>> groupsFuture = _fetchUserGroups(
-        user.id,
-      );
-      final Future<List<Map<String, dynamic>>> doctorsFuture =
-          _fetchAssignedDoctors();
+      final results = await Future.wait([
+        _fetchUserGroups(user.id),
+        _fetchAssignedDoctors(),
+      ]);
 
-      final results = await Future.wait([groupsFuture, doctorsFuture]);
       final userGroups = results[0];
       final assignedDoctors = results[1];
 
@@ -221,12 +230,11 @@ class _FilesScreenState extends State<FilesScreen> {
         return;
       }
 
-      // Show enhanced selection dialog
       final selectedTargets =
           await showDialog<Map<String, List<Map<String, dynamic>>>>(
             context: context,
             builder: (BuildContext context) {
-              return _EnhancedShareSelectionDialog(
+              return _ShareDialog(
                 groups: userGroups,
                 doctors: assignedDoctors,
                 filesToShare: filesToShare,
@@ -244,7 +252,6 @@ class _FilesScreenState extends State<FilesScreen> {
     }
   }
 
-  // Simplified sharing method that delegates to the appropriate services
   Future<void> _shareFilesToTargets(
     List<FileItem> filesToShare,
     Map<String, List<Map<String, dynamic>>> selectedTargets,
@@ -261,13 +268,6 @@ class _FilesScreenState extends State<FilesScreen> {
       final selectedGroups = selectedTargets['groups']!;
       final selectedDoctors = selectedTargets['doctors']!;
 
-      print('=== ENHANCED SHARING DEBUG ===');
-      print('User ID: ${user.id}');
-      print('Files to share: ${filesToShare.length}');
-      print('Groups selected: ${selectedGroups.length}');
-      print('Doctors selected: ${selectedDoctors.length}');
-
-      // Show loading dialog
       showDialog(
         context: context,
         barrierDismissible: false,
@@ -276,20 +276,16 @@ class _FilesScreenState extends State<FilesScreen> {
               content: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const CircularProgressIndicator(),
+                  const CircularProgressIndicator(color: Color(0xFF416240)),
                   const SizedBox(height: 16),
-                  Text(
-                    'Sharing ${filesToShare.length} file(s) to ${selectedGroups.length} group(s) and ${selectedDoctors.length} doctor(s)...',
-                  ),
+                  Text('Sharing ${filesToShare.length} file(s)...'),
                 ],
               ),
             ),
       );
 
-      // Extract file IDs
       final fileIds = filesToShare.map((file) => file.id).toList();
 
-      // Share with groups using the dedicated service
       if (selectedGroups.isNotEmpty) {
         final groupIds =
             selectedGroups.map((group) => group['id'] as String).toList();
@@ -300,7 +296,6 @@ class _FilesScreenState extends State<FilesScreen> {
         );
       }
 
-      // Share with doctors using the dedicated service
       if (selectedDoctors.isNotEmpty) {
         final doctorIds =
             selectedDoctors
@@ -313,9 +308,8 @@ class _FilesScreenState extends State<FilesScreen> {
         );
       }
 
-      Navigator.of(context).pop(); // Close loading dialog
+      Navigator.of(context).pop();
 
-      // Exit selection mode
       setState(() {
         _isSelectionMode = false;
         _selectedFiles.clear();
@@ -325,10 +319,8 @@ class _FilesScreenState extends State<FilesScreen> {
       _showSuccess(
         'Successfully shared ${filesToShare.length} file(s) to $totalTargets recipient(s)',
       );
-    } catch (e, stackTrace) {
-      print('❌ CRITICAL ERROR in _shareFilesToTargets: $e');
-      print('Stack trace: $stackTrace');
-      Navigator.of(context).pop(); // Close loading dialog
+    } catch (e) {
+      Navigator.of(context).pop();
       _showError('Error sharing files: $e');
     }
   }
@@ -336,60 +328,10 @@ class _FilesScreenState extends State<FilesScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        title: Text(
-          _isSelectionMode ? '${_selectedFiles.length} Selected' : 'My Files',
-          style: TextStyle(
-            fontSize: 24,
-            fontWeight: FontWeight.bold,
-            color: Colors.grey[800],
-          ),
-        ),
-        actions: [
-          if (_isSelectionMode) ...[
-            IconButton(
-              icon: const Icon(Icons.share),
-              onPressed: _shareSelectedFiles,
-              color: Colors.grey[700],
-            ),
-            IconButton(
-              icon: const Icon(Icons.close),
-              onPressed:
-                  () => setState(() {
-                    _isSelectionMode = false;
-                    _selectedFiles.clear();
-                  }),
-              color: Colors.grey[700],
-            ),
-          ] else ...[
-            IconButton(
-              icon: const Icon(Icons.refresh),
-              onPressed: _loadFiles,
-              color: Colors.grey[700],
-            ),
-            IconButton(
-              icon: const Icon(Icons.upload),
-              onPressed: _uploadFile,
-              color: Colors.grey[700],
-            ),
-          ],
-        ],
-      ),
-      body:
-          _isLoading
-              ? const Center(child: CircularProgressIndicator())
-              : Column(
-                children: [
-                  _buildSearchAndFilterBar(),
-                  Expanded(
-                    child:
-                        items.isEmpty ? _buildEmptyState() : _buildFilesList(),
-                  ),
-                ],
-              ),
+      backgroundColor: Colors.grey[50],
+      appBar: _buildAppBar(),
+      body: _isLoading ? _buildLoadingState() : _buildBody(),
+      floatingActionButton: _isSelectionMode ? null : _buildFAB(),
       bottomNavigationBar: MainNavBar(
         selectedIndex: _selectedIndex,
         onItemTapped: (index) => setState(() => _selectedIndex = index),
@@ -397,34 +339,203 @@ class _FilesScreenState extends State<FilesScreen> {
     );
   }
 
-  // Update _buildFilesList to use filtered and sorted items
-  Widget _buildFilesList() {
-    final filteredItems = _filteredAndSortedItems;
+  PreferredSizeWidget _buildAppBar() {
+    return AppBar(
+      elevation: 0,
+      backgroundColor: Colors.white,
+      title:
+          _isSelectionMode
+              ? Text(
+                '${_selectedFiles.length} selected',
+                style: TextStyle(
+                  color: Colors.grey[900],
+                  fontWeight: FontWeight.w600,
+                ),
+              )
+              : Text(
+                'My Files',
+                style: TextStyle(
+                  color: Colors.grey[900],
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+      actions: [
+        if (_isSelectionMode) ...[
+          IconButton(
+            icon: Icon(Icons.share_rounded, color: Color(0xFF416240)),
+            onPressed: _shareSelectedFiles,
+          ),
+          IconButton(
+            icon: Icon(Icons.close_rounded, color: Colors.grey[700]),
+            onPressed:
+                () => setState(() {
+                  _isSelectionMode = false;
+                  _selectedFiles.clear();
+                }),
+          ),
+        ] else ...[
+          IconButton(
+            icon: Icon(Icons.refresh_rounded, color: Colors.grey[700]),
+            onPressed: _loadFiles,
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildLoadingState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          CircularProgressIndicator(color: Color(0xFF416240)),
+          SizedBox(height: 16),
+          Text('Loading files...', style: TextStyle(color: Colors.grey[600])),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBody() {
+    if (items.isEmpty) return _buildEmptyState();
+
+    return Column(
+      children: [
+        _buildSearchBar(),
+        SizedBox(height: 8),
+        Expanded(child: _buildFileList()),
+      ],
+    );
+  }
+
+  Widget _buildSearchBar() {
+    return Container(
+      padding: EdgeInsets.all(16),
+      color: Colors.white,
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _searchController,
+                  onChanged: (value) => setState(() => _searchQuery = value),
+                  decoration: InputDecoration(
+                    hintText: 'Search files...',
+                    prefixIcon: Icon(
+                      Icons.search_rounded,
+                      color: Color(0xFF416240),
+                    ),
+                    suffixIcon:
+                        _searchQuery.isNotEmpty
+                            ? IconButton(
+                              icon: Icon(Icons.clear_rounded),
+                              onPressed: () {
+                                _searchController.clear();
+                                setState(() => _searchQuery = '');
+                              },
+                            )
+                            : null,
+                    filled: true,
+                    fillColor: Colors.grey[100],
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none,
+                    ),
+                    contentPadding: EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 12,
+                    ),
+                  ),
+                ),
+              ),
+              SizedBox(width: 12),
+              PopupMenuButton<String>(
+                icon: Container(
+                  padding: EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color:
+                        _selectedFilter != 'All'
+                            ? Color(0xFF416240)
+                            : Colors.grey[100],
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(
+                    Icons.filter_list_rounded,
+                    color:
+                        _selectedFilter != 'All'
+                            ? Colors.white
+                            : Colors.grey[700],
+                  ),
+                ),
+                onSelected: (value) {
+                  setState(() => _selectedFilter = value);
+                },
+                itemBuilder:
+                    (context) => [
+                      PopupMenuItem(value: 'All', child: Text('All Files')),
+                      PopupMenuItem(
+                        value: 'DOCUMENT',
+                        child: Text('Documents'),
+                      ),
+                      PopupMenuItem(value: 'IMAGE', child: Text('Images')),
+                      PopupMenuItem(value: 'AUDIO', child: Text('Audio')),
+                      PopupMenuItem(value: 'VIDEO', child: Text('Videos')),
+                      PopupMenuItem(
+                        value: 'COMPRESSED',
+                        child: Text('Compressed'),
+                      ),
+                    ],
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFileList() {
+    final filteredItems = _filteredItems;
 
     if (filteredItems.isEmpty) {
       return Center(
-        child: Text(
-          'No files match your search criteria',
-          style: TextStyle(fontSize: 16, color: Colors.grey[600]),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.search_off_rounded, size: 64, color: Colors.grey[300]),
+            SizedBox(height: 16),
+            Text('No files found', style: TextStyle(color: Colors.grey[600])),
+          ],
         ),
       );
     }
 
     return ListView.builder(
-      padding: const EdgeInsets.all(20),
+      padding: EdgeInsets.all(16),
       itemCount: filteredItems.length,
       itemBuilder: (context, index) {
         final item = filteredItems[index];
         final isSelected = _selectedFiles.contains(index);
 
         return Container(
-          margin: const EdgeInsets.only(bottom: 12),
-          child: Material(
-            color:
-                isSelected
-                    ? const Color(0xFF667EEA).withOpacity(0.1)
-                    : Colors.white,
+          margin: EdgeInsets.only(bottom: 12),
+          decoration: BoxDecoration(
+            color: Colors.white,
             borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: isSelected ? Color(0xFF416240) : Colors.transparent,
+              width: 2,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.05),
+                blurRadius: 10,
+                offset: Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Material(
+            color: Colors.transparent,
             child: InkWell(
               onTap:
                   () =>
@@ -433,29 +544,20 @@ class _FilesScreenState extends State<FilesScreen> {
                           : _previewFile(item),
               onLongPress: () => _enableSelectionMode(index),
               borderRadius: BorderRadius.circular(12),
-              child: Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color:
-                        isSelected
-                            ? const Color(0xFF667EEA)
-                            : Colors.grey.withOpacity(0.1),
-                  ),
-                ),
+              child: Padding(
+                padding: EdgeInsets.all(16),
                 child: Row(
                   children: [
                     Container(
-                      width: 44,
-                      height: 44,
+                      width: 48,
+                      height: 48,
                       decoration: BoxDecoration(
                         color: item.color.withOpacity(0.1),
                         borderRadius: BorderRadius.circular(10),
                       ),
-                      child: Icon(item.icon, color: item.color, size: 22),
+                      child: Icon(item.icon, color: item.color, size: 24),
                     ),
-                    const SizedBox(width: 16),
+                    SizedBox(width: 16),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -463,57 +565,30 @@ class _FilesScreenState extends State<FilesScreen> {
                           Text(
                             item.name,
                             style: TextStyle(
-                              fontSize: 16,
+                              fontSize: 15,
                               fontWeight: FontWeight.w600,
-                              color: Colors.grey[800],
+                              color: Colors.grey[900],
                             ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
-                          const SizedBox(height: 4),
-                          Row(
-                            children: [
-                              Text(
-                                item.size,
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  color: Colors.grey[500],
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Text(
-                                '•',
-                                style: TextStyle(color: Colors.grey[500]),
-                              ),
-                              const SizedBox(width: 8),
-                              Text(
-                                _formatDate(item.dateAdded),
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  color: Colors.grey[500],
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Text(
-                                '•',
-                                style: TextStyle(color: Colors.grey[500]),
-                              ),
-                              const SizedBox(width: 8),
-                              Text(
-                                item.category,
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  color: Colors.grey[500],
-                                ),
-                              ),
-                            ],
+                          SizedBox(height: 4),
+                          Text(
+                            '${item.size} • ${_formatDate(item.dateAdded)}',
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: Colors.grey[600],
+                            ),
                           ),
                         ],
                       ),
                     ),
                     if (_isSelectionMode)
-                      Checkbox(
-                        value: isSelected,
-                        onChanged: (value) => _toggleFileSelection(index),
-                        activeColor: const Color(0xFF667EEA),
+                      Icon(
+                        isSelected ? Icons.check_circle : Icons.circle_outlined,
+                        color:
+                            isSelected ? Color(0xFF416240) : Colors.grey[400],
+                        size: 24,
                       ),
                   ],
                 ),
@@ -531,42 +606,41 @@ class _FilesScreenState extends State<FilesScreen> {
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Container(
-            width: 80,
-            height: 80,
+            width: 100,
+            height: 100,
             decoration: BoxDecoration(
-              color: Colors.grey[100],
-              borderRadius: BorderRadius.circular(20),
+              color: Color(0xFF416240).withOpacity(0.1),
+              shape: BoxShape.circle,
             ),
             child: Icon(
-              Icons.upload_file_outlined,
-              size: 40,
-              color: Colors.grey[400],
+              Icons.folder_open_rounded,
+              size: 50,
+              color: Color(0xFF416240),
             ),
           ),
-          const SizedBox(height: 24),
+          SizedBox(height: 24),
           Text(
-            'No files yet',
+            'No Files Yet',
             style: TextStyle(
               fontSize: 20,
               fontWeight: FontWeight.w600,
-              color: Colors.grey[700],
+              color: Colors.grey[800],
             ),
           ),
-          const SizedBox(height: 8),
+          SizedBox(height: 8),
           Text(
-            'Upload files to get started',
-            style: TextStyle(fontSize: 14, color: Colors.grey[500]),
-            textAlign: TextAlign.center,
+            'Upload your first file to get started',
+            style: TextStyle(color: Colors.grey[600]),
           ),
-          const SizedBox(height: 32),
+          SizedBox(height: 32),
           ElevatedButton.icon(
             onPressed: _uploadFile,
-            icon: const Icon(Icons.upload_file_outlined),
-            label: const Text('Upload Files'),
+            icon: Icon(Icons.upload_file_rounded),
+            label: Text('Upload File'),
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF667EEA),
+              backgroundColor: Color(0xFF416240),
               foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+              padding: EdgeInsets.symmetric(horizontal: 32, vertical: 16),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),
               ),
@@ -577,26 +651,27 @@ class _FilesScreenState extends State<FilesScreen> {
     );
   }
 
+  Widget _buildFAB() {
+    return FloatingActionButton(
+      onPressed: _uploadFile,
+      backgroundColor: Color(0xFF416240),
+      child: Icon(Icons.add_rounded, color: Colors.white),
+    );
+  }
+
   void _uploadFile() async {
     final success = await UploadFileService.uploadFile(context);
-
-    // Refresh the file list if upload was successful
-    if (success) {
-      await _loadFiles(); // Reload files from database
-    }
+    if (success) await _loadFiles();
   }
 
   void _shareSelectedFiles() async {
     if (_selectedFiles.isEmpty) return;
-
     final selectedItems =
-        _selectedFiles.map((index) => _filteredAndSortedItems[index]).toList();
-
+        _selectedFiles.map((index) => _filteredItems[index]).toList();
     await _showShareSelectionDialog(selectedItems);
   }
 
   void _previewFile(FileItem item) async {
-    // Show loading dialog
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -605,9 +680,9 @@ class _FilesScreenState extends State<FilesScreen> {
             content: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const CircularProgressIndicator(),
-                const SizedBox(height: 16),
-                Text('Verifying and decrypting ${item.name}...'),
+                CircularProgressIndicator(color: Color(0xFF416240)),
+                SizedBox(height: 16),
+                Text('Decrypting ${item.name}...'),
               ],
             ),
           ),
@@ -619,88 +694,44 @@ class _FilesScreenState extends State<FilesScreen> {
 
       if (user == null) {
         Navigator.of(context).pop();
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('User not logged in')));
+        _showError('User not logged in');
         return;
       }
 
-      // ✅ Fetch Hive username from .env instead of Supabase
       final hiveUsername = dotenv.env['HIVE_ACCOUNT_NAME'] ?? '';
 
       if (hiveUsername.isEmpty) {
         Navigator.of(context).pop();
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Hive username not configured. Please check your .env file.',
-            ),
-            backgroundColor: Colors.orange,
-          ),
-        );
+        _showError('Hive username not configured');
         return;
       }
 
-      print(
-        'Starting blockchain verification and decryption for file: ${item.name}',
-      );
-      print('File ID: ${item.id}, IPFS CID: ${item.ipfsCid}');
-      print('Hive Username (from .env): $hiveUsername');
-
-      // Use the new DecryptFileService with blockchain verification
       final decryptedBytes = await DecryptFileService.decryptFileFromIpfs(
         cid: item.ipfsCid,
         fileId: item.id,
         userId: user.id,
-        username: hiveUsername, // ← now comes from .env
+        username: hiveUsername,
       );
 
-      Navigator.of(context).pop(); // Close loading dialog
-
-      if (decryptedBytes == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Failed to decrypt file. Blockchain verification may have failed.',
-            ),
-            backgroundColor: Colors.red,
-          ),
-        );
-        return;
-      }
-
-      print(
-        'Successfully decrypted file. Size: ${decryptedBytes.length} bytes',
-      );
-
-      if (decryptedBytes.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Decrypted file is empty'),
-            backgroundColor: Colors.orange,
-          ),
-        );
-        return;
-      }
-
-      // Use enhanced preview service
-      await EnhancedFilePreviewService.previewFile(
-        context,
-        item.name,
-        decryptedBytes,
-      );
-    } catch (e, stackTrace) {
       Navigator.of(context).pop();
-      print('Error in _previewFile: $e');
-      print('Stack trace: $stackTrace');
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error opening file: ${e.toString()}'),
-          backgroundColor: Colors.red,
-          duration: const Duration(seconds: 5),
+      if (decryptedBytes == null || decryptedBytes.isEmpty) {
+        _showError('Failed to decrypt file');
+        return;
+      }
+
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder:
+              (context) => FullscreenFilePreview(
+                fileName: item.name,
+                bytes: decryptedBytes,
+              ),
         ),
       );
+    } catch (e) {
+      Navigator.of(context).pop();
+      _showError('Error opening file: $e');
     }
   }
 
@@ -715,9 +746,7 @@ class _FilesScreenState extends State<FilesScreen> {
     setState(() {
       if (_selectedFiles.contains(index)) {
         _selectedFiles.remove(index);
-        if (_selectedFiles.isEmpty) {
-          _isSelectionMode = false;
-        }
+        if (_selectedFiles.isEmpty) _isSelectionMode = false;
       } else {
         _selectedFiles.add(index);
       }
@@ -728,11 +757,10 @@ class _FilesScreenState extends State<FilesScreen> {
     return '${date.day}/${date.month}/${date.year}';
   }
 
-  // Filter and sort files
-  List<FileItem> get _filteredAndSortedItems {
+  List<FileItem> get _filteredItems {
     List<FileItem> filtered = items;
 
-    // Apply search query
+    // Apply search filter
     if (_searchQuery.isNotEmpty) {
       filtered =
           filtered
@@ -744,146 +772,30 @@ class _FilesScreenState extends State<FilesScreen> {
               .toList();
     }
 
-    // Apply file type filter
-    if (_selectedFileType != 'All') {
+    // Apply type filter
+    if (_selectedFilter != 'All') {
       filtered =
-          filtered
-              .where(
-                (file) =>
-                    file.type.toUpperCase() == _selectedFileType.toUpperCase(),
-              )
-              .toList();
-    }
+          filtered.where((file) {
+            final fileType = file.type.toUpperCase();
 
-    // Apply sorting
-    switch (_sortBy) {
-      case 'dateDesc':
-        filtered.sort((a, b) => b.dateAdded.compareTo(a.dateAdded));
-        break;
-      case 'dateAsc':
-        filtered.sort((a, b) => a.dateAdded.compareTo(b.dateAdded));
-        break;
-      case 'nameAsc':
-        filtered.sort((a, b) => a.name.compareTo(b.name));
-        break;
-      case 'nameDesc':
-        filtered.sort((a, b) => b.name.compareTo(a.name));
-        break;
+            switch (_selectedFilter) {
+              case 'DOCUMENT':
+                return _isDocumentType(fileType);
+              case 'IMAGE':
+                return _isImageType(fileType);
+              case 'AUDIO':
+                return _isAudioType(fileType);
+              case 'VIDEO':
+                return _isVideoType(fileType);
+              case 'COMPRESSED':
+                return _isCompressedType(fileType);
+              default:
+                return true;
+            }
+          }).toList();
     }
 
     return filtered;
-  }
-
-  Widget _buildSearchAndFilterBar() {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        children: [
-          // Search Bar
-          Container(
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.grey.withOpacity(0.1)),
-            ),
-            child: TextField(
-              controller: _searchController,
-              onChanged: (value) {
-                setState(() {
-                  _searchQuery = value;
-                });
-              },
-              decoration: InputDecoration(
-                hintText: 'Search files...',
-                prefixIcon: Icon(Icons.search, color: Colors.grey[400]),
-                border: InputBorder.none,
-                contentPadding: const EdgeInsets.symmetric(horizontal: 16),
-              ),
-            ),
-          ),
-
-          const SizedBox(height: 16),
-          // Filter and Sort Options
-          Row(
-            children: [
-              // File Type Filter
-              Expanded(
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.grey.withOpacity(0.1)),
-                  ),
-                  child: DropdownButtonHideUnderline(
-                    child: DropdownButton<String>(
-                      value: _selectedFileType,
-                      items:
-                          _fileTypes.map((String type) {
-                            return DropdownMenuItem<String>(
-                              value: type,
-                              child: Text(type),
-                            );
-                          }).toList(),
-                      onChanged: (String? newValue) {
-                        if (newValue != null) {
-                          setState(() {
-                            _selectedFileType = newValue;
-                          });
-                        }
-                      },
-                      hint: const Text('File Type'),
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              // Sort Options
-              Expanded(
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.grey.withOpacity(0.1)),
-                  ),
-                  child: DropdownButtonHideUnderline(
-                    child: DropdownButton<String>(
-                      value: _sortBy,
-                      items: const [
-                        DropdownMenuItem(
-                          value: 'dateDesc',
-                          child: Text('Newest First'),
-                        ),
-                        DropdownMenuItem(
-                          value: 'dateAsc',
-                          child: Text('Oldest First'),
-                        ),
-                        DropdownMenuItem(
-                          value: 'nameAsc',
-                          child: Text('Name A-Z'),
-                        ),
-                        DropdownMenuItem(
-                          value: 'nameDesc',
-                          child: Text('Name Z-A'),
-                        ),
-                      ],
-                      onChanged: (String? newValue) {
-                        if (newValue != null) {
-                          setState(() {
-                            _sortBy = newValue;
-                          });
-                        }
-                      },
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
   }
 
   void _showError(String message) {
@@ -897,23 +809,14 @@ class _FilesScreenState extends State<FilesScreen> {
   void _showSuccess(String message) {
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(message),
-          backgroundColor: const Color(0xFF667EEA),
-        ),
+        SnackBar(content: Text(message), backgroundColor: Color(0xFF416240)),
       );
     }
-  }
-
-  @override
-  void dispose() {
-    _searchController.dispose();
-    super.dispose();
   }
 }
 
 class FileItem {
-  final String id; // Changed from int to String
+  final String id;
   final String name;
   final String type;
   final String size;
@@ -936,26 +839,23 @@ class FileItem {
   });
 }
 
-/// Enhanced Dialog widget for selecting both groups and doctors
-class _EnhancedShareSelectionDialog extends StatefulWidget {
+class _ShareDialog extends StatefulWidget {
   final List<Map<String, dynamic>> groups;
   final List<Map<String, dynamic>> doctors;
   final List<FileItem> filesToShare;
 
-  const _EnhancedShareSelectionDialog({
+  const _ShareDialog({
     required this.groups,
     required this.doctors,
     required this.filesToShare,
   });
 
   @override
-  State<_EnhancedShareSelectionDialog> createState() =>
-      _EnhancedShareSelectionDialogState();
+  State<_ShareDialog> createState() => _ShareDialogState();
 }
 
-class _EnhancedShareSelectionDialogState
-    extends State<_EnhancedShareSelectionDialog>
-    with TickerProviderStateMixin {
+class _ShareDialogState extends State<_ShareDialog>
+    with SingleTickerProviderStateMixin {
   late TabController _tabController;
   final Set<String> _selectedGroupIds = {};
   final Set<String> _selectedDoctorIds = {};
@@ -974,9 +874,7 @@ class _EnhancedShareSelectionDialogState
 
   String _formatFullName(Map<String, dynamic> user) {
     final person = user['Person'];
-    if (person == null) {
-      return user['email'] ?? 'Unknown User';
-    }
+    if (person == null) return user['email'] ?? 'Unknown User';
 
     final firstName = person['first_name']?.toString().trim() ?? '';
     final middleName = person['middle_name']?.toString().trim() ?? '';
@@ -994,109 +892,126 @@ class _EnhancedShareSelectionDialogState
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
+    return Dialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      title: Text('Share ${widget.filesToShare.length} file(s)'),
-      content: SizedBox(
-        width: double.maxFinite,
-        height: 400,
+      child: Container(
+        constraints: BoxConstraints(maxWidth: 500, maxHeight: 600),
         child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Text(
-              'Choose groups and doctors to share with:',
-              style: TextStyle(color: Colors.grey[600], fontSize: 14),
-            ),
-            const SizedBox(height: 16),
             Container(
+              padding: EdgeInsets.all(20),
               decoration: BoxDecoration(
-                color: Colors.grey[100],
-                borderRadius: BorderRadius.circular(8),
+                color: Color(0xFF416240),
+                borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
               ),
-              child: TabBar(
-                controller: _tabController,
-                indicator: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                labelColor: Colors.blue[700],
-                unselectedLabelColor: Colors.grey[600],
-                tabs: [
-                  Tab(
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
+              child: Row(
+                children: [
+                  Icon(Icons.share_rounded, color: Colors.white),
+                  SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Icon(Icons.group, size: 16),
-                        const SizedBox(width: 6),
-                        Text('Groups (${widget.groups.length})'),
-                      ],
-                    ),
-                  ),
-                  Tab(
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.medical_services, size: 16),
-                        const SizedBox(width: 6),
-                        Text('Doctors (${widget.doctors.length})'),
+                        Text(
+                          'Share Files',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 18,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        Text(
+                          '${widget.filesToShare.length} file(s)',
+                          style: TextStyle(color: Colors.white70, fontSize: 13),
+                        ),
                       ],
                     ),
                   ),
                 ],
               ),
             ),
-            const SizedBox(height: 16),
+            TabBar(
+              controller: _tabController,
+              labelColor: Color(0xFF416240),
+              unselectedLabelColor: Colors.grey,
+              indicatorColor: Color(0xFF416240),
+              tabs: [
+                Tab(text: 'Groups (${widget.groups.length})'),
+                Tab(text: 'Doctors (${widget.doctors.length})'),
+              ],
+            ),
             Expanded(
               child: TabBarView(
                 controller: _tabController,
                 children: [_buildGroupsTab(), _buildDoctorsTab()],
               ),
             ),
+            Container(
+              padding: EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.grey[50],
+                borderRadius: BorderRadius.vertical(
+                  bottom: Radius.circular(16),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: Text('Cancel'),
+                    ),
+                  ),
+                  SizedBox(width: 12),
+                  Expanded(
+                    flex: 2,
+                    child: ElevatedButton(
+                      onPressed:
+                          (_selectedGroupIds.isEmpty &&
+                                  _selectedDoctorIds.isEmpty)
+                              ? null
+                              : () {
+                                final selectedGroups =
+                                    widget.groups
+                                        .where(
+                                          (g) => _selectedGroupIds.contains(
+                                            g['id'],
+                                          ),
+                                        )
+                                        .toList();
+                                final selectedDoctors =
+                                    widget.doctors
+                                        .where(
+                                          (d) => _selectedDoctorIds.contains(
+                                            d['doctor_id'],
+                                          ),
+                                        )
+                                        .toList();
+
+                                Navigator.pop(context, {
+                                  'groups': selectedGroups,
+                                  'doctors': selectedDoctors,
+                                });
+                              },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Color(0xFF416240),
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                      child: Text(
+                        'Share (${_selectedGroupIds.length + _selectedDoctorIds.length})',
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ],
         ),
       ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: Text('Cancel', style: TextStyle(color: Colors.grey[600])),
-        ),
-        ElevatedButton(
-          onPressed:
-              (_selectedGroupIds.isEmpty && _selectedDoctorIds.isEmpty)
-                  ? null
-                  : () {
-                    final selectedGroups =
-                        widget.groups
-                            .where(
-                              (group) =>
-                                  _selectedGroupIds.contains(group['id']),
-                            )
-                            .toList();
-                    final selectedDoctors =
-                        widget.doctors
-                            .where(
-                              (doctor) => _selectedDoctorIds.contains(
-                                doctor['doctor_id'],
-                              ),
-                            )
-                            .toList();
-
-                    Navigator.pop(context, {
-                      'groups': selectedGroups,
-                      'doctors': selectedDoctors,
-                    });
-                  },
-          style: ElevatedButton.styleFrom(
-            backgroundColor: const Color(0xFF667EEA),
-            foregroundColor: Colors.white,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(8),
-            ),
-          ),
-          child: Text(
-            'Share (${_selectedGroupIds.length + _selectedDoctorIds.length})',
-          ),
-        ),
-      ],
     );
   }
 
@@ -1106,11 +1021,11 @@ class _EnhancedShareSelectionDialogState
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.group_off, size: 48, color: Colors.grey[400]),
-            const SizedBox(height: 16),
+            Icon(Icons.group_off_rounded, size: 48, color: Colors.grey[300]),
+            SizedBox(height: 16),
             Text(
               'No groups available',
-              style: TextStyle(color: Colors.grey[600], fontSize: 16),
+              style: TextStyle(color: Colors.grey[600]),
             ),
           ],
         ),
@@ -1118,34 +1033,36 @@ class _EnhancedShareSelectionDialogState
     }
 
     return ListView.builder(
+      padding: EdgeInsets.all(16),
       itemCount: widget.groups.length,
       itemBuilder: (context, index) {
         final group = widget.groups[index];
         final groupId = group['id'] as String;
         final isSelected = _selectedGroupIds.contains(groupId);
 
-        return CheckboxListTile(
-          value: isSelected,
-          onChanged: (bool? value) {
-            setState(() {
-              if (value == true) {
-                _selectedGroupIds.add(groupId);
-              } else {
-                _selectedGroupIds.remove(groupId);
-              }
-            });
-          },
-          title: Text(
-            group['name'] as String,
-            style: const TextStyle(fontWeight: FontWeight.w500),
+        return Container(
+          margin: EdgeInsets.only(bottom: 8),
+          decoration: BoxDecoration(
+            border: Border.all(
+              color: isSelected ? Color(0xFF416240) : Colors.grey[300]!,
+            ),
+            borderRadius: BorderRadius.circular(8),
           ),
-          subtitle: Text('Group'),
-          secondary: CircleAvatar(
-            backgroundColor: Colors.blue[50],
-            child: Icon(Icons.group, color: Colors.blue[600], size: 20),
+          child: CheckboxListTile(
+            value: isSelected,
+            onChanged: (value) {
+              setState(() {
+                if (value == true) {
+                  _selectedGroupIds.add(groupId);
+                } else {
+                  _selectedGroupIds.remove(groupId);
+                }
+              });
+            },
+            title: Text(group['name'] as String),
+            secondary: Icon(Icons.group_rounded, color: Color(0xFF416240)),
+            activeColor: Color(0xFF416240),
           ),
-          activeColor: const Color(0xFF667EEA),
-          controlAffinity: ListTileControlAffinity.leading,
         );
       },
     );
@@ -1160,12 +1077,12 @@ class _EnhancedShareSelectionDialogState
             Icon(
               Icons.medical_services_outlined,
               size: 48,
-              color: Colors.grey[400],
+              color: Colors.grey[300],
             ),
-            const SizedBox(height: 16),
+            SizedBox(height: 16),
             Text(
-              'No assigned doctors',
-              style: TextStyle(color: Colors.grey[600], fontSize: 16),
+              'No doctors available',
+              style: TextStyle(color: Colors.grey[600]),
             ),
           ],
         ),
@@ -1173,50 +1090,42 @@ class _EnhancedShareSelectionDialogState
     }
 
     return ListView.builder(
+      padding: EdgeInsets.all(16),
       itemCount: widget.doctors.length,
       itemBuilder: (context, index) {
         final doctor = widget.doctors[index];
         final doctorId = doctor['doctor_id'] as String;
         final isSelected = _selectedDoctorIds.contains(doctorId);
-        final doctorUser = doctor['user'];
 
-        return CheckboxListTile(
-          value: isSelected,
-          onChanged: (bool? value) {
-            setState(() {
-              if (value == true) {
-                _selectedDoctorIds.add(doctorId);
-              } else {
-                _selectedDoctorIds.remove(doctorId);
-              }
-            });
-          },
-          title: Text(
-            'Dr. ${_formatFullName(doctorUser)}',
-            style: const TextStyle(fontWeight: FontWeight.w500),
-          ),
-          subtitle: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(doctor['organization_name'] ?? 'Unknown Organization'),
-              if (doctor['department'] != null)
-                Text(
-                  doctor['department'],
-                  style: TextStyle(fontSize: 12, color: Colors.grey[500]),
-                ),
-            ],
-          ),
-          secondary: CircleAvatar(
-            backgroundColor: Colors.green[50],
-            child: Icon(
-              Icons.medical_services,
-              color: Colors.green[600],
-              size: 20,
+        return Container(
+          margin: EdgeInsets.only(bottom: 8),
+          decoration: BoxDecoration(
+            border: Border.all(
+              color: isSelected ? Color(0xFF416240) : Colors.grey[300]!,
             ),
+            borderRadius: BorderRadius.circular(8),
           ),
-          activeColor: const Color(0xFF667EEA),
-          controlAffinity: ListTileControlAffinity.leading,
-          isThreeLine: doctor['department'] != null,
+          child: CheckboxListTile(
+            value: isSelected,
+            onChanged: (value) {
+              setState(() {
+                if (value == true) {
+                  _selectedDoctorIds.add(doctorId);
+                } else {
+                  _selectedDoctorIds.remove(doctorId);
+                }
+              });
+            },
+            title: Text('Dr. ${_formatFullName(doctor['user'])}'),
+            subtitle: Text(
+              doctor['organization_name'] ?? 'Unknown Organization',
+            ),
+            secondary: Icon(
+              Icons.medical_services_rounded,
+              color: Color(0xFF416240),
+            ),
+            activeColor: Color(0xFF416240),
+          ),
         );
       },
     );
