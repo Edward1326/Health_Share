@@ -144,7 +144,7 @@ class _ProfileScreenState extends State<ProfileScreen>
               icon: const Icon(Icons.edit_outlined, size: 18),
               label: const Text('Edit'),
               style: TextButton.styleFrom(
-                foregroundColor: const Color(0xFF667EEA),
+                foregroundColor: const Color(0xFF416240),
                 textStyle: const TextStyle(
                   fontWeight: FontWeight.w600,
                   fontSize: 15,
@@ -166,7 +166,7 @@ class _ProfileScreenState extends State<ProfileScreen>
     if (_isLoading) {
       return const Center(
         child: CircularProgressIndicator(
-          color: Color(0xFF667EEA),
+          color: Color(0xFF416240),
           strokeWidth: 2.5,
         ),
       );
@@ -211,7 +211,7 @@ class _ProfileScreenState extends State<ProfileScreen>
               ElevatedButton(
                 onPressed: _loadUserData,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF667EEA),
+                  backgroundColor: const Color(0xFF416240),
                   foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(
                     horizontal: 24,
@@ -328,7 +328,7 @@ class _ProfileScreenState extends State<ProfileScreen>
               width: 100,
               height: 100,
               decoration: BoxDecoration(
-                color: const Color(0xFF667EEA).withOpacity(0.1),
+                color: const Color(0xFF416240).withOpacity(0.1),
                 shape: BoxShape.circle,
               ),
               child: Center(
@@ -337,7 +337,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                   style: const TextStyle(
                     fontSize: 36,
                     fontWeight: FontWeight.w700,
-                    color: Color(0xFF667EEA),
+                    color: Color(0xFF416240),
                   ),
                 ),
               ),
@@ -391,7 +391,7 @@ class _ProfileScreenState extends State<ProfileScreen>
             padding: const EdgeInsets.all(16),
             child: Row(
               children: [
-                Icon(icon, size: 20, color: const Color(0xFF667EEA)),
+                Icon(icon, size: 20, color: const Color(0xFF416240)),
                 const SizedBox(width: 10),
                 Text(
                   title,
@@ -481,7 +481,7 @@ class _ProfileScreenState extends State<ProfileScreen>
             icon: Icons.lock_outline,
             title: 'Change Password',
             subtitle: 'Update your account password',
-            color: const Color(0xFF667EEA),
+            color: const Color(0xFF416240),
             onTap: () {
               // Navigate to change password
             },

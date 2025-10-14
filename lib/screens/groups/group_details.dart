@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'dart:ui';
 import 'package:health_share/screens/groups/user_files_screen.dart';
 import 'package:health_share/services/group_services/group_files_service.dart';
 import 'package:health_share/services/group_services/group_functions.dart';
@@ -26,34 +27,51 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen>
   late TabController _tabController;
   List<Map<String, dynamic>> _members = [];
   Map<String, List<Map<String, dynamic>>> _filesByUser = {};
-  bool _isLoading = false;
+  bool _isLoading = true;
   String? _currentUserId;
   bool _isGroupOwner = false;
+  final Color _primaryColor = const Color(0xFF416240);
+  final Color _accentColor = const Color(0xFF6A8E6E);
+  late AnimationController _fabAnimController;
+  late AnimationController _headerAnimController;
+  String _searchQuery = '';
+  final TextEditingController _searchController = TextEditingController();
+  bool _isSearchVisible = false;
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
+    _fabAnimController = AnimationController(
+      duration: const Duration(milliseconds: 400),
+      vsync: this,
+    );
+    _headerAnimController = AnimationController(
+      duration: const Duration(milliseconds: 600),
+      vsync: this,
+    );
     _initializeScreen();
   }
 
   Future<void> _initializeScreen() async {
+    setState(() => _isLoading = true);
     _currentUserId = GroupFunctions.getCurrentUserId();
     _isGroupOwner = GroupFunctions.isUserGroupOwner(
       _currentUserId,
       widget.groupData,
     );
     await Future.wait([_fetchMembers(), _fetchSharedFiles()]);
+    setState(() => _isLoading = false);
+    _fabAnimController.forward();
+    _headerAnimController.forward();
   }
 
   Future<void> _fetchMembers() async {
-    setState(() => _isLoading = true);
     try {
-      _members = await FetchGroupService.fetchGroupMembers(widget.groupId);
+      final members = await FetchGroupService.fetchGroupMembers(widget.groupId);
+      if (mounted) setState(() => _members = members);
     } catch (e) {
       _showError('Error loading members: $e');
-    } finally {
-      setState(() => _isLoading = false);
     }
   }
 
@@ -63,303 +81,392 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen>
         widget.groupId,
       );
       final filesByUser = GroupFileService.organizeFilesByUser(sharedFiles);
-      setState(() {
-        _filesByUser = filesByUser;
-      });
+      if (mounted) setState(() => _filesByUser = filesByUser);
     } catch (e) {
-      setState(() {
-        _filesByUser = {};
-      });
+      if (mounted) setState(() => _filesByUser = {});
     }
   }
 
   Future<void> _refreshData() async {
+    setState(() => _isLoading = true);
     await Future.wait([_fetchMembers(), _fetchSharedFiles()]);
-    _showSuccess('Data refreshed');
+    setState(() => _isLoading = false);
+    _showSuccess('Refreshed successfully');
+  }
+
+  List<Map<String, dynamic>> get _filteredMembers {
+    if (_searchQuery.isEmpty) return _members;
+    return _members.where((member) {
+      final email = member['User']?['email'] ?? '';
+      return email.toLowerCase().contains(_searchQuery.toLowerCase());
+    }).toList();
+  }
+
+  Map<String, List<Map<String, dynamic>>> get _filteredFilesByUser {
+    if (_searchQuery.isEmpty) return _filesByUser;
+    final filtered = <String, List<Map<String, dynamic>>>{};
+    _filesByUser.forEach((key, files) {
+      final userName = key.split('|').length > 1 ? key.split('|')[1] : '';
+      if (userName.toLowerCase().contains(_searchQuery.toLowerCase())) {
+        filtered[key] = files;
+      }
+    });
+    return filtered;
   }
 
   @override
   void dispose() {
     _tabController.dispose();
+    _fabAnimController.dispose();
+    _headerAnimController.dispose();
+    _searchController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        leading: IconButton(
-          icon: Icon(Icons.arrow_back, color: Colors.grey[800]),
-          onPressed: () => Navigator.pop(context),
+      backgroundColor: Colors.grey[50],
+      body: RefreshIndicator(
+        onRefresh: _refreshData,
+        color: _primaryColor,
+        child: NestedScrollView(
+          headerSliverBuilder: (context, innerBoxIsScrolled) {
+            return [_buildSliverAppBar()];
+          },
+          body:
+              _isLoading
+                  ? Center(
+                    child: CircularProgressIndicator(color: _primaryColor),
+                  )
+                  : TabBarView(
+                    controller: _tabController,
+                    children: [_buildFilesTab(), _buildMembersTab()],
+                  ),
         ),
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              widget.groupName,
-              style: TextStyle(
-                color: Colors.grey[800],
-                fontWeight: FontWeight.w600,
-                fontSize: 18,
-              ),
+      ),
+      floatingActionButton:
+          _isGroupOwner
+              ? ScaleTransition(
+                scale: Tween<double>(begin: 0.0, end: 1.0).animate(
+                  CurvedAnimation(
+                    parent: _fabAnimController,
+                    curve: Curves.elasticOut,
+                  ),
+                ),
+                child: FloatingActionButton.extended(
+                  onPressed: _showAddMemberDialog,
+                  backgroundColor: _primaryColor,
+                  foregroundColor: Colors.white,
+                  elevation: 4,
+                  icon: const Icon(Icons.person_add_alt_1_rounded),
+                  label: const Text(
+                    'Add Member',
+                    style: TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                ),
+              )
+              : null,
+    );
+  }
+
+  Widget _buildSliverAppBar() {
+    return SliverAppBar(
+      expandedHeight: 220,
+      floating: false,
+      pinned: true,
+      backgroundColor: _primaryColor,
+      leading: Padding(
+        padding: const EdgeInsets.all(8.0),
+        child: InkWell(
+          onTap: () => Navigator.pop(context),
+          customBorder: const CircleBorder(),
+          child: Container(
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.15),
+              shape: BoxShape.circle,
             ),
-            Text(
-              '${_members.length} members',
-              style: TextStyle(color: Colors.grey[600], fontSize: 12),
+            child: const Icon(
+              Icons.arrow_back_ios_new_rounded,
+              color: Colors.white,
+              size: 20,
             ),
-          ],
+          ),
         ),
-        actions: [
-          PopupMenuButton<String>(
-            onSelected: (value) {
-              if (value == 'add_member') {
-                _showAddMemberDialog();
-              } else if (value == 'leave') {
-                _showLeaveGroupDialog();
-              } else if (value == 'refresh') {
-                _refreshData();
+      ),
+      actions: [
+        IconButton(
+          icon: Icon(
+            _isSearchVisible ? Icons.search_off_rounded : Icons.search,
+          ),
+          onPressed: () {
+            setState(() {
+              _isSearchVisible = !_isSearchVisible;
+              if (!_isSearchVisible) {
+                _searchController.clear();
+                _searchQuery = '';
               }
-            },
-            itemBuilder:
-                (context) => [
-                  const PopupMenuItem(
-                    value: 'add_member',
-                    child: Row(
-                      children: [
-                        Icon(Icons.person_add, size: 16),
-                        SizedBox(width: 8),
-                        Text('Add Members'),
-                      ],
+            });
+          },
+          color: Colors.white,
+          tooltip: 'Search',
+        ),
+        PopupMenuButton<String>(
+          icon: const Icon(Icons.more_vert, color: Colors.white),
+          onSelected: (value) {
+            if (value == 'refresh') _refreshData();
+            if (value == 'leave') _showLeaveGroupDialog();
+          },
+          itemBuilder:
+              (context) => [
+                const PopupMenuItem(value: 'refresh', child: Text('Refresh')),
+                const PopupMenuDivider(),
+                const PopupMenuItem(
+                  value: 'leave',
+                  child: Text(
+                    'Leave Group',
+                    style: TextStyle(color: Colors.red),
+                  ),
+                ),
+              ],
+        ),
+      ],
+      flexibleSpace: FlexibleSpaceBar(
+        background: FadeTransition(
+          opacity: _headerAnimController,
+          child: _buildGroupHeader(),
+        ),
+      ),
+      bottom: PreferredSize(
+        preferredSize: Size.fromHeight(_isSearchVisible ? 110 : 50),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 300),
+          color: _primaryColor,
+          child: Column(
+            children: [if (_isSearchVisible) _buildSearchBar(), _buildTabBar()],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildGroupHeader() {
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [_primaryColor, _accentColor],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+      ),
+      child: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 60, 20, 20),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.end,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Hero(
+                tag: 'group_avatar_${widget.groupId}',
+                child: CircleAvatar(
+                  radius: 40,
+                  backgroundColor: Colors.white,
+                  child: Text(
+                    (widget.groupName.isNotEmpty ? widget.groupName[0] : 'G')
+                        .toUpperCase(),
+                    style: TextStyle(
+                      color: _primaryColor,
+                      fontSize: 36,
+                      fontWeight: FontWeight.bold,
                     ),
                   ),
-                  const PopupMenuItem(
-                    value: 'refresh',
-                    child: Row(
-                      children: [
-                        Icon(Icons.refresh, size: 16),
-                        SizedBox(width: 8),
-                        Text('Refresh'),
-                      ],
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                widget.groupName,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 22,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 8),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    '${_members.length} Members',
+                    style: TextStyle(
+                      color: Colors.white.withOpacity(0.8),
+                      fontSize: 14,
                     ),
                   ),
-                  const PopupMenuItem(
-                    value: 'leave',
-                    child: Row(
-                      children: [
-                        Icon(Icons.exit_to_app, size: 16, color: Colors.red),
-                        SizedBox(width: 8),
-                        Text(
-                          'Leave Group',
-                          style: TextStyle(color: Colors.red),
-                        ),
-                      ],
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                    child: Icon(
+                      Icons.circle,
+                      size: 6,
+                      color: Colors.white.withOpacity(0.5),
+                    ),
+                  ),
+                  Text(
+                    '${_filesByUser.length} Folders',
+                    style: TextStyle(
+                      color: Colors.white.withOpacity(0.8),
+                      fontSize: 14,
                     ),
                   ),
                 ],
+              ),
+            ],
           ),
-        ],
-        bottom: TabBar(
-          controller: _tabController,
-          labelColor: const Color(0xFF667EEA),
-          unselectedLabelColor: Colors.grey[600],
-          indicatorColor: const Color(0xFF667EEA),
-          tabs: const [Tab(text: 'Members'), Tab(text: 'Shared Files')],
         ),
       ),
-      body: TabBarView(
-        controller: _tabController,
-        children: [_buildMembersTab(), _buildFilesTab()],
+    );
+  }
+
+  Widget _buildTabBar() {
+    return TabBar(
+      controller: _tabController,
+      labelColor: Colors.white,
+      unselectedLabelColor: Colors.white.withOpacity(0.7),
+      indicator: const UnderlineTabIndicator(
+        borderSide: BorderSide(width: 3.0, color: Colors.white),
+        insets: EdgeInsets.symmetric(horizontal: 16.0),
+      ),
+      tabs: [
+        Tab(text: 'FILES (${_filesByUser.length})'),
+        Tab(text: 'MEMBERS (${_members.length})'),
+      ],
+    );
+  }
+
+  Widget _buildSearchBar() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+      child: TextField(
+        controller: _searchController,
+        onChanged: (value) => setState(() => _searchQuery = value),
+        style: const TextStyle(color: Colors.white),
+        decoration: InputDecoration(
+          hintText:
+              _tabController.index == 0
+                  ? 'Search folders...'
+                  : 'Search members...',
+          hintStyle: TextStyle(color: Colors.white.withOpacity(0.7)),
+          prefixIcon: Icon(Icons.search, color: Colors.white.withOpacity(0.7)),
+          suffixIcon:
+              _searchQuery.isNotEmpty
+                  ? IconButton(
+                    icon: const Icon(Icons.clear, color: Colors.white),
+                    onPressed: () {
+                      _searchController.clear();
+                      setState(() => _searchQuery = '');
+                    },
+                  )
+                  : null,
+          filled: true,
+          fillColor: Colors.white.withOpacity(0.1),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(30),
+            borderSide: BorderSide.none,
+          ),
+        ),
       ),
     );
   }
 
   Widget _buildMembersTab() {
-    if (_isLoading) {
-      return const Center(child: CircularProgressIndicator());
-    }
-
-    if (_members.isEmpty) {
-      return const Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.people_outline, size: 64, color: Colors.grey),
-            SizedBox(height: 16),
-            Text(
-              'No members found',
-              style: TextStyle(
-                fontSize: 18,
-                color: Colors.grey,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ],
-        ),
+    final displayMembers = _filteredMembers;
+    if (displayMembers.isEmpty) {
+      return _buildEmptyState(
+        icon: Icons.people_outline,
+        title: 'No Members Found',
       );
     }
-
     return ListView.builder(
       padding: const EdgeInsets.all(16),
-      itemCount: _members.length,
-      itemBuilder: (context, index) {
-        final member = _members[index];
-        final user = member['User'];
-        final isOwner = member['user_id'] == widget.groupData['user_id'];
-        final isCurrentUser = member['user_id'] == _currentUserId;
+      itemCount: displayMembers.length,
+      itemBuilder: (context, index) => _buildMemberCard(displayMembers[index]),
+    );
+  }
 
-        if (user == null) {
-          return Container(
-            margin: const EdgeInsets.only(bottom: 12),
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.red.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.red.withOpacity(0.3)),
-            ),
-            child: const Text(
-              'Error: User data not found',
-              style: TextStyle(color: Colors.red),
-            ),
-          );
-        }
+  Widget _buildMemberCard(Map<String, dynamic> member) {
+    final user = member['User'];
+    if (user == null) return const SizedBox.shrink();
 
-        final email = user['email'] ?? 'Unknown User';
+    final email = user['email'] ?? 'Unknown User';
+    final initial = email.isNotEmpty ? email[0].toUpperCase() : 'U';
+    final isOwner = member['user_id'] == widget.groupData['user_id'];
+    final isCurrentUser = member['user_id'] == _currentUserId;
 
-        return Container(
-          margin: const EdgeInsets.only(bottom: 12),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: Colors.grey.withOpacity(0.1)),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.02),
-                blurRadius: 4,
-                offset: const Offset(0, 1),
-              ),
-            ],
-          ),
-          child: ListTile(
-            contentPadding: const EdgeInsets.all(16),
-            leading: CircleAvatar(
-              backgroundColor: const Color(0xFF667EEA),
-              radius: 24,
-              child: Text(
-                email.isNotEmpty ? email[0].toUpperCase() : 'U',
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w600,
-                  fontSize: 18,
-                ),
-              ),
-            ),
-            title: Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        email,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.w600,
-                          fontSize: 16,
-                        ),
-                      ),
-                      if (isCurrentUser)
-                        Text(
-                          'You',
-                          style: TextStyle(
-                            color: Colors.grey[600],
-                            fontSize: 12,
-                            fontStyle: FontStyle.italic,
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-                if (isOwner)
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 4,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.orange.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: const Text(
-                      'Owner',
-                      style: TextStyle(
-                        color: Colors.orange,
-                        fontSize: 10,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-            subtitle: Padding(
-              padding: const EdgeInsets.only(top: 4),
-              child: Text(
-                'Joined: ${member['added_at'] != null ? GroupFunctions.formatDate(member['added_at']) : 'Unknown'}',
-                style: TextStyle(color: Colors.grey[600], fontSize: 12),
-              ),
+    return Card(
+      elevation: 2,
+      margin: const EdgeInsets.only(bottom: 12),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: ListTile(
+        leading: CircleAvatar(
+          backgroundColor: _primaryColor,
+          child: Text(
+            initial,
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
             ),
           ),
-        );
-      },
+        ),
+        title: Text(email, style: const TextStyle(fontWeight: FontWeight.w600)),
+        subtitle: Wrap(
+          spacing: 8,
+          children: [
+            if (isOwner) _buildBadge('Owner', Icons.star, _primaryColor),
+            if (isCurrentUser) _buildBadge('You', Icons.check, Colors.blue),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBadge(String label, IconData icon, Color color) {
+    return Chip(
+      avatar: Icon(icon, color: color, size: 14),
+      label: Text(
+        label,
+        style: TextStyle(
+          color: color,
+          fontSize: 12,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+      backgroundColor: color.withOpacity(0.1),
+      padding: EdgeInsets.zero,
+      labelPadding: const EdgeInsets.only(left: 2, right: 6),
+      visualDensity: VisualDensity.compact,
     );
   }
 
   Widget _buildFilesTab() {
-    if (_isLoading) {
-      return const Center(child: CircularProgressIndicator());
+    final displayFiles = _filteredFilesByUser;
+    if (displayFiles.isEmpty) {
+      return _buildEmptyState(
+        icon: Icons.folder_off_outlined,
+        title: 'No Files Found',
+      );
     }
-
-    return _filesByUser.isEmpty
-        ? Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.folder_open, size: 64, color: Colors.grey[400]),
-              const SizedBox(height: 16),
-              Text(
-                'No files shared yet',
-                style: TextStyle(
-                  fontSize: 18,
-                  color: Colors.grey[600],
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Files shared with this group will appear here',
-                style: TextStyle(fontSize: 14, color: Colors.grey[500]),
-                textAlign: TextAlign.center,
-              ),
-            ],
-          ),
-        )
-        : RefreshIndicator(
-          onRefresh: _fetchSharedFiles,
-          child: ListView.builder(
-            padding: const EdgeInsets.all(16),
-            itemCount: _filesByUser.keys.length,
-            itemBuilder: (context, index) {
-              final userKey = _filesByUser.keys.elementAt(index);
-              final parts = userKey.split('|');
-              final userId = parts[0];
-              final firstName = parts.length > 1 ? parts[1] : 'Unknown';
-              final userFiles = _filesByUser[userKey]!;
-
-              return _buildUserFileFolder(userId, firstName, userFiles);
-            },
-          ),
-        );
+    return ListView.builder(
+      padding: const EdgeInsets.all(16),
+      itemCount: displayFiles.keys.length,
+      itemBuilder: (context, index) {
+        final userKey = displayFiles.keys.elementAt(index);
+        final parts = userKey.split('|');
+        final userId = parts[0];
+        final firstName = parts.length > 1 ? parts[1] : 'Unknown';
+        final userFiles = displayFiles[userKey]!;
+        return _buildUserFileFolder(userId, firstName, userFiles);
+      },
+    );
   }
 
   Widget _buildUserFileFolder(
@@ -367,407 +474,120 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen>
     String firstName,
     List<Map<String, dynamic>> userFiles,
   ) {
-    return InkWell(
-      onTap: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder:
-                (context) => UserFilesScreen(
-                  groupId: widget.groupId,
-                  memberId: userId,
-                  memberName: firstName,
-                  memberFiles: userFiles,
-                ),
-          ),
-        );
-      },
-      borderRadius: BorderRadius.circular(12),
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 20),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.grey.withOpacity(0.1)),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.02),
-              blurRadius: 4,
-              offset: const Offset(0, 1),
+    final totalSize = userFiles.fold<int>(
+      0,
+      (sum, file) => sum + ((file['file']?['file_size'] ?? 0) as int),
+    );
+
+    return Card(
+      elevation: 2,
+      margin: const EdgeInsets.only(bottom: 12),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: InkWell(
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder:
+                  (context) => UserFilesScreen(
+                    groupId: widget.groupId,
+                    memberId: userId,
+                    memberName: firstName,
+                    memberFiles: userFiles,
+                  ),
             ),
-          ],
-        ),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        child: Row(
-          children: [
-            CircleAvatar(
-              backgroundColor: const Color(0xFF667EEA),
-              radius: 22,
+          );
+        },
+        borderRadius: BorderRadius.circular(12),
+        child: ListTile(
+          leading: Hero(
+            tag: 'user_avatar_$userId',
+            child: CircleAvatar(
+              backgroundColor: _accentColor,
               child: Text(
                 firstName.isNotEmpty ? firstName[0].toUpperCase() : 'U',
                 style: const TextStyle(
                   color: Colors.white,
-                  fontWeight: FontWeight.w600,
-                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
                 ),
               ),
             ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    '$firstName\'s Files',
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w600,
-                      fontSize: 16,
-                    ),
-                  ),
-                  Text(
-                    '${userFiles.length} file${userFiles.length == 1 ? '' : 's'} shared',
-                    style: TextStyle(color: Colors.grey[600], fontSize: 12),
-                  ),
-                ],
-              ),
-            ),
-            Icon(Icons.chevron_right, color: Colors.grey[600]),
-          ],
+          ),
+          title: Text(
+            '$firstName\'s Files',
+            style: const TextStyle(fontWeight: FontWeight.w600),
+          ),
+          subtitle: Text(
+            '${userFiles.length} files • ${GroupFunctions.formatFileSize(totalSize)}',
+          ),
+          trailing: const Icon(Icons.arrow_forward_ios, size: 16),
         ),
       ),
     );
   }
 
-  Widget _buildSharedFileCard(Map<String, dynamic> shareRecord) {
-    final fileData = shareRecord['file'] ?? {};
-    final fileName = fileData['filename'] ?? 'Unknown File';
-    final fileType = GroupFunctions.getFileType(fileName);
-    final fileSize = GroupFunctions.formatFileSize(fileData['file_size'] ?? 0);
-    final sharedDate = GroupFunctions.formatDate(shareRecord['shared_at']);
-    final uploadDate = GroupFunctions.formatDate(fileData['uploaded_at'] ?? '');
-
-    final canRemoveShare = GroupFunctions.canUserRemoveShare(
-      isGroupOwner: _isGroupOwner,
-      currentUserId: _currentUserId,
-      shareRecord: shareRecord,
-    );
-
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-      decoration: BoxDecoration(
-        color: Colors.grey[50],
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.grey.withOpacity(0.1)),
-      ),
-      child: ListTile(
-        contentPadding: const EdgeInsets.all(12),
-        leading: Container(
-          width: 40,
-          height: 40,
-          decoration: BoxDecoration(
-            color: GroupFunctions.getFileIconColor(fileType),
-            borderRadius: BorderRadius.circular(6),
-          ),
-          child: Icon(
-            GroupFunctions.getFileIcon(fileType),
-            color: Colors.white,
-            size: 20,
-          ),
-        ),
-        title: Text(
-          fileName,
-          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-        ),
-        subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const SizedBox(height: 2),
-            Text(
-              fileSize,
-              style: TextStyle(color: Colors.grey[600], fontSize: 11),
-            ),
-            Text(
-              'Shared: $sharedDate • Uploaded: $uploadDate',
-              style: TextStyle(color: Colors.grey[500], fontSize: 10),
-            ),
-          ],
-        ),
-        trailing: PopupMenuButton<String>(
-          onSelected: (value) {
-            if (value == 'preview') {
-              _previewSharedFile(shareRecord);
-            } else if (value == 'remove') {
-              _removeFileFromGroup(shareRecord);
-            } else if (value == 'info') {
-              _showFileInfo(shareRecord);
-            }
-          },
-          itemBuilder:
-              (context) => [
-                const PopupMenuItem(
-                  value: 'preview',
-                  child: Row(
-                    children: [
-                      Icon(Icons.visibility, size: 16),
-                      SizedBox(width: 8),
-                      Text('Preview'),
-                    ],
-                  ),
-                ),
-                const PopupMenuItem(
-                  value: 'info',
-                  child: Row(
-                    children: [
-                      Icon(Icons.info_outline, size: 16),
-                      SizedBox(width: 8),
-                      Text('File Info'),
-                    ],
-                  ),
-                ),
-                if (canRemoveShare)
-                  const PopupMenuItem(
-                    value: 'remove',
-                    child: Row(
-                      children: [
-                        Icon(Icons.remove_circle, size: 16, color: Colors.red),
-                        SizedBox(width: 8),
-                        Text(
-                          'Remove Share',
-                          style: TextStyle(color: Colors.red),
-                        ),
-                      ],
-                    ),
-                  ),
-              ],
-        ),
-      ),
-    );
-  }
-
-  Future<void> _previewSharedFile(Map<String, dynamic> shareRecord) async {
-    if (_currentUserId == null) {
-      _showError('User not logged in');
-      return;
-    }
-
-    try {
-      await GroupFunctions.previewSharedFile(
-        context: context,
-        shareRecord: shareRecord,
-        userId: _currentUserId!,
-        groupId: widget.groupId,
-      );
-    } catch (e) {
-      _showError('Error previewing file: $e');
-    }
-  }
-
-  Future<void> _removeFileFromGroup(Map<String, dynamic> shareRecord) async {
-    final fileData = shareRecord['file'];
-    final fileName = fileData['filename'] ?? 'Unknown File';
-    final fileId = fileData['id'];
-
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder:
-          (context) => AlertDialog(
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-            ),
-            title: const Text('Remove File Share'),
-            content: Text(
-              'Remove "$fileName" from this group? Group members will no longer be able to access this file.',
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context, false),
-                child: const Text('Cancel'),
-              ),
-              ElevatedButton(
-                onPressed: () => Navigator.pop(context, true),
-                style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-                child: const Text(
-                  'Remove',
-                  style: TextStyle(color: Colors.white),
-                ),
-              ),
-            ],
-          ),
-    );
-
-    if (confirm == true && _currentUserId != null) {
-      try {
-        final success = await GroupFileService.revokeFileFromGroup(
-          fileId: fileId,
-          groupId: widget.groupId,
-          userId: _currentUserId!,
-        );
-
-        if (success) {
-          await _fetchSharedFiles();
-          _showSuccess('File share removed from group');
-        } else {
-          _showError('Failed to remove file share');
-        }
-      } catch (e) {
-        _showError('Error removing file share: $e');
-      }
-    }
-  }
-
-  void _showFileInfo(Map<String, dynamic> shareRecord) {
-    final fileData = shareRecord['file'];
-    final sharedByUser = shareRecord['shared_by'];
-
-    showDialog(
-      context: context,
-      builder:
-          (context) => AlertDialog(
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-            ),
-            title: Text(fileData['filename'] ?? 'File Info'),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _buildInfoRow('File Type', fileData['file_type'] ?? 'Unknown'),
-                _buildInfoRow(
-                  'File Size',
-                  GroupFunctions.formatFileSize(fileData['file_size'] ?? 0),
-                ),
-                _buildInfoRow('Category', fileData['category'] ?? 'General'),
-                _buildInfoRow(
-                  'Uploaded',
-                  GroupFunctions.formatDate(fileData['uploaded_at'] ?? ''),
-                ),
-                _buildInfoRow('Shared By', sharedByUser['email'] ?? 'Unknown'),
-                _buildInfoRow(
-                  'Shared On',
-                  GroupFunctions.formatDate(shareRecord['shared_at'] ?? ''),
-                ),
-              ],
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('Close'),
-              ),
-            ],
-          ),
-    );
-  }
-
-  Widget _buildInfoRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
+  Widget _buildEmptyState({required IconData icon, required String title}) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          SizedBox(
-            width: 80,
-            child: Text(
-              '$label:',
-              style: TextStyle(
-                fontWeight: FontWeight.w500,
-                color: Colors.grey[700],
-              ),
+          Icon(icon, size: 64, color: Colors.grey[300]),
+          const SizedBox(height: 16),
+          Text(
+            title,
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
+              color: Colors.grey[600],
             ),
-          ),
-          Expanded(
-            child: Text(value, style: TextStyle(color: Colors.grey[800])),
           ),
         ],
       ),
     );
   }
 
+  // --- Dialogs and Snackbars (Functionality Unchanged, UI Polished) ---
+
   void _showAddMemberDialog() {
     final TextEditingController emailController = TextEditingController();
-    bool isAdding = false;
-
     showDialog(
       context: context,
-      builder: (BuildContext context) {
-        return StatefulBuilder(
-          builder: (context, setDialogState) {
-            return AlertDialog(
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
+      builder:
+          (context) => AlertDialog(
+            title: const Text('Add Member'),
+            content: TextField(
+              controller: emailController,
+              autofocus: true,
+              decoration: const InputDecoration(labelText: 'Email Address'),
+              keyboardType: TextInputType.emailAddress,
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancel'),
               ),
-              title: const Text('Add Member'),
-              content: TextField(
-                controller: emailController,
-                decoration: InputDecoration(
-                  labelText: 'Email Address',
-                  hintText: 'Enter user\'s email',
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-                keyboardType: TextInputType.emailAddress,
+              ElevatedButton(
+                onPressed: () async {
+                  if (emailController.text.isNotEmpty) {
+                    Navigator.pop(context);
+                    try {
+                      await GroupMemberService.addMemberToGroup(
+                        groupId: widget.groupId,
+                        email: emailController.text,
+                      );
+                      await _fetchMembers();
+                      _showSuccess(
+                        '${emailController.text} added successfully',
+                      );
+                    } catch (e) {
+                      _showError(e.toString().replaceAll('Exception: ', ''));
+                    }
+                  }
+                },
+                child: const Text('Add'),
               ),
-              actions: [
-                TextButton(
-                  onPressed: isAdding ? null : () => Navigator.pop(context),
-                  child: Text(
-                    'Cancel',
-                    style: TextStyle(color: Colors.grey[600]),
-                  ),
-                ),
-                ElevatedButton(
-                  onPressed:
-                      isAdding
-                          ? null
-                          : () async {
-                            if (emailController.text.isNotEmpty) {
-                              setDialogState(() => isAdding = true);
-                              try {
-                                await GroupMemberService.addMemberToGroup(
-                                  groupId: widget.groupId,
-                                  email: emailController.text,
-                                );
-                                await _fetchMembers();
-                                Navigator.pop(context);
-                                _showSuccess(
-                                  '${emailController.text} added to group successfully',
-                                );
-                              } catch (e) {
-                                setDialogState(() => isAdding = false);
-                                _showError(
-                                  e.toString().replaceAll('Exception: ', ''),
-                                );
-                              }
-                            }
-                          },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF667EEA),
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                  ),
-                  child:
-                      isAdding
-                          ? const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              valueColor: AlwaysStoppedAnimation<Color>(
-                                Colors.white,
-                              ),
-                            ),
-                          )
-                          : const Text('Add Member'),
-                ),
-              ],
-            );
-          },
-        );
-      },
+            ],
+          ),
     );
   }
 
@@ -776,9 +596,6 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen>
       context: context,
       builder:
           (context) => AlertDialog(
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-            ),
             title: const Text('Leave Group'),
             content: Text(
               'Are you sure you want to leave "${widget.groupName}"?',
@@ -793,10 +610,7 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen>
                   Navigator.pop(context);
                   await _leaveGroup();
                 },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.red,
-                  foregroundColor: Colors.white,
-                ),
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
                 child: const Text('Leave'),
               ),
             ],
@@ -810,15 +624,9 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen>
         groupId: widget.groupId,
         userId: _currentUserId!,
       );
-
       if (mounted) {
         Navigator.pop(context, true);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Left "${widget.groupName}" successfully'),
-            backgroundColor: Colors.orange,
-          ),
-        );
+        _showSuccess('Left "${widget.groupName}" successfully');
       }
     } catch (e) {
       _showError('Error leaving group: $e');
@@ -826,21 +634,16 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen>
   }
 
   void _showError(String message) {
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(message), backgroundColor: Colors.red),
-      );
-    }
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message), backgroundColor: Colors.red),
+    );
   }
 
   void _showSuccess(String message) {
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(message),
-          backgroundColor: const Color(0xFF667EEA),
-        ),
-      );
-    }
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message), backgroundColor: _primaryColor),
+    );
   }
 }

@@ -341,28 +341,28 @@ class _FilesScreenState extends State<FilesScreen> {
 
   PreferredSizeWidget _buildAppBar() {
     return AppBar(
-      elevation: 0,
       backgroundColor: Colors.white,
-      title:
-          _isSelectionMode
-              ? Text(
-                '${_selectedFiles.length} selected',
-                style: TextStyle(
-                  color: Colors.grey[900],
-                  fontWeight: FontWeight.w600,
-                ),
-              )
-              : Text(
-                'My Files',
-                style: TextStyle(
-                  color: Colors.grey[900],
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
+      elevation: 0,
+      automaticallyImplyLeading: false,
+      title: const Text(
+        'My Files',
+        style: TextStyle(
+          color: Color(0xFF416240),
+          fontWeight: FontWeight.bold,
+          fontSize: 28,
+        ),
+      ),
+      bottom: PreferredSize(
+        preferredSize: const Size.fromHeight(1),
+        child: Container(
+          height: 1,
+          color: const Color(0xFF416240).withOpacity(0.1),
+        ),
+      ),
       actions: [
         if (_isSelectionMode) ...[
           IconButton(
-            icon: Icon(Icons.share_rounded, color: Color(0xFF416240)),
+            icon: const Icon(Icons.share_rounded, color: Color(0xFF416240)),
             onPressed: _shareSelectedFiles,
           ),
           IconButton(
@@ -372,11 +372,6 @@ class _FilesScreenState extends State<FilesScreen> {
                   _isSelectionMode = false;
                   _selectedFiles.clear();
                 }),
-          ),
-        ] else ...[
-          IconButton(
-            icon: Icon(Icons.refresh_rounded, color: Colors.grey[700]),
-            onPressed: _loadFiles,
           ),
         ],
       ],
