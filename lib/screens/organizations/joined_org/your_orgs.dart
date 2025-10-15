@@ -1,20 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:health_share/components/navbar_main.dart';
-import 'package:health_share/screens/organizations/all_orgs/org_details.dart';
 import 'package:health_share/screens/organizations/joined_org/org_doctors.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:health_share/services/org_services/org_service.dart';
 import 'package:health_share/services/org_services/org_membership_service.dart';
 import 'package:health_share/services/org_services/org_invitation_service.dart';
 
-class OrganizationsScreen extends StatefulWidget {
-  const OrganizationsScreen({super.key});
+class YourOrgsScreen extends StatefulWidget {
+  const YourOrgsScreen({super.key});
 
   @override
-  State<OrganizationsScreen> createState() => _OrganizationsScreenState();
+  State<YourOrgsScreen> createState() => _YourOrgsScreenState();
 }
 
-class _OrganizationsScreenState extends State<OrganizationsScreen>
+class _YourOrgsScreenState extends State<YourOrgsScreen>
     with TickerProviderStateMixin {
   late AnimationController _fadeController;
   late Animation<double> _fadeAnimation;
@@ -22,12 +20,10 @@ class _OrganizationsScreenState extends State<OrganizationsScreen>
   late Animation<Offset> _slideAnimation;
 
   int _selectedIndex = 3;
-  int _selectedTab = 0;
 
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
 
-  List<Map<String, dynamic>> _allOrganizations = [];
   List<Map<String, dynamic>> _joinedOrganizations = [];
   List<Map<String, dynamic>> _invitations = [];
 
@@ -68,21 +64,8 @@ class _OrganizationsScreenState extends State<OrganizationsScreen>
 
   Future<void> _fetchInitialData() async {
     setState(() => _isLoading = true);
-    await Future.wait([
-      _fetchAllOrganizations(),
-      _fetchJoinedOrganizations(),
-      _fetchInvitations(),
-    ]);
+    await Future.wait([_fetchJoinedOrganizations(), _fetchInvitations()]);
     setState(() => _isLoading = false);
-  }
-
-  Future<void> _fetchAllOrganizations() async {
-    try {
-      final orgs = await OrgService.fetchAllOrgs();
-      setState(() => _allOrganizations = orgs);
-    } catch (e) {
-      _showError('Error loading organizations: $e');
-    }
   }
 
   Future<void> _fetchJoinedOrganizations() async {
@@ -126,12 +109,9 @@ class _OrganizationsScreenState extends State<OrganizationsScreen>
     }
   }
 
-  List<Map<String, dynamic>> get _currentOrganizations =>
-      _selectedTab == 0 ? _allOrganizations : _joinedOrganizations;
-
   List<Map<String, dynamic>> get _filteredOrganizations {
-    if (_searchQuery.isEmpty) return _currentOrganizations;
-    return _currentOrganizations
+    if (_searchQuery.isEmpty) return _joinedOrganizations;
+    return _joinedOrganizations
         .where(
           (org) => (org['name'] ?? '').toLowerCase().contains(
             _searchQuery.toLowerCase(),
@@ -164,7 +144,7 @@ class _OrganizationsScreenState extends State<OrganizationsScreen>
         elevation: 0,
         automaticallyImplyLeading: false,
         title: const Text(
-          'Organizations',
+          'Your Organizations',
           style: TextStyle(
             color: primaryColor,
             fontWeight: FontWeight.bold,
@@ -238,8 +218,6 @@ class _OrganizationsScreenState extends State<OrganizationsScreen>
           child: Column(
             children: [
               const SizedBox(height: 16),
-              _buildTabSelector(),
-              const SizedBox(height: 16),
               Padding(
                 padding: EdgeInsets.symmetric(
                   horizontal: MediaQuery.of(context).size.width > 600 ? 24 : 16,
@@ -271,82 +249,6 @@ class _OrganizationsScreenState extends State<OrganizationsScreen>
     );
   }
 
-  Widget _buildTabSelector() {
-    return Padding(
-      padding: EdgeInsets.symmetric(
-        horizontal: MediaQuery.of(context).size.width > 600 ? 24 : 16,
-      ),
-      child: Container(
-        padding: const EdgeInsets.all(4),
-        decoration: BoxDecoration(
-          color: lightBg,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: primaryColor.withOpacity(0.15), width: 1),
-        ),
-        child: Row(
-          children: [
-            _buildTab('All Organizations', Icons.apartment_rounded, 0),
-            _buildTab('Your Organizations', Icons.groups_rounded, 1),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildTab(String label, IconData icon, int index) {
-    final isSelected = _selectedTab == index;
-    return Expanded(
-      child: GestureDetector(
-        onTap: () => setState(() => _selectedTab = index),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeInOut,
-          padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
-          decoration: BoxDecoration(
-            color: isSelected ? primaryColor : Colors.transparent,
-            borderRadius: BorderRadius.circular(12),
-            boxShadow:
-                isSelected
-                    ? [
-                      BoxShadow(
-                        color: primaryColor.withOpacity(0.25),
-                        blurRadius: 8,
-                        offset: const Offset(0, 2),
-                      ),
-                    ]
-                    : [],
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                icon,
-                size: 18,
-                color:
-                    isSelected ? Colors.white : primaryColor.withOpacity(0.7),
-              ),
-              const SizedBox(width: 8),
-              Flexible(
-                child: Text(
-                  label,
-                  style: TextStyle(
-                    color:
-                        isSelected
-                            ? Colors.white
-                            : primaryColor.withOpacity(0.7),
-                    fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
-                    fontSize: 14,
-                  ),
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
   Widget _buildSearchBar() {
     return Container(
       constraints: const BoxConstraints(maxWidth: 800),
@@ -367,7 +269,7 @@ class _OrganizationsScreenState extends State<OrganizationsScreen>
         onChanged: (value) => setState(() => _searchQuery = value),
         style: const TextStyle(fontSize: 15, color: primaryColor),
         decoration: InputDecoration(
-          hintText: 'Search organizations...',
+          hintText: 'Search your organizations...',
           hintStyle: TextStyle(
             color: primaryColor.withOpacity(0.4),
             fontSize: 15,
@@ -438,7 +340,6 @@ class _OrganizationsScreenState extends State<OrganizationsScreen>
   }
 
   Widget _buildOrgCard(Map<String, dynamic> org) {
-    final joined = _selectedTab == 1;
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -448,16 +349,7 @@ class _OrganizationsScreenState extends State<OrganizationsScreen>
             context,
             MaterialPageRoute(
               builder:
-                  (c) =>
-                      joined
-                          ? DoctorsScreen(
-                            orgId: org['id'],
-                            orgName: org['name'],
-                          )
-                          : OrgDetailsScreen(
-                            orgId: org['id'],
-                            orgName: org['name'],
-                          ),
+                  (c) => DoctorsScreen(orgId: org['id'], orgName: org['name']),
             ),
           );
         },
@@ -501,10 +393,8 @@ class _OrganizationsScreenState extends State<OrganizationsScreen>
                           ),
                         ],
                       ),
-                      child: Icon(
-                        joined
-                            ? Icons.verified_user_rounded
-                            : Icons.business_rounded,
+                      child: const Icon(
+                        Icons.verified_user_rounded,
                         color: Colors.white,
                         size: 30,
                       ),
@@ -543,47 +433,46 @@ class _OrganizationsScreenState extends State<OrganizationsScreen>
                   ],
                 ),
               ),
-              if (joined)
-                Positioned(
-                  top: 12,
-                  right: 12,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 6,
-                    ),
-                    decoration: BoxDecoration(
-                      color: primaryColor,
-                      borderRadius: BorderRadius.circular(20),
-                      boxShadow: [
-                        BoxShadow(
-                          color: primaryColor.withOpacity(0.3),
-                          blurRadius: 6,
-                          offset: const Offset(0, 2),
-                        ),
-                      ],
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: const [
-                        Icon(
-                          Icons.check_circle_rounded,
+              Positioned(
+                top: 12,
+                right: 12,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 6,
+                  ),
+                  decoration: BoxDecoration(
+                    color: primaryColor,
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: [
+                      BoxShadow(
+                        color: primaryColor.withOpacity(0.3),
+                        blurRadius: 6,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: const [
+                      Icon(
+                        Icons.check_circle_rounded,
+                        color: Colors.white,
+                        size: 14,
+                      ),
+                      SizedBox(width: 4),
+                      Text(
+                        'Joined',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w700,
                           color: Colors.white,
-                          size: 14,
+                          fontSize: 12,
                         ),
-                        SizedBox(width: 4),
-                        Text(
-                          'Joined',
-                          style: TextStyle(
-                            fontWeight: FontWeight.w700,
-                            color: Colors.white,
-                            fontSize: 12,
-                          ),
-                        ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
                 ),
+              ),
             ],
           ),
         ),
@@ -606,19 +495,15 @@ class _OrganizationsScreenState extends State<OrganizationsScreen>
                 shape: BoxShape.circle,
               ),
               child: Icon(
-                _selectedTab == 1
-                    ? Icons.groups_rounded
-                    : Icons.apartment_rounded,
+                Icons.groups_rounded,
                 color: primaryColor.withOpacity(0.4),
                 size: 60,
               ),
             ),
             const SizedBox(height: 32),
-            Text(
-              _selectedTab == 1
-                  ? 'No organizations joined yet'
-                  : 'No organizations found',
-              style: const TextStyle(
+            const Text(
+              'No organizations joined yet',
+              style: TextStyle(
                 fontSize: 22,
                 fontWeight: FontWeight.w700,
                 color: primaryColor,
@@ -627,9 +512,7 @@ class _OrganizationsScreenState extends State<OrganizationsScreen>
             ),
             const SizedBox(height: 12),
             Text(
-              _selectedTab == 1
-                  ? 'Accept an invitation to join an organization'
-                  : 'Try adjusting your search or check back later',
+              'Accept an invitation or browse all organizations to join',
               style: TextStyle(
                 fontSize: 15,
                 fontWeight: FontWeight.w500,

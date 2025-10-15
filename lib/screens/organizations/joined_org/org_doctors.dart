@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'dart:ui';
-import 'package:health_share/screens/organizations/org_files.dart';
+import 'package:health_share/screens/organizations/joined_org/org_files.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 // Import service

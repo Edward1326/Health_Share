@@ -15,10 +15,10 @@ class MainNavBar extends StatelessWidget {
       onItemTapped(index);
 
       final routes = {
-        0: '/home',
-        1: '/files',
-        2: '/groups',
-        3: '/organizations',
+        0: '/files',
+        1: '/groups',
+        2: '/organizations',
+        3: '/your-organizations',
         4: '/profile',
       };
 
@@ -56,29 +56,29 @@ class MainNavBar extends StatelessWidget {
             children: [
               _buildNavItem(
                 context: context,
-                icon: Icons.home_rounded,
-                label: 'Home',
-                index: 0,
-                isCompact: isCompact,
-              ),
-              _buildNavItem(
-                context: context,
                 icon: Icons.folder_rounded,
                 label: 'Files',
-                index: 1,
+                index: 0,
                 isCompact: isCompact,
               ),
               _buildNavItem(
                 context: context,
                 icon: Icons.group_rounded,
                 label: 'Groups',
-                index: 2,
+                index: 1,
                 isCompact: isCompact,
               ),
               _buildNavItem(
                 context: context,
                 icon: Icons.apartment_rounded,
                 label: 'Orgs',
+                index: 2,
+                isCompact: isCompact,
+              ),
+              _buildNavItem(
+                context: context,
+                icon: Icons.verified_rounded,
+                label: 'Your Orgs',
                 index: 3,
                 isCompact: isCompact,
               ),

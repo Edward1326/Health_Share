@@ -34,4 +34,6 @@ class OrgService {
       rethrow;
     }
   }
+
+  static Future fetchJoinedOrgs() async {}
 }

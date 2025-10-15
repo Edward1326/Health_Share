@@ -17,7 +17,7 @@ class _GroupsScreenState extends State<GroupsScreen>
     with TickerProviderStateMixin {
   late AnimationController _fadeController;
   late Animation<double> _fadeAnimation;
-  int _selectedIndex = 2;
+  int _selectedIndex = 1;
 
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';

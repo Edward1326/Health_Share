@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:health_share/screens/files/files_main.dart';
 import 'package:health_share/screens/home/home.dart';
 import 'package:health_share/screens/login/login.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -17,7 +18,7 @@ class AuthGate extends StatelessWidget {
         final session = snapshot.hasData ? snapshot.data!.session : null;
 
         if (session != null) {
-          return const HomeScreen(); // change this later to HomeScreen
+          return const FilesScreen(); // change this later to HomeScreen
         } else {
           return const LoginScreen();
         }

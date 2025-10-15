@@ -19,7 +19,7 @@ class FilesScreen extends StatefulWidget {
 }
 
 class _FilesScreenState extends State<FilesScreen> {
-  int _selectedIndex = 1;
+  int _selectedIndex = 0;
   Set<int> _selectedFiles = {};
   bool _isSelectionMode = false;
   bool _isLoading = true;
