@@ -43,7 +43,7 @@ class OrgFilesService {
             shared_with_user_id,
             shared_with_doctor,
             Files!inner(
-              id, filename, file_type, file_size, category, uploaded_at, sha256_hash
+              id, filename, file_type, file_size, category, uploaded_at, sha256_hash, uploaded_by
             )
           ''')
           .eq('shared_with_doctor', doctorUserId)
@@ -63,7 +63,7 @@ class OrgFilesService {
             shared_with_user_id,
             shared_with_doctor,
             Files!inner(
-              id, filename, file_type, file_size, category, uploaded_at, sha256_hash
+              id, filename, file_type, file_size, category, uploaded_at, sha256_hash, uploaded_by
             )
           ''')
           .eq('shared_by_user_id', userId)
@@ -89,7 +89,7 @@ class OrgFilesService {
             shared_with_user_id,
             shared_with_doctor,
             Files!inner(
-              id, filename, file_type, file_size, category, uploaded_at, sha256_hash
+              id, filename, file_type, file_size, category, uploaded_at, sha256_hash, uploaded_by
             )
           ''')
           .eq('shared_by_user_id', doctorUserId)
@@ -129,7 +129,7 @@ class OrgFilesService {
           final sharedFilesDetails = await _supabase
               .from('Files')
               .select(
-                'id, filename, file_type, file_size, category, uploaded_at, sha256_hash',
+                'id, filename, file_type, file_size, category, uploaded_at, sha256_hash, uploaded_by',
               )
               .inFilter('id', sharedFileIds);
 
@@ -236,6 +236,119 @@ class OrgFilesService {
           'shared_with': sharedWith,
         };
       }
+    }
+  }
+
+  /// Revoke file sharing from a doctor
+  /// ONLY the file owner (uploaded_by) can remove their file from the doctor
+  static Future<bool> revokeFileFromDoctor({
+    required String fileId,
+    required String doctorUserId,
+    required String userId,
+  }) async {
+    try {
+      print('=== REVOKING FILE ACCESS FROM DOCTOR ===');
+      print('File ID: $fileId');
+      print('Doctor User ID: $doctorUserId');
+      print('User ID: $userId');
+
+      // Check if user is the file owner (uploaded_by)
+      final fileData =
+          await _supabase
+              .from('Files')
+              .select('uploaded_by')
+              .eq('id', fileId)
+              .single();
+
+      final isFileOwner = fileData['uploaded_by'] == userId;
+
+      print('Is file owner: $isFileOwner');
+
+      if (!isFileOwner) {
+        print('❌ Only the file owner can revoke this file share');
+        throw Exception(
+          'Only the file owner can remove this file from the doctor',
+        );
+      }
+
+      // Update all File_Shares records for this file and doctor to mark as revoked
+      print('Marking shares as revoked...');
+      final shareResult =
+          await _supabase
+              .from('File_Shares')
+              .update({'revoked_at': DateTime.now().toIso8601String()})
+              .eq('file_id', fileId)
+              .or(
+                'shared_with_doctor.eq.$doctorUserId,shared_with_user_id.eq.$doctorUserId',
+              )
+              .isFilter('revoked_at', null)
+              .select();
+
+      print('Share revocation result: $shareResult');
+
+      // Remove the doctor's File_Keys record
+      print('Removing doctor file key...');
+      final keyResult =
+          await _supabase
+              .from('File_Keys')
+              .delete()
+              .eq('file_id', fileId)
+              .eq('recipient_type', 'user')
+              .eq('recipient_id', doctorUserId)
+              .select();
+
+      print('Key deletion result: $keyResult');
+      print('✓ Successfully revoked file $fileId from doctor $doctorUserId');
+      return true;
+    } catch (e, stackTrace) {
+      print('❌ Error revoking file from doctor: $e');
+      print('Stack trace: $stackTrace');
+      rethrow;
+    }
+  }
+
+  /// Check if a file is shared with any doctors
+  static Future<bool> isFileSharedWithDoctors(String fileId) async {
+    try {
+      final shares = await _supabase
+          .from('File_Shares')
+          .select('id')
+          .eq('file_id', fileId)
+          .not('shared_with_doctor', 'is', null)
+          .isFilter('revoked_at', null)
+          .limit(1);
+
+      return shares.isNotEmpty;
+    } catch (e) {
+      print('Error checking if file is shared with doctors: $e');
+      return false;
+    }
+  }
+
+  /// Get sharing information for a specific file with doctors
+  static Future<Map<String, dynamic>?> getFileDoctorSharingInfo(
+    String fileId,
+  ) async {
+    try {
+      final shares = await _supabase
+          .from('File_Shares')
+          .select('''
+            *,
+            shared_with_user:User!shared_with_doctor(email, Person(first_name, last_name)),
+            shared_by:User!shared_by_user_id(email)
+          ''')
+          .eq('file_id', fileId)
+          .not('shared_with_doctor', 'is', null)
+          .isFilter('revoked_at', null);
+
+      return {
+        'file_id': fileId,
+        'shares': shares,
+        'total_doctors_shared': shares.length,
+      };
+    } catch (e) {
+      print('Error getting file sharing info: $e');
+      return null;
     }
   }
 }

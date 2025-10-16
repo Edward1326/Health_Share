@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:health_share/services/files_services/file_preview.dart';
 import 'package:health_share/services/files_services/fullscreen_file_preview.dart';
 import 'package:health_share/services/group_services/group_files_decrypt.dart';
 import 'package:health_share/services/group_services/group_fetch_service.dart';
@@ -105,18 +104,38 @@ class GroupFunctions {
     }
   }
 
-  /// Add member to group
+  /// Add member to group (owner only)
   static Future<bool> addMemberToGroup({
     required String groupId,
     required String email,
+    required String ownerId,
   }) async {
     try {
       return await GroupMemberService.addMemberToGroup(
         groupId: groupId,
         email: email,
+        addedBy: ownerId,
       );
     } catch (e) {
       print('Error adding member: $e');
+      rethrow;
+    }
+  }
+
+  /// Remove member from group (owner only)
+  static Future<bool> removeMemberFromGroup({
+    required String groupId,
+    required String userId,
+    required String ownerId,
+  }) async {
+    try {
+      return await GroupMemberService.removeMemberFromGroup(
+        groupId: groupId,
+        userId: userId,
+        removedBy: ownerId,
+      );
+    } catch (e) {
+      print('Error removing member: $e');
       rethrow;
     }
   }
@@ -206,19 +225,8 @@ class GroupFunctions {
     required String fileId,
     required String groupId,
     required String userId,
-    required Map<String, dynamic> shareRecord,
-    required bool isGroupOwner,
   }) async {
     try {
-      final canRemoveShare =
-          isGroupOwner || shareRecord['shared_by_user_id'] == userId;
-
-      if (!canRemoveShare) {
-        throw Exception(
-          'Only the file owner or group admin can remove this share',
-        );
-      }
-
       return await GroupFileService.revokeFileFromGroup(
         fileId: fileId,
         groupId: groupId,

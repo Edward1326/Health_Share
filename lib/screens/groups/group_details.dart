@@ -401,6 +401,7 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen>
     final initial = email.isNotEmpty ? email[0].toUpperCase() : 'U';
     final isOwner = member['user_id'] == widget.groupData['user_id'];
     final isCurrentUser = member['user_id'] == _currentUserId;
+    final canRemoveThisMember = _isGroupOwner && !isOwner && !isCurrentUser;
 
     return Card(
       elevation: 2,
@@ -425,6 +426,14 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen>
             if (isCurrentUser) _buildBadge('You', Icons.check, Colors.blue),
           ],
         ),
+        trailing:
+            canRemoveThisMember
+                ? IconButton(
+                  icon: const Icon(Icons.close, color: Colors.red),
+                  onPressed: () => _showRemoveMemberDialog(member),
+                  tooltip: 'Remove member',
+                )
+                : null,
       ),
     );
   }
@@ -546,8 +555,6 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen>
     );
   }
 
-  // --- Dialogs and Snackbars (Functionality Unchanged, UI Polished) ---
-
   void _showAddMemberDialog() {
     final TextEditingController emailController = TextEditingController();
     showDialog(
@@ -570,18 +577,7 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen>
                 onPressed: () async {
                   if (emailController.text.isNotEmpty) {
                     Navigator.pop(context);
-                    try {
-                      await GroupMemberService.addMemberToGroup(
-                        groupId: widget.groupId,
-                        email: emailController.text,
-                      );
-                      await _fetchMembers();
-                      _showSuccess(
-                        '${emailController.text} added successfully',
-                      );
-                    } catch (e) {
-                      _showError(e.toString().replaceAll('Exception: ', ''));
-                    }
+                    await _addMember(emailController.text);
                   }
                 },
                 child: const Text('Add'),
@@ -589,6 +585,68 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen>
             ],
           ),
     );
+  }
+
+  Future<void> _addMember(String email) async {
+    try {
+      await GroupFunctions.addMemberToGroup(
+        groupId: widget.groupId,
+        email: email,
+        ownerId: _currentUserId!,
+      );
+      await _fetchMembers();
+      _showSuccess('$email added successfully');
+    } catch (e) {
+      _showError(e.toString().replaceAll('Exception: ', ''));
+    }
+  }
+
+  void _showRemoveMemberDialog(Map<String, dynamic> member) {
+    final user = member['User'];
+    final email = user?['email'] ?? 'Unknown User';
+
+    showDialog(
+      context: context,
+      builder:
+          (context) => AlertDialog(
+            title: const Text('Remove Member'),
+            content: Text(
+              'Are you sure you want to remove $email from this group?',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancel'),
+              ),
+              ElevatedButton(
+                onPressed: () {
+                  Navigator.pop(context);
+                  _removeMember(member);
+                },
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+                child: const Text('Remove'),
+              ),
+            ],
+          ),
+    );
+  }
+
+  Future<void> _removeMember(Map<String, dynamic> member) async {
+    try {
+      final user = member['User'];
+      final email = user?['email'] ?? 'Unknown User';
+      final userId = member['user_id'];
+
+      await GroupFunctions.removeMemberFromGroup(
+        groupId: widget.groupId,
+        userId: userId,
+        ownerId: _currentUserId!,
+      );
+      await _fetchMembers();
+      _showSuccess('$email removed successfully');
+    } catch (e) {
+      _showError(e.toString().replaceAll('Exception: ', ''));
+    }
   }
 
   void _showLeaveGroupDialog() {

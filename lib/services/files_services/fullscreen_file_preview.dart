@@ -5,7 +5,7 @@ import 'package:photo_view/photo_view.dart';
 import 'package:video_player/video_player.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:open_file/open_file.dart';
+import 'package:open_filex/open_filex.dart';
 import 'package:mime/mime.dart';
 
 class FullscreenFilePreview extends StatefulWidget {
@@ -46,7 +46,7 @@ class _FullscreenFilePreviewState extends State<FullscreenFilePreview> {
       return;
     }
 
-    // Only prepare for video/audio files that need initialization
+    // Prepare for video/audio files that need initialization
     if (_mimeType?.startsWith('video/') == true) {
       final tempDir = await getTemporaryDirectory();
       final file = File('${tempDir.path}/${widget.fileName}');
@@ -77,18 +77,27 @@ class _FullscreenFilePreviewState extends State<FullscreenFilePreview> {
 
   /// Check if file should be opened with system app
   bool _shouldOpenWithSystemApp() {
-    // File types that should use system apps
     const systemAppExtensions = [
-      'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', // Documents
-      'zip', 'rar', '7z', 'tar', 'gz', // Archives
-      'apk', // Android packages
-      'epub', 'mobi', // Ebooks
+      'pdf',
+      'doc',
+      'docx',
+      'xls',
+      'xlsx',
+      'ppt',
+      'pptx',
+      'zip',
+      'rar',
+      '7z',
+      'tar',
+      'gz',
+      'apk',
+      'epub',
+      'mobi',
     ];
-
     return systemAppExtensions.contains(_extension);
   }
 
-  /// Open file with system app
+  /// Open file with system app (using open_filex)
   Future<void> _openWithSystemApp() async {
     setState(() => _isLoading = true);
 
@@ -97,7 +106,7 @@ class _FullscreenFilePreviewState extends State<FullscreenFilePreview> {
       final file = File('${tempDir.path}/${widget.fileName}');
       await file.writeAsBytes(widget.bytes, flush: true);
 
-      final result = await OpenFile.open(file.path);
+      final result = await OpenFilex.open(file.path);
 
       if (result.type != ResultType.done) {
         if (mounted) {
@@ -116,9 +125,7 @@ class _FullscreenFilePreviewState extends State<FullscreenFilePreview> {
         ).showSnackBar(SnackBar(content: Text('Error opening file: $e')));
       }
     } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -184,7 +191,7 @@ class _FullscreenFilePreviewState extends State<FullscreenFilePreview> {
       );
     }
 
-    // For preview-able files, show preview
+    // For preview-able files
     if (_mimeType?.startsWith('image/') == true) {
       content = PhotoView(imageProvider: MemoryImage(widget.bytes));
     } else if (_mimeType?.startsWith('video/') == true &&
@@ -251,7 +258,6 @@ class _FullscreenFilePreviewState extends State<FullscreenFilePreview> {
     );
   }
 
-  /// Check if file is a text file
   bool _isTextFile(String extension) {
     const textExtensions = [
       'txt',
@@ -267,7 +273,6 @@ class _FullscreenFilePreviewState extends State<FullscreenFilePreview> {
     return textExtensions.contains(extension);
   }
 
-  /// Build text file preview
   Widget _buildTextPreview() {
     try {
       final textContent = String.fromCharCodes(widget.bytes);
@@ -295,35 +300,30 @@ class _FullscreenFilePreviewState extends State<FullscreenFilePreview> {
     }
   }
 
-  /// Get icon based on file type
   IconData _getFileIcon() {
     if (_extension == 'pdf') return Icons.picture_as_pdf;
     if (['doc', 'docx'].contains(_extension)) return Icons.description;
     if (['xls', 'xlsx'].contains(_extension)) return Icons.table_chart;
     if (['ppt', 'pptx'].contains(_extension)) return Icons.slideshow;
-    if (['zip', 'rar', '7z', 'tar', 'gz'].contains(_extension)) {
+    if (['zip', 'rar', '7z', 'tar', 'gz'].contains(_extension))
       return Icons.folder_zip;
-    }
     if (_extension == 'apk') return Icons.android;
     if (['epub', 'mobi'].contains(_extension)) return Icons.menu_book;
     return Icons.insert_drive_file;
   }
 
-  /// Get app type name based on file extension
   String _getAppTypeName() {
     if (_extension == 'pdf') return 'PDF Viewer';
     if (['doc', 'docx'].contains(_extension)) return 'Document App';
     if (['xls', 'xlsx'].contains(_extension)) return 'Spreadsheet App';
     if (['ppt', 'pptx'].contains(_extension)) return 'Presentation App';
-    if (['zip', 'rar', '7z', 'tar', 'gz'].contains(_extension)) {
+    if (['zip', 'rar', '7z', 'tar', 'gz'].contains(_extension))
       return 'Archive Manager';
-    }
     if (_extension == 'apk') return 'Package Installer';
     if (['epub', 'mobi'].contains(_extension)) return 'Ebook Reader';
     return 'External App';
   }
 
-  /// Format file size
   String _formatFileSize(int bytes) {
     if (bytes < 1024) return '$bytes B';
     if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
@@ -333,7 +333,6 @@ class _FullscreenFilePreviewState extends State<FullscreenFilePreview> {
     return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(1)} GB';
   }
 
-  /// Format duration for audio
   String _formatDuration(Duration duration) {
     String twoDigits(int n) => n.toString().padLeft(2, '0');
     final minutes = twoDigits(duration.inMinutes.remainder(60));

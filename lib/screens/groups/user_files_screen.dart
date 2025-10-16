@@ -25,7 +25,6 @@ class _UserFilesScreenState extends State<UserFilesScreen>
   late List<Map<String, dynamic>> _files;
   bool _isLoading = false;
   String? _currentUserId;
-  bool _isGroupOwner = false;
   String _sortBy = 'date';
   late AnimationController _animationController;
   String _searchQuery = '';
@@ -117,6 +116,13 @@ class _UserFilesScreenState extends State<UserFilesScreen>
           ),
         )
         .toList();
+  }
+
+  /// Check if current user can remove this file (only file owner)
+  bool _canRemoveFile(Map<String, dynamic> shareRecord) {
+    final fileData = shareRecord['file'];
+    final fileOwnerId = fileData['uploaded_by'];
+    return _currentUserId == fileOwnerId;
   }
 
   @override
@@ -519,12 +525,7 @@ class _UserFilesScreenState extends State<UserFilesScreen>
     final fileSize = GroupFunctions.formatFileSize(fileData['file_size'] ?? 0);
     final sharedDate = GroupFunctions.formatDate(shareRecord['shared_at']);
     final fileCategory = fileData['category'] ?? 'General';
-
-    final canRemoveShare = GroupFunctions.canUserRemoveShare(
-      isGroupOwner: _isGroupOwner,
-      currentUserId: _currentUserId,
-      shareRecord: shareRecord,
-    );
+    final canRemove = _canRemoveFile(shareRecord);
 
     return Container(
       decoration: BoxDecoration(
@@ -685,7 +686,7 @@ class _UserFilesScreenState extends State<UserFilesScreen>
                             ],
                           ),
                         ),
-                        if (canRemoveShare)
+                        if (canRemove)
                           const PopupMenuItem(
                             value: 'remove',
                             child: Row(
@@ -951,13 +952,10 @@ class _UserFilesScreenState extends State<UserFilesScreen>
                   ),
                 ),
                 const SizedBox(width: 12),
-                Expanded(
+                const Expanded(
                   child: Text(
                     'File Details',
-                    style: const TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.w700,
-                    ),
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),

@@ -19,7 +19,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   late TextEditingController _contactController;
   late TextEditingController _allergiesController;
   late TextEditingController _medicalConditionsController;
-  late TextEditingController _currentMedicationsController;
   late TextEditingController _disabilitiesController;
 
   // Dropdown values
@@ -57,41 +56,41 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       text: widget.userData['contact_number'] ?? '',
     );
 
-    // Convert arrays to comma-separated strings
     _allergiesController = TextEditingController(
-      text: _listToString(widget.userData['allergies']),
+      text: widget.userData['allergies'] ?? '',
     );
     _medicalConditionsController = TextEditingController(
-      text: _listToString(widget.userData['medical_conditions']),
-    );
-    _currentMedicationsController = TextEditingController(
-      text: _listToString(widget.userData['current_medications']),
+      text: widget.userData['medical_conditions'] ?? '',
     );
     _disabilitiesController = TextEditingController(
-      text: _listToString(widget.userData['disabilities']),
+      text: widget.userData['disabilities'] ?? '',
     );
 
-    // Set dropdown values
     _selectedBloodType = widget.userData['blood_type'];
     _selectedSex = widget.userData['sex'];
   }
 
-  // UPDATED METHOD - Now handles both List and String types
-  String _listToString(dynamic list) {
-    if (list == null) return '';
-    if (list is String) return list; // Handle string type
-    if (list is List && list.isEmpty) return '';
-    if (list is List) return list.join(', ');
-    return '';
-  }
+  String _formatInput(String text) {
+    if (text.trim().isEmpty) return '';
 
-  List<String> _stringToList(String text) {
-    if (text.trim().isEmpty) return [];
     return text
         .split(',')
         .map((item) => item.trim())
         .where((item) => item.isNotEmpty)
-        .toList();
+        .map((item) => _capitalizeWords(item))
+        .join(', ');
+  }
+
+  String _capitalizeWords(String text) {
+    return text
+        .split(' ')
+        .map(
+          (word) =>
+              word.isEmpty
+                  ? word
+                  : word[0].toUpperCase() + word.substring(1).toLowerCase(),
+        )
+        .join(' ');
   }
 
   @override
@@ -100,7 +99,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     _contactController.dispose();
     _allergiesController.dispose();
     _medicalConditionsController.dispose();
-    _currentMedicationsController.dispose();
     _disabilitiesController.dispose();
     super.dispose();
   }
@@ -115,27 +113,31 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     });
 
     try {
-      // Prepare update data
       final updateData = {
         'address':
             _addressController.text.trim().isEmpty
                 ? null
-                : _addressController.text.trim(),
+                : _capitalizeWords(_addressController.text.trim()),
         'contact_number':
             _contactController.text.trim().isEmpty
                 ? null
                 : _contactController.text.trim(),
         'blood_type': _selectedBloodType,
         'sex': _selectedSex,
-        'allergies': _stringToList(_allergiesController.text),
-        'medical_conditions': _stringToList(_medicalConditionsController.text),
-        'current_medications': _stringToList(
-          _currentMedicationsController.text,
-        ),
-        'disabilities': _stringToList(_disabilitiesController.text),
+        'allergies':
+            _formatInput(_allergiesController.text).isEmpty
+                ? null
+                : _formatInput(_allergiesController.text),
+        'medical_conditions':
+            _formatInput(_medicalConditionsController.text).isEmpty
+                ? null
+                : _formatInput(_medicalConditionsController.text),
+        'disabilities':
+            _formatInput(_disabilitiesController.text).isEmpty
+                ? null
+                : _formatInput(_disabilitiesController.text),
       };
 
-      // Update the person record
       await _supabase
           .from('Person')
           .update(updateData)
@@ -148,7 +150,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             backgroundColor: Colors.green,
           ),
         );
-        Navigator.pop(context, true); // Return true to indicate success
+        Navigator.pop(context, true);
       }
     } catch (e) {
       if (mounted) {
@@ -214,7 +216,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           key: _formKey,
           child: Column(
             children: [
-              // Contact Information Section
               _buildSectionCard(
                 title: 'Contact Information',
                 icon: Icons.contact_phone_outlined,
@@ -237,7 +238,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
               const SizedBox(height: 24),
 
-              // Medical Information Section
               _buildSectionCard(
                 title: 'Medical Information',
                 icon: Icons.medical_information_outlined,
@@ -275,26 +275,17 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                   ),
                   const SizedBox(height: 16),
                   _buildTextField(
-                    'Current Medications (comma-separated)',
-                    _currentMedicationsController,
-                    Icons.medication_outlined,
-                    maxLines: 2,
-                    hintText: 'e.g., Aspirin, Metformin',
-                  ),
-                  const SizedBox(height: 16),
-                  _buildTextField(
                     'Disabilities (comma-separated)',
                     _disabilitiesController,
                     Icons.accessible_outlined,
                     maxLines: 2,
-                    hintText: 'e.g., Visual impairment, Mobility issues',
+                    hintText: 'e.g., Visual Impairment, Mobility Issues',
                   ),
                 ],
               ),
 
               const SizedBox(height: 32),
 
-              // Cancel Button
               SizedBox(
                 width: double.infinity,
                 child: OutlinedButton(
@@ -481,12 +472,14 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             ),
           ),
           items:
-              options.map((String option) {
-                return DropdownMenuItem<String>(
-                  value: option,
-                  child: Text(option),
-                );
-              }).toList(),
+              options
+                  .map(
+                    (String option) => DropdownMenuItem<String>(
+                      value: option,
+                      child: Text(option),
+                    ),
+                  )
+                  .toList(),
           hint: Text(
             'Select $label',
             style: TextStyle(color: Colors.grey[500]),

@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "521803039535",
+    "project_id": "health-share-b97c8",
+    "storage_bucket": "health-share-b97c8.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:521803039535:android:2689f9a79b45ffda7ed7da",
+        "android_client_info": {
+          "package_name": "com.example.health_share"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCOaxJ_uIX1_cy0fb5CFWDeDQVeye7i9Jc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

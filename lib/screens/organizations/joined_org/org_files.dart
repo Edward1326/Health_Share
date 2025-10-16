@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'dart:ui';
+import 'dart:io';
+import 'package:path_provider/path_provider.dart';
 import 'package:health_share/services/files_services/fullscreen_file_preview.dart';
 import 'package:health_share/services/org_services/org_files_decrypt.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -35,6 +37,8 @@ class _OrgDoctorsFilesScreenState extends State<OrgDoctorsFilesScreen>
   List<Map<String, dynamic>> _sharedFiles = [];
   bool _isLoading = false;
   bool _isLoadingFiles = false;
+  String? _currentUserId;
+  String? _doctorUserId;
 
   final Color _primaryColor = const Color(0xFF416240);
 
@@ -51,6 +55,7 @@ class _OrgDoctorsFilesScreenState extends State<OrgDoctorsFilesScreen>
     ).animate(CurvedAnimation(parent: _fadeController, curve: Curves.easeOut));
     _fadeController.forward();
 
+    _currentUserId = Supabase.instance.client.auth.currentUser?.id;
     _fetchDoctorDetails();
     _fetchSharedFiles();
   }
@@ -65,6 +70,7 @@ class _OrgDoctorsFilesScreenState extends State<OrgDoctorsFilesScreen>
 
       setState(() {
         _doctorDetails = doctorDetails;
+        _doctorUserId = doctorDetails?['User']?['id'];
       });
 
       print('DEBUG: Successfully loaded doctor details');
@@ -72,17 +78,7 @@ class _OrgDoctorsFilesScreenState extends State<OrgDoctorsFilesScreen>
       print('DEBUG: Error in _fetchDoctorDetails: $e');
       print('DEBUG: Stack trace: $stackTrace');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error loading doctor details: ${e.toString()}'),
-            backgroundColor: Colors.red[700],
-            behavior: SnackBarBehavior.floating,
-            margin: const EdgeInsets.all(16),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-          ),
-        );
+        _showErrorSnackBar('Error loading doctor details: ${e.toString()}');
       }
     } finally {
       setState(() => _isLoading = false);
@@ -115,21 +111,345 @@ class _OrgDoctorsFilesScreenState extends State<OrgDoctorsFilesScreen>
       setState(() => _sharedFiles = []);
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error loading shared files: ${e.toString()}'),
-            backgroundColor: Colors.red[700],
-            behavior: SnackBarBehavior.floating,
-            margin: const EdgeInsets.all(16),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-          ),
-        );
+        _showErrorSnackBar('Error loading shared files: ${e.toString()}');
       }
     } finally {
       setState(() => _isLoadingFiles = false);
     }
+  }
+
+  /// Check if current user can remove this file (only file owner)
+  bool _canRemoveFile(Map<String, dynamic> file) {
+    final fileOwnerId = file['uploaded_by'];
+    return _currentUserId == fileOwnerId;
+  }
+
+  Future<void> _removeFileFromDoctor(Map<String, dynamic> file) async {
+    if (_currentUserId == null || _doctorUserId == null) {
+      _showErrorSnackBar('User not logged in');
+      return;
+    }
+
+    final fileName = file['filename'] ?? 'Unknown File';
+    final fileId = file['id'];
+
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(24),
+          ),
+          title: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: Colors.red.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(
+                  Icons.delete_outline_rounded,
+                  color: Colors.red,
+                  size: 22,
+                ),
+              ),
+              const SizedBox(width: 12),
+              const Expanded(
+                child: Text(
+                  'Remove Share',
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
+                ),
+              ),
+            ],
+          ),
+          content: Text(
+            'Remove "$fileName" from ${widget.doctorName}? The doctor will no longer be able to access it.',
+            style: TextStyle(
+              fontSize: 15,
+              color: Colors.grey[700],
+              height: 1.5,
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: Text(
+                'Cancel',
+                style: TextStyle(
+                  color: Colors.grey[600],
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context, true),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                elevation: 0,
+              ),
+              child: const Text(
+                'Remove',
+                style: TextStyle(fontWeight: FontWeight.w600),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirm == true) {
+      try {
+        final success = await OrgFilesService.revokeFileFromDoctor(
+          fileId: fileId,
+          doctorUserId: _doctorUserId!,
+          userId: _currentUserId!,
+        );
+
+        if (success) {
+          await _fetchSharedFiles();
+          _showSuccessSnackBar('File share removed');
+        } else {
+          _showErrorSnackBar('Failed to remove file share');
+        }
+      } catch (e) {
+        _showErrorSnackBar('Error removing file share: $e');
+      }
+    }
+  }
+
+  Future<void> _downloadFile(Map<String, dynamic> file) async {
+    final fileName = file['filename'] ?? 'Unknown file';
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder:
+          (context) => Dialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  CircularProgressIndicator(
+                    color: _primaryColor,
+                    strokeWidth: 2.5,
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Downloading file...',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w600,
+                      color: _primaryColor,
+                      fontSize: 14,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+    );
+
+    try {
+      // Get file metadata
+      final fileMetadata = await OrgFilesDecryptService.getFileMetadata(
+        file['id'],
+      );
+
+      if (fileMetadata == null) {
+        throw Exception('File metadata not found');
+      }
+
+      // Decrypt the file
+      final decryptedBytes =
+          await OrgFilesDecryptService.decryptSharedFileSimple(
+            fileId: file['id'],
+            ipfsCid: fileMetadata['ipfs_cid'],
+          );
+
+      if (decryptedBytes == null) {
+        throw Exception('Failed to decrypt file');
+      }
+
+      // Get the downloads directory
+      Directory? directory;
+      if (Platform.isAndroid) {
+        directory = Directory('/storage/emulated/0/Download');
+      } else {
+        directory = await getApplicationDocumentsDirectory();
+      }
+
+      // Create a unique file path (avoid overwriting existing files)
+      String filePath = '${directory.path}/$fileName';
+      int counter = 1;
+      while (await File(filePath).exists()) {
+        final nameWithoutExt =
+            fileName.contains('.')
+                ? fileName.substring(0, fileName.lastIndexOf('.'))
+                : fileName;
+        final ext =
+            fileName.contains('.') ? '.${fileName.split('.').last}' : '';
+        filePath = '${directory.path}/$nameWithoutExt($counter)$ext';
+        counter++;
+      }
+
+      final fileToSave = File(filePath);
+
+      // Write the decrypted bytes to the file
+      await fileToSave.writeAsBytes(decryptedBytes);
+
+      Navigator.of(context).pop(); // Close loading dialog
+
+      // Show success message with file location
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'File downloaded successfully',
+                style: TextStyle(fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Saved to: ${directory.path}',
+                style: const TextStyle(fontSize: 12),
+              ),
+            ],
+          ),
+          backgroundColor: Colors.green[700],
+          behavior: SnackBarBehavior.floating,
+          margin: const EdgeInsets.all(16),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    } catch (e) {
+      Navigator.of(context).pop(); // Close loading dialog
+      _showErrorSnackBar('Error: ${e.toString()}');
+    }
+  }
+
+  void _showFileInfo(Map<String, dynamic> file) {
+    showDialog(
+      context: context,
+      builder:
+          (context) => AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(24),
+            ),
+            title: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: _primaryColor.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(
+                    Icons.info_outline_rounded,
+                    color: Color(0xFF416240),
+                    size: 22,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                const Expanded(
+                  child: Text(
+                    'File Details',
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildDetailRow('File Name', file['filename'] ?? 'Unknown'),
+                  const SizedBox(height: 16),
+                  _buildDetailRow('File Type', file['file_type'] ?? 'Unknown'),
+                  const SizedBox(height: 16),
+                  _buildDetailRow(
+                    'File Size',
+                    _formatFileSize(file['file_size'] ?? 0),
+                  ),
+                  const SizedBox(height: 16),
+                  _buildDetailRow('Category', file['category'] ?? 'General'),
+                  const SizedBox(height: 16),
+                  _buildDetailRow(
+                    'Uploaded',
+                    _formatSharedDate(file['uploaded_at']),
+                  ),
+                  const SizedBox(height: 16),
+                  _buildDetailRow('Shared By', file['shared_by'] ?? 'Unknown'),
+                  const SizedBox(height: 16),
+                  _buildDetailRow(
+                    'Shared On',
+                    _formatSharedDate(file['shared_at']),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                style: TextButton.styleFrom(foregroundColor: _primaryColor),
+                child: const Text(
+                  'Close',
+                  style: TextStyle(fontWeight: FontWeight.w600),
+                ),
+              ),
+            ],
+          ),
+    );
+  }
+
+  Widget _buildDetailRow(String label, String value) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+            fontWeight: FontWeight.w600,
+            fontSize: 12,
+            color: Colors.grey[600],
+            letterSpacing: 0.5,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(
+            color: _primaryColor.withOpacity(0.05),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: _primaryColor.withOpacity(0.15)),
+          ),
+          child: Text(
+            value,
+            style: TextStyle(
+              fontSize: 14,
+              color: Colors.grey[900],
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ),
+      ],
+    );
   }
 
   // ===== UI HELPER METHODS =====
@@ -250,6 +570,65 @@ class _OrgDoctorsFilesScreenState extends State<OrgDoctorsFilesScreen>
     }
   }
 
+  void _showErrorSnackBar(String message) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const Icon(Icons.error_outline_rounded, color: Colors.white),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  message,
+                  style: const TextStyle(fontWeight: FontWeight.w500),
+                ),
+              ),
+            ],
+          ),
+          backgroundColor: Colors.red[700],
+          behavior: SnackBarBehavior.floating,
+          margin: const EdgeInsets.all(16),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    }
+  }
+
+  void _showSuccessSnackBar(String message) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const Icon(
+                Icons.check_circle_outline_rounded,
+                color: Colors.white,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  message,
+                  style: const TextStyle(fontWeight: FontWeight.w500),
+                ),
+              ),
+            ],
+          ),
+          backgroundColor: _primaryColor,
+          behavior: SnackBarBehavior.floating,
+          margin: const EdgeInsets.all(16),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    }
+  }
+
   @override
   void dispose() {
     _fadeController.dispose();
@@ -259,143 +638,74 @@ class _OrgDoctorsFilesScreenState extends State<OrgDoctorsFilesScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8F9FA),
-      body: CustomScrollView(
-        physics: const BouncingScrollPhysics(),
-        slivers: [
-          // Modern App Bar
-          SliverAppBar(
-            expandedHeight: 140,
-            floating: false,
-            pinned: true,
-            backgroundColor: _primaryColor,
-            elevation: 0,
-            flexibleSpace: FlexibleSpaceBar(
-              titlePadding: const EdgeInsets.only(left: 56, bottom: 16),
-              title: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    widget.doctorName,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 20,
-                      letterSpacing: -0.5,
-                    ),
-                  ),
-                  Text(
-                    widget.orgName,
-                    style: TextStyle(
-                      color: Colors.white.withOpacity(0.75),
-                      fontSize: 12,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ],
-              ),
+      backgroundColor: Colors.white,
+      appBar: AppBar(
+        backgroundColor: _primaryColor,
+        elevation: 0,
+        automaticallyImplyLeading: false,
+        leading: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: () => Navigator.pop(context),
+            child: const Icon(
+              Icons.arrow_back_rounded,
+              color: Colors.white,
+              size: 24,
             ),
-            leading: Padding(
-              padding: const EdgeInsets.all(8),
-              child: Material(
-                color: Colors.white.withOpacity(0.15),
-                shape: const CircleBorder(),
-                child: InkWell(
-                  onTap: () => Navigator.pop(context),
-                  customBorder: const CircleBorder(),
-                  child: const Icon(
-                    Icons.arrow_back_rounded,
-                    color: Colors.white,
-                    size: 22,
-                  ),
-                ),
-              ),
-            ),
-            actions: [
-              Padding(
-                padding: const EdgeInsets.all(8),
-                child: Material(
-                  color: Colors.white.withOpacity(0.15),
-                  shape: const CircleBorder(),
-                  child: InkWell(
-                    onTap: () async {
-                      await _fetchDoctorDetails();
-                      await _fetchSharedFiles();
-                      if (mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: const Row(
-                              children: [
-                                Icon(
-                                  Icons.check_circle,
-                                  color: Colors.white,
-                                  size: 20,
-                                ),
-                                SizedBox(width: 12),
-                                Text('Refreshed successfully'),
-                              ],
-                            ),
-                            duration: const Duration(seconds: 2),
-                            backgroundColor: _primaryColor,
-                            behavior: SnackBarBehavior.floating,
-                            margin: const EdgeInsets.all(16),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                          ),
-                        );
-                      }
-                    },
-                    customBorder: const CircleBorder(),
-                    child: const Padding(
-                      padding: EdgeInsets.all(12),
-                      child: Icon(
-                        Icons.refresh_rounded,
-                        color: Colors.white,
-                        size: 20,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-            ],
           ),
-          // Content
-          SliverToBoxAdapter(
-            child: FadeTransition(
-              opacity: _fadeAnimation,
-              child:
-                  _isLoading
-                      ? Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 80),
-                        child: Center(
-                          child: CircularProgressIndicator(
-                            color: _primaryColor,
-                            strokeWidth: 2.5,
-                          ),
-                        ),
-                      )
-                      : Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const SizedBox(height: 16),
-                          Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 16),
-                            child: _buildDoctorInfoCard(),
-                          ),
-                          const SizedBox(height: 24),
-                          Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 16),
-                            child: _buildFilesSection(),
-                          ),
-                          const SizedBox(height: 32),
-                        ],
-                      ),
+        ),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              widget.doctorName,
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w700,
+                fontSize: 18,
+              ),
             ),
+            Text(
+              widget.orgName,
+              style: TextStyle(
+                color: Colors.white.withOpacity(0.8),
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh_rounded, color: Colors.white),
+            onPressed: _fetchSharedFiles,
+            tooltip: 'Refresh',
           ),
         ],
+      ),
+      body: FadeTransition(
+        opacity: _fadeAnimation,
+        child:
+            _isLoading
+                ? Center(
+                  child: CircularProgressIndicator(
+                    color: _primaryColor,
+                    strokeWidth: 2.5,
+                  ),
+                )
+                : SingleChildScrollView(
+                  physics: const BouncingScrollPhysics(),
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _buildDoctorInfoCard(),
+                      const SizedBox(height: 24),
+                      _buildFilesSection(),
+                      const SizedBox(height: 32),
+                    ],
+                  ),
+                ),
       ),
     );
   }
@@ -410,19 +720,13 @@ class _OrgDoctorsFilesScreenState extends State<OrgDoctorsFilesScreen>
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 10,
-            offset: const Offset(0, 2),
-          ),
-        ],
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey[200]!, width: 1),
       ),
       child: Column(
         children: [
           Padding(
-            padding: const EdgeInsets.all(20),
+            padding: const EdgeInsets.all(16),
             child: Row(
               children: [
                 Container(
@@ -430,7 +734,7 @@ class _OrgDoctorsFilesScreenState extends State<OrgDoctorsFilesScreen>
                   height: 56,
                   decoration: BoxDecoration(
                     color: _primaryColor.withOpacity(0.1),
-                    shape: BoxShape.circle,
+                    borderRadius: BorderRadius.circular(12),
                   ),
                   child: Center(
                     child: Text(
@@ -443,7 +747,7 @@ class _OrgDoctorsFilesScreenState extends State<OrgDoctorsFilesScreen>
                     ),
                   ),
                 ),
-                const SizedBox(width: 16),
+                const SizedBox(width: 14),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -451,26 +755,25 @@ class _OrgDoctorsFilesScreenState extends State<OrgDoctorsFilesScreen>
                       Text(
                         doctorName,
                         style: const TextStyle(
-                          fontSize: 18,
+                          fontSize: 16,
                           fontWeight: FontWeight.w700,
                           color: Color(0xFF1F2937),
-                          height: 1.2,
                         ),
                       ),
                       const SizedBox(height: 6),
                       Container(
                         padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 4,
+                          horizontal: 8,
+                          vertical: 3,
                         ),
                         decoration: BoxDecoration(
                           color: _primaryColor.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(6),
+                          borderRadius: BorderRadius.circular(4),
                         ),
                         child: Text(
                           _getDoctorDepartment(),
                           style: TextStyle(
-                            fontSize: 12,
+                            fontSize: 11,
                             fontWeight: FontWeight.w600,
                             color: _primaryColor,
                           ),
@@ -484,17 +787,17 @@ class _OrgDoctorsFilesScreenState extends State<OrgDoctorsFilesScreen>
           ),
           Container(
             height: 1,
-            color: const Color(0xFFF1F5F9),
-            margin: const EdgeInsets.symmetric(horizontal: 20),
+            color: Colors.grey[200],
+            margin: const EdgeInsets.symmetric(horizontal: 16),
           ),
           Padding(
-            padding: const EdgeInsets.all(20),
+            padding: const EdgeInsets.all(16),
             child: Column(
               children: [
                 _buildInfoRow(Icons.email_outlined, _getDoctorEmail()),
-                const SizedBox(height: 14),
+                const SizedBox(height: 10),
                 _buildInfoRow(Icons.phone_outlined, _getDoctorContact()),
-                const SizedBox(height: 14),
+                const SizedBox(height: 10),
                 _buildInfoRow(
                   Icons.calendar_today_outlined,
                   'Since ${_formatJoinDate(_doctorDetails?['created_at'])}',
@@ -510,13 +813,13 @@ class _OrgDoctorsFilesScreenState extends State<OrgDoctorsFilesScreen>
   Widget _buildInfoRow(IconData icon, String text) {
     return Row(
       children: [
-        Icon(icon, size: 18, color: const Color(0xFF64748B)),
+        Icon(icon, size: 16, color: _primaryColor),
         const SizedBox(width: 12),
         Expanded(
           child: Text(
             text,
             style: const TextStyle(
-              fontSize: 14,
+              fontSize: 13,
               color: Color(0xFF475569),
               fontWeight: FontWeight.w500,
             ),
@@ -531,15 +834,15 @@ class _OrgDoctorsFilesScreenState extends State<OrgDoctorsFilesScreen>
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
-          padding: const EdgeInsets.only(left: 4),
+          padding: const EdgeInsets.only(left: 0, bottom: 12),
           child: Row(
             children: [
-              Icon(Icons.folder_open_rounded, size: 24, color: _primaryColor),
+              Icon(Icons.folder_open_rounded, size: 22, color: _primaryColor),
               const SizedBox(width: 10),
               const Text(
                 'Medical Records',
                 style: TextStyle(
-                  fontSize: 20,
+                  fontSize: 18,
                   fontWeight: FontWeight.w700,
                   color: Color(0xFF1F2937),
                 ),
@@ -547,7 +850,6 @@ class _OrgDoctorsFilesScreenState extends State<OrgDoctorsFilesScreen>
             ],
           ),
         ),
-        const SizedBox(height: 16),
         _isLoadingFiles
             ? Padding(
               padding: const EdgeInsets.symmetric(vertical: 60),
@@ -584,6 +886,7 @@ class _OrgDoctorsFilesScreenState extends State<OrgDoctorsFilesScreen>
     final fileName = file['filename'] ?? 'Unknown file';
     final fileSize = _formatFileSize(file['file_size'] ?? 0);
     final sharedDate = _formatSharedDate(file['shared_at']);
+    final canRemove = _canRemoveFile(file);
 
     return TweenAnimationBuilder<double>(
       tween: Tween(begin: 0, end: 1),
@@ -597,7 +900,7 @@ class _OrgDoctorsFilesScreenState extends State<OrgDoctorsFilesScreen>
       },
       child: Material(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(12),
         child: InkWell(
           onTap: () async {
             showDialog(
@@ -606,10 +909,10 @@ class _OrgDoctorsFilesScreenState extends State<OrgDoctorsFilesScreen>
               builder:
                   (context) => Dialog(
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
+                      borderRadius: BorderRadius.circular(12),
                     ),
                     child: Padding(
-                      padding: const EdgeInsets.all(24),
+                      padding: const EdgeInsets.all(20),
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
@@ -617,13 +920,13 @@ class _OrgDoctorsFilesScreenState extends State<OrgDoctorsFilesScreen>
                             color: _primaryColor,
                             strokeWidth: 2.5,
                           ),
-                          const SizedBox(height: 20),
+                          const SizedBox(height: 16),
                           Text(
                             'Decrypting file...',
                             style: TextStyle(
                               fontWeight: FontWeight.w600,
                               color: _primaryColor,
-                              fontSize: 15,
+                              fontSize: 14,
                             ),
                           ),
                         ],
@@ -664,119 +967,185 @@ class _OrgDoctorsFilesScreenState extends State<OrgDoctorsFilesScreen>
               );
             } catch (e) {
               Navigator.of(context).pop();
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text('Error: ${e.toString()}'),
-                  backgroundColor: Colors.red[700],
-                  behavior: SnackBarBehavior.floating,
-                  margin: const EdgeInsets.all(16),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-              );
+              _showErrorSnackBar('Error: ${e.toString()}');
             }
           },
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(12),
           child: Container(
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(16),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.04),
-                  blurRadius: 10,
-                  offset: const Offset(0, 2),
-                ),
-              ],
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.grey[200]!, width: 1),
             ),
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Row(
-                children: [
-                  Container(
-                    width: 48,
-                    height: 48,
-                    decoration: BoxDecoration(
-                      color: fileColor.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Icon(fileIcon, color: fileColor, size: 24),
+            padding: const EdgeInsets.all(14),
+            child: Row(
+              children: [
+                Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    color: fileColor.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(10),
                   ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          fileName,
-                          style: const TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w600,
-                            color: Color(0xFF1F2937),
-                            height: 1.3,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
+                  child: Icon(fileIcon, color: fileColor, size: 24),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        fileName,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF1F2937),
                         ),
-                        const SizedBox(height: 6),
-                        Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 6,
-                                vertical: 2,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 5,
+                              vertical: 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color: fileColor.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(3),
+                            ),
+                            child: Text(
+                              fileType.toUpperCase(),
+                              style: TextStyle(
+                                fontSize: 9,
+                                fontWeight: FontWeight.w700,
+                                color: fileColor,
                               ),
-                              decoration: BoxDecoration(
-                                color: fileColor.withOpacity(0.1),
-                                borderRadius: BorderRadius.circular(4),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            fileSize,
+                            style: const TextStyle(
+                              fontSize: 11,
+                              color: Color(0xFF94A3B8),
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            '•',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: Colors.grey[300],
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            sharedDate,
+                            style: const TextStyle(
+                              fontSize: 11,
+                              color: Color(0xFF94A3B8),
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                // Action buttons
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Download button
+                    Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        onTap: () => _downloadFile(file),
+                        borderRadius: BorderRadius.circular(8),
+                        child: Container(
+                          padding: const EdgeInsets.all(8),
+                          child: Icon(
+                            Icons.download_rounded,
+                            color: _primaryColor,
+                            size: 20,
+                          ),
+                        ),
+                      ),
+                    ),
+                    // More options menu
+                    PopupMenuButton<String>(
+                      icon: Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color: _primaryColor.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Icon(
+                          Icons.more_vert_rounded,
+                          color: _primaryColor,
+                          size: 16,
+                        ),
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      onSelected: (value) {
+                        if (value == 'info') {
+                          _showFileInfo(file);
+                        } else if (value == 'remove') {
+                          _removeFileFromDoctor(file);
+                        }
+                      },
+                      itemBuilder:
+                          (context) => [
+                            PopupMenuItem(
+                              value: 'info',
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    Icons.info_outline_rounded,
+                                    size: 18,
+                                    color: Colors.blue[700],
+                                  ),
+                                  const SizedBox(width: 12),
+                                  const Text(
+                                    'Details',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ],
                               ),
-                              child: Text(
-                                fileType.toUpperCase(),
-                                style: TextStyle(
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.w700,
-                                  color: fileColor,
+                            ),
+                            if (canRemove)
+                              const PopupMenuItem(
+                                value: 'remove',
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      Icons.delete_outline_rounded,
+                                      size: 18,
+                                      color: Colors.red,
+                                    ),
+                                    SizedBox(width: 12),
+                                    Text(
+                                      'Remove',
+                                      style: TextStyle(
+                                        color: Colors.red,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
-                            ),
-                            const SizedBox(width: 8),
-                            Text(
-                              fileSize,
-                              style: const TextStyle(
-                                fontSize: 12,
-                                color: Color(0xFF94A3B8),
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Text(
-                              '•',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: Colors.grey[400],
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Text(
-                              sharedDate,
-                              style: const TextStyle(
-                                fontSize: 12,
-                                color: Color(0xFF94A3B8),
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
                           ],
-                        ),
-                      ],
                     ),
-                  ),
-                  Icon(
-                    Icons.chevron_right_rounded,
-                    color: const Color(0xFFCBD5E1),
-                    size: 24,
-                  ),
-                ],
-              ),
+                  ],
+                ),
+              ],
             ),
           ),
         ),
@@ -787,17 +1156,11 @@ class _OrgDoctorsFilesScreenState extends State<OrgDoctorsFilesScreen>
   Widget _buildEmptyFilesState() {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(vertical: 60, horizontal: 32),
+      padding: const EdgeInsets.symmetric(vertical: 48, horizontal: 24),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 10,
-            offset: const Offset(0, 2),
-          ),
-        ],
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey[200]!, width: 1),
       ),
       child: Column(
         children: [
@@ -806,19 +1169,19 @@ class _OrgDoctorsFilesScreenState extends State<OrgDoctorsFilesScreen>
             height: 80,
             decoration: BoxDecoration(
               color: _primaryColor.withOpacity(0.1),
-              shape: BoxShape.circle,
+              borderRadius: BorderRadius.circular(12),
             ),
             child: Icon(
               Icons.folder_open_rounded,
               size: 40,
-              color: _primaryColor.withOpacity(0.5),
+              color: _primaryColor.withOpacity(0.4),
             ),
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 18),
           const Text(
             'No records yet',
             style: TextStyle(
-              fontSize: 18,
+              fontSize: 16,
               fontWeight: FontWeight.w700,
               color: Color(0xFF1F2937),
             ),
@@ -827,7 +1190,7 @@ class _OrgDoctorsFilesScreenState extends State<OrgDoctorsFilesScreen>
           Text(
             'Shared medical records will appear here',
             style: TextStyle(
-              fontSize: 14,
+              fontSize: 13,
               color: Colors.grey[600],
               fontWeight: FontWeight.w500,
             ),

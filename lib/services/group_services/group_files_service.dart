@@ -19,6 +19,7 @@ class GroupFileService {
               file_type,
               file_size,
               uploaded_at,
+              uploaded_by,
               ipfs_cid,
               category
             ),
@@ -48,7 +49,6 @@ class GroupFileService {
       final firstName = personData['first_name'] ?? userEmail.split('@')[0];
       final userId = shareRecord['shared_by_user_id'] ?? 'unknown';
 
-      // Create a key combining user ID and first name for uniqueness
       final userKey = '$userId|$firstName';
 
       if (!filesByUser.containsKey(userKey)) {
@@ -63,7 +63,8 @@ class GroupFileService {
     return filesByUser;
   }
 
-  /// Revoke file sharing from a group (only file owner or group owner can do this)
+  /// Revoke file sharing from a group
+  /// ONLY the file owner (uploaded_by) can remove their file from the group
   static Future<bool> revokeFileFromGroup({
     required String fileId,
     required String groupId,
@@ -77,7 +78,7 @@ class GroupFileService {
       print('Group ID: $groupId');
       print('User ID: $userId');
 
-      // Check if user is the file owner or group owner
+      // Check if user is the file owner (uploaded_by)
       final fileData =
           await supabase
               .from('Files')
@@ -85,22 +86,15 @@ class GroupFileService {
               .eq('id', fileId)
               .single();
 
-      final groupData =
-          await supabase
-              .from('Group')
-              .select('user_id')
-              .eq('id', groupId)
-              .single();
-
       final isFileOwner = fileData['uploaded_by'] == userId;
-      final isGroupOwner = groupData['user_id'] == userId;
 
       print('Is file owner: $isFileOwner');
-      print('Is group owner: $isGroupOwner');
 
-      if (!isFileOwner && !isGroupOwner) {
-        print('❌ User $userId is not authorized to revoke this file share');
-        return false;
+      if (!isFileOwner) {
+        print('❌ Only the file owner can revoke this file share');
+        throw Exception(
+          'Only the file owner can remove this file from the group',
+        );
       }
 
       // Update the File_Shares record to mark as revoked
@@ -132,7 +126,7 @@ class GroupFileService {
     } catch (e, stackTrace) {
       print('❌ Error revoking file from group: $e');
       print('Stack trace: $stackTrace');
-      return false;
+      rethrow;
     }
   }
 
@@ -149,7 +143,7 @@ class GroupFileService {
             shared_by:User!shared_by_user_id(email)
           ''')
           .eq('file_id', fileId)
-          .isFilter('revoked_at', null); // Only get non-revoked shares
+          .isFilter('revoked_at', null);
 
       return {
         'file_id': fileId,
@@ -171,41 +165,12 @@ class GroupFileService {
           .from('File_Shares')
           .select('id')
           .eq('file_id', fileId)
-          .isFilter('revoked_at', null) // Only count non-revoked shares
+          .isFilter('revoked_at', null)
           .limit(1);
 
       return shares.isNotEmpty;
     } catch (e) {
       print('Error checking if file is shared: $e');
-      return false;
-    }
-  }
-
-  /// Add a file to a group's shared files (for Supabase storage method)
-  static Future<bool> addFileToGroupStorage({
-    required String fileName,
-    required String filePath,
-    required int fileSize,
-    required String groupId,
-    required String uploadedBy,
-  }) async {
-    try {
-      final supabase = Supabase.instance.client;
-
-      // Insert into Group_Files table
-      await supabase.from('Group_Files').insert({
-        'group_id': groupId,
-        'file_name': fileName,
-        'file_path': filePath,
-        'file_size': fileSize,
-        'uploaded_by': uploadedBy,
-        'uploaded_at': DateTime.now().toIso8601String(),
-      });
-
-      print('Successfully added file to group storage');
-      return true;
-    } catch (e) {
-      print('Error adding file to group storage: $e');
       return false;
     }
   }

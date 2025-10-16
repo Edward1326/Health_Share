@@ -49,7 +49,7 @@ class MainNavBar extends StatelessWidget {
         child: Padding(
           padding: EdgeInsets.symmetric(
             horizontal: isCompact ? 8 : 16,
-            vertical: isCompact ? 8 : 12,
+            vertical: isCompact ? 6 : 6,
           ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
@@ -113,7 +113,7 @@ class MainNavBar extends StatelessWidget {
         child: Container(
           padding: EdgeInsets.symmetric(
             horizontal: isCompact ? 4 : 8,
-            vertical: 8,
+            vertical: 4,
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,

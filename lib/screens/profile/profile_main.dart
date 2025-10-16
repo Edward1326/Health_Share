@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:health_share/components/navbar_main.dart';
+import 'package:health_share/screens/profile/change_password.dart';
 import 'package:health_share/screens/profile/edit_profile.dart';
 import 'package:health_share/services/auth_services/auth_gate.dart';
 import 'package:health_share/services/auth_services/auth_service.dart';
@@ -235,16 +236,12 @@ class _ProfileScreenState extends State<ProfileScreen>
         physics: const BouncingScrollPhysics(),
         child: Column(
           children: [
-            // Profile Header
             _buildProfileHeader(),
             const SizedBox(height: 20),
-
-            // Content
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: Column(
                 children: [
-                  // Personal Information
                   _buildInfoSection(
                     title: 'Personal Information',
                     icon: Icons.person_outline,
@@ -261,10 +258,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                       ),
                     ],
                   ),
-
                   const SizedBox(height: 16),
-
-                  // Medical Information
                   _buildInfoSection(
                     title: 'Medical Information',
                     icon: Icons.medical_information_outlined,
@@ -283,26 +277,15 @@ class _ProfileScreenState extends State<ProfileScreen>
                         _formatArrayValue(_userData!['medical_conditions']),
                       ),
                       _InfoItem(
-                        'Current Medications',
-                        _formatArrayValue(_userData!['current_medications']),
-                      ),
-                      _InfoItem(
                         'Disabilities',
                         _formatArrayValue(_userData!['disabilities']),
                       ),
                     ],
                   ),
-
                   const SizedBox(height: 16),
-
-                  // Account Actions
                   _buildActionSection(),
-
                   const SizedBox(height: 24),
-
-                  // Logout Button
                   _buildLogoutButton(),
-
                   const SizedBox(height: 32),
                 ],
               ),
@@ -482,8 +465,14 @@ class _ProfileScreenState extends State<ProfileScreen>
             title: 'Change Password',
             subtitle: 'Update your account password',
             color: const Color(0xFF416240),
-            onTap: () {
-              // Navigate to change password
+            onTap: () async {
+              final result = await Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const ChangePasswordScreen(),
+                ),
+              );
+              // Optionally refresh profile if needed
             },
           ),
           const Divider(height: 1, color: Color(0xFFF1F5F9)),
@@ -492,9 +481,7 @@ class _ProfileScreenState extends State<ProfileScreen>
             title: 'Privacy Settings',
             subtitle: 'Manage your privacy preferences',
             color: const Color(0xFF10B981),
-            onTap: () {
-              // Navigate to privacy settings
-            },
+            onTap: () {},
           ),
         ],
       ),

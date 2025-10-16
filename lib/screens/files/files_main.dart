@@ -1,4 +1,3 @@
-import 'package:health_share/services/files_services/file_preview.dart';
 import 'package:health_share/services/files_services/file_share_to_group.dart';
 import 'package:health_share/services/files_services/files_share_to_org.dart';
 import 'package:health_share/services/files_services/fullscreen_file_preview.dart';
@@ -26,9 +25,15 @@ class _FilesScreenState extends State<FilesScreen> {
 
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
+  bool _isSearchExpanded = false;
   String _selectedFilter = 'All';
 
   List<FileItem> items = [];
+
+  static const primaryColor = Color(0xFF416240);
+  static const accentColor = Color(0xFF6A8E6E);
+  static const lightBg = Color(0xFFF8FAF8);
+  static const borderColor = Color(0xFFE5E7EB);
 
   @override
   void initState() {
@@ -276,7 +281,7 @@ class _FilesScreenState extends State<FilesScreen> {
               content: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const CircularProgressIndicator(color: Color(0xFF416240)),
+                  const CircularProgressIndicator(color: primaryColor),
                   const SizedBox(height: 16),
                   Text('Sharing ${filesToShare.length} file(s)...'),
                 ],
@@ -327,9 +332,152 @@ class _FilesScreenState extends State<FilesScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isDesktop = screenWidth > 600;
+    final isTablet = screenWidth > 600 && screenWidth <= 900;
+    final isLargeScreen = screenWidth > 900;
+
+    // Responsive dimensions
+    final titleFontSize = isLargeScreen ? 24.0 : (isTablet ? 22.0 : 20.0);
+    final toolbarHeight = isDesktop ? 72.0 : 64.0;
+    final searchExpandedWidth =
+        isLargeScreen ? 300.0 : (isTablet ? 250.0 : screenWidth * 0.5);
+
     return Scaffold(
-      backgroundColor: Colors.grey[50],
-      appBar: _buildAppBar(),
+      backgroundColor: lightBg,
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        elevation: 0,
+        automaticallyImplyLeading: false,
+        toolbarHeight: toolbarHeight,
+        title: Padding(
+          padding: EdgeInsets.symmetric(horizontal: isDesktop ? 20 : 0),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'My Files',
+                  style: TextStyle(
+                    color: primaryColor,
+                    fontWeight: FontWeight.bold,
+                    fontSize: titleFontSize,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              // Search icon/bar
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 300),
+                curve: Curves.easeInOut,
+                width: _isSearchExpanded ? searchExpandedWidth : 51,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: _isSearchExpanded ? lightBg : Colors.transparent,
+                  borderRadius: BorderRadius.circular(24),
+                  border: Border.all(
+                    color: _isSearchExpanded ? borderColor : Colors.transparent,
+                    width: 1.5,
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    IconButton(
+                      icon: Icon(
+                        _isSearchExpanded
+                            ? Icons.close_rounded
+                            : Icons.search_rounded,
+                        color: primaryColor,
+                        size: 24,
+                      ),
+                      onPressed: () {
+                        setState(() {
+                          _isSearchExpanded = !_isSearchExpanded;
+                          if (!_isSearchExpanded) {
+                            _searchController.clear();
+                            _searchQuery = '';
+                          }
+                        });
+                      },
+                    ),
+                    if (_isSearchExpanded)
+                      Expanded(
+                        child: TextField(
+                          controller: _searchController,
+                          autofocus: true,
+                          onChanged:
+                              (value) => setState(() => _searchQuery = value),
+                          style: const TextStyle(
+                            fontSize: 15,
+                            color: primaryColor,
+                          ),
+                          decoration: InputDecoration(
+                            hintText: 'Search files...',
+                            hintStyle: TextStyle(
+                              color: primaryColor.withOpacity(0.4),
+                              fontSize: 14,
+                            ),
+                            border: InputBorder.none,
+                            contentPadding: const EdgeInsets.only(right: 16),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              // Filter button
+              PopupMenuButton<String>(
+                icon: Icon(
+                  Icons.filter_list_rounded,
+                  color:
+                      _selectedFilter != 'All'
+                          ? primaryColor
+                          : primaryColor.withOpacity(0.5),
+                  size: 24,
+                ),
+                onSelected: (value) {
+                  setState(() => _selectedFilter = value);
+                },
+                itemBuilder:
+                    (context) => [
+                      const PopupMenuItem(
+                        value: 'All',
+                        child: Text('All Files'),
+                      ),
+                      const PopupMenuItem(
+                        value: 'DOCUMENT',
+                        child: Text('Documents'),
+                      ),
+                      const PopupMenuItem(
+                        value: 'IMAGE',
+                        child: Text('Images'),
+                      ),
+                      const PopupMenuItem(value: 'AUDIO', child: Text('Audio')),
+                      const PopupMenuItem(
+                        value: 'VIDEO',
+                        child: Text('Videos'),
+                      ),
+                      const PopupMenuItem(
+                        value: 'COMPRESSED',
+                        child: Text('Compressed'),
+                      ),
+                    ],
+              ),
+              if (_isSelectionMode) ...[
+                const SizedBox(width: 8),
+                IconButton(
+                  icon: const Icon(Icons.share_rounded, color: primaryColor),
+                  onPressed: _shareSelectedFiles,
+                ),
+              ],
+            ],
+          ),
+        ),
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(1),
+          child: Container(height: 1, color: borderColor),
+        ),
+      ),
       body: _isLoading ? _buildLoadingState() : _buildBody(),
       floatingActionButton: _isSelectionMode ? null : _buildFAB(),
       bottomNavigationBar: MainNavBar(
@@ -339,53 +487,14 @@ class _FilesScreenState extends State<FilesScreen> {
     );
   }
 
-  PreferredSizeWidget _buildAppBar() {
-    return AppBar(
-      backgroundColor: Colors.white,
-      elevation: 0,
-      automaticallyImplyLeading: false,
-      title: const Text(
-        'My Files',
-        style: TextStyle(
-          color: Color(0xFF416240),
-          fontWeight: FontWeight.bold,
-          fontSize: 28,
-        ),
-      ),
-      bottom: PreferredSize(
-        preferredSize: const Size.fromHeight(1),
-        child: Container(
-          height: 1,
-          color: const Color(0xFF416240).withOpacity(0.1),
-        ),
-      ),
-      actions: [
-        if (_isSelectionMode) ...[
-          IconButton(
-            icon: const Icon(Icons.share_rounded, color: Color(0xFF416240)),
-            onPressed: _shareSelectedFiles,
-          ),
-          IconButton(
-            icon: Icon(Icons.close_rounded, color: Colors.grey[700]),
-            onPressed:
-                () => setState(() {
-                  _isSelectionMode = false;
-                  _selectedFiles.clear();
-                }),
-          ),
-        ],
-      ],
-    );
-  }
-
   Widget _buildLoadingState() {
-    return Center(
+    return const Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          CircularProgressIndicator(color: Color(0xFF416240)),
+          CircularProgressIndicator(color: primaryColor, strokeWidth: 2.5),
           SizedBox(height: 16),
-          Text('Loading files...', style: TextStyle(color: Colors.grey[600])),
+          Text('Loading files...', style: TextStyle(color: Colors.grey)),
         ],
       ),
     );
@@ -393,139 +502,59 @@ class _FilesScreenState extends State<FilesScreen> {
 
   Widget _buildBody() {
     if (items.isEmpty) return _buildEmptyState();
-
-    return Column(
-      children: [
-        _buildSearchBar(),
-        SizedBox(height: 8),
-        Expanded(child: _buildFileList()),
-      ],
-    );
-  }
-
-  Widget _buildSearchBar() {
-    return Container(
-      padding: EdgeInsets.all(16),
-      color: Colors.white,
-      child: Column(
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: _searchController,
-                  onChanged: (value) => setState(() => _searchQuery = value),
-                  decoration: InputDecoration(
-                    hintText: 'Search files...',
-                    prefixIcon: Icon(
-                      Icons.search_rounded,
-                      color: Color(0xFF416240),
-                    ),
-                    suffixIcon:
-                        _searchQuery.isNotEmpty
-                            ? IconButton(
-                              icon: Icon(Icons.clear_rounded),
-                              onPressed: () {
-                                _searchController.clear();
-                                setState(() => _searchQuery = '');
-                              },
-                            )
-                            : null,
-                    filled: true,
-                    fillColor: Colors.grey[100],
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide.none,
-                    ),
-                    contentPadding: EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 12,
-                    ),
-                  ),
-                ),
-              ),
-              SizedBox(width: 12),
-              PopupMenuButton<String>(
-                icon: Container(
-                  padding: EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color:
-                        _selectedFilter != 'All'
-                            ? Color(0xFF416240)
-                            : Colors.grey[100],
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Icon(
-                    Icons.filter_list_rounded,
-                    color:
-                        _selectedFilter != 'All'
-                            ? Colors.white
-                            : Colors.grey[700],
-                  ),
-                ),
-                onSelected: (value) {
-                  setState(() => _selectedFilter = value);
-                },
-                itemBuilder:
-                    (context) => [
-                      PopupMenuItem(value: 'All', child: Text('All Files')),
-                      PopupMenuItem(
-                        value: 'DOCUMENT',
-                        child: Text('Documents'),
-                      ),
-                      PopupMenuItem(value: 'IMAGE', child: Text('Images')),
-                      PopupMenuItem(value: 'AUDIO', child: Text('Audio')),
-                      PopupMenuItem(value: 'VIDEO', child: Text('Videos')),
-                      PopupMenuItem(
-                        value: 'COMPRESSED',
-                        child: Text('Compressed'),
-                      ),
-                    ],
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
+    return _buildFileList();
   }
 
   Widget _buildFileList() {
     final filteredItems = _filteredItems;
+    final screenWidth = MediaQuery.of(context).size.width;
+    final horizontalPadding =
+        screenWidth > 900 ? 60.0 : (screenWidth > 600 ? 40.0 : 20.0);
 
     if (filteredItems.isEmpty) {
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.search_off_rounded, size: 64, color: Colors.grey[300]),
-            SizedBox(height: 16),
-            Text('No files found', style: TextStyle(color: Colors.grey[600])),
+            Icon(
+              Icons.search_off_rounded,
+              size: 64,
+              color: primaryColor.withOpacity(0.3),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'No files found',
+              style: TextStyle(color: primaryColor.withOpacity(0.6)),
+            ),
           ],
         ),
       );
     }
 
     return ListView.builder(
-      padding: EdgeInsets.all(16),
+      padding: EdgeInsets.symmetric(
+        horizontal: horizontalPadding,
+        vertical: 20,
+      ),
       itemCount: filteredItems.length,
       itemBuilder: (context, index) {
         final item = filteredItems[index];
         final isSelected = _selectedFiles.contains(index);
 
         return Container(
-          margin: EdgeInsets.only(bottom: 12),
+          margin: const EdgeInsets.only(bottom: 12),
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
-              color: isSelected ? Color(0xFF416240) : Colors.transparent,
-              width: 2,
+              color: isSelected ? primaryColor : borderColor,
+              width: isSelected ? 2 : 1,
             ),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.05),
-                blurRadius: 10,
-                offset: Offset(0, 2),
+                color: Colors.black.withOpacity(0.06),
+                blurRadius: 16,
+                offset: const Offset(0, 4),
               ),
             ],
           ),
@@ -540,7 +569,7 @@ class _FilesScreenState extends State<FilesScreen> {
               onLongPress: () => _enableSelectionMode(index),
               borderRadius: BorderRadius.circular(12),
               child: Padding(
-                padding: EdgeInsets.all(16),
+                padding: const EdgeInsets.all(16),
                 child: Row(
                   children: [
                     Container(
@@ -552,27 +581,27 @@ class _FilesScreenState extends State<FilesScreen> {
                       ),
                       child: Icon(item.icon, color: item.color, size: 24),
                     ),
-                    SizedBox(width: 16),
+                    const SizedBox(width: 16),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
                             item.name,
-                            style: TextStyle(
+                            style: const TextStyle(
                               fontSize: 15,
                               fontWeight: FontWeight.w600,
-                              color: Colors.grey[900],
+                              color: primaryColor,
                             ),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
-                          SizedBox(height: 4),
+                          const SizedBox(height: 4),
                           Text(
                             '${item.size} • ${_formatDate(item.dateAdded)}',
                             style: TextStyle(
                               fontSize: 13,
-                              color: Colors.grey[600],
+                              color: primaryColor.withOpacity(0.6),
                             ),
                           ),
                         ],
@@ -581,8 +610,7 @@ class _FilesScreenState extends State<FilesScreen> {
                     if (_isSelectionMode)
                       Icon(
                         isSelected ? Icons.check_circle : Icons.circle_outlined,
-                        color:
-                            isSelected ? Color(0xFF416240) : Colors.grey[400],
+                        color: isSelected ? primaryColor : Colors.grey[400],
                         size: 24,
                       ),
                   ],
@@ -601,44 +629,48 @@ class _FilesScreenState extends State<FilesScreen> {
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Container(
-            width: 100,
-            height: 100,
+            width: 120,
+            height: 120,
             decoration: BoxDecoration(
-              color: Color(0xFF416240).withOpacity(0.1),
+              color: primaryColor.withOpacity(0.08),
               shape: BoxShape.circle,
             ),
             child: Icon(
               Icons.folder_open_rounded,
-              size: 50,
-              color: Color(0xFF416240),
+              size: 56,
+              color: primaryColor.withOpacity(0.3),
             ),
           ),
-          SizedBox(height: 24),
-          Text(
+          const SizedBox(height: 28),
+          const Text(
             'No Files Yet',
             style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.w600,
-              color: Colors.grey[800],
+              fontSize: 22,
+              fontWeight: FontWeight.w700,
+              color: primaryColor,
             ),
           ),
-          SizedBox(height: 8),
+          const SizedBox(height: 10),
           Text(
             'Upload your first file to get started',
-            style: TextStyle(color: Colors.grey[600]),
+            style: TextStyle(
+              fontSize: 15,
+              color: primaryColor.withOpacity(0.6),
+            ),
           ),
-          SizedBox(height: 32),
+          const SizedBox(height: 32),
           ElevatedButton.icon(
             onPressed: _uploadFile,
-            icon: Icon(Icons.upload_file_rounded),
-            label: Text('Upload File'),
+            icon: const Icon(Icons.upload_file_rounded),
+            label: const Text('Upload File'),
             style: ElevatedButton.styleFrom(
-              backgroundColor: Color(0xFF416240),
+              backgroundColor: primaryColor,
               foregroundColor: Colors.white,
-              padding: EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+              padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),
               ),
+              elevation: 0,
             ),
           ),
         ],
@@ -649,8 +681,8 @@ class _FilesScreenState extends State<FilesScreen> {
   Widget _buildFAB() {
     return FloatingActionButton(
       onPressed: _uploadFile,
-      backgroundColor: Color(0xFF416240),
-      child: Icon(Icons.add_rounded, color: Colors.white),
+      backgroundColor: primaryColor,
+      child: const Icon(Icons.add_rounded, color: Colors.white),
     );
   }
 
@@ -675,8 +707,8 @@ class _FilesScreenState extends State<FilesScreen> {
             content: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                CircularProgressIndicator(color: Color(0xFF416240)),
-                SizedBox(height: 16),
+                const CircularProgressIndicator(color: primaryColor),
+                const SizedBox(height: 16),
                 Text('Decrypting ${item.name}...'),
               ],
             ),
@@ -796,7 +828,21 @@ class _FilesScreenState extends State<FilesScreen> {
   void _showError(String message) {
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(message), backgroundColor: Colors.red),
+        SnackBar(
+          content: Row(
+            children: [
+              const Icon(Icons.error_outline_rounded, color: Colors.white),
+              const SizedBox(width: 12),
+              Expanded(child: Text(message)),
+            ],
+          ),
+          backgroundColor: const Color(0xFFD32F2F),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          margin: const EdgeInsets.all(16),
+        ),
       );
     }
   }
@@ -804,7 +850,24 @@ class _FilesScreenState extends State<FilesScreen> {
   void _showSuccess(String message) {
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(message), backgroundColor: Color(0xFF416240)),
+        SnackBar(
+          content: Row(
+            children: [
+              const Icon(
+                Icons.check_circle_outline_rounded,
+                color: Colors.white,
+              ),
+              const SizedBox(width: 12),
+              Expanded(child: Text(message)),
+            ],
+          ),
+          backgroundColor: primaryColor,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          margin: const EdgeInsets.all(16),
+        ),
       );
     }
   }
@@ -890,25 +953,25 @@ class _ShareDialogState extends State<_ShareDialog>
     return Dialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Container(
-        constraints: BoxConstraints(maxWidth: 500, maxHeight: 600),
+        constraints: const BoxConstraints(maxWidth: 500, maxHeight: 600),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Container(
-              padding: EdgeInsets.all(20),
-              decoration: BoxDecoration(
+              padding: const EdgeInsets.all(20),
+              decoration: const BoxDecoration(
                 color: Color(0xFF416240),
                 borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
               ),
               child: Row(
                 children: [
-                  Icon(Icons.share_rounded, color: Colors.white),
-                  SizedBox(width: 12),
+                  const Icon(Icons.share_rounded, color: Colors.white),
+                  const SizedBox(width: 12),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
+                        const Text(
                           'Share Files',
                           style: TextStyle(
                             color: Colors.white,
@@ -918,7 +981,10 @@ class _ShareDialogState extends State<_ShareDialog>
                         ),
                         Text(
                           '${widget.filesToShare.length} file(s)',
-                          style: TextStyle(color: Colors.white70, fontSize: 13),
+                          style: const TextStyle(
+                            color: Colors.white70,
+                            fontSize: 13,
+                          ),
                         ),
                       ],
                     ),
@@ -928,9 +994,9 @@ class _ShareDialogState extends State<_ShareDialog>
             ),
             TabBar(
               controller: _tabController,
-              labelColor: Color(0xFF416240),
+              labelColor: const Color(0xFF416240),
               unselectedLabelColor: Colors.grey,
-              indicatorColor: Color(0xFF416240),
+              indicatorColor: const Color(0xFF416240),
               tabs: [
                 Tab(text: 'Groups (${widget.groups.length})'),
                 Tab(text: 'Doctors (${widget.doctors.length})'),
@@ -943,10 +1009,10 @@ class _ShareDialogState extends State<_ShareDialog>
               ),
             ),
             Container(
-              padding: EdgeInsets.all(16),
+              padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
                 color: Colors.grey[50],
-                borderRadius: BorderRadius.vertical(
+                borderRadius: const BorderRadius.vertical(
                   bottom: Radius.circular(16),
                 ),
               ),
@@ -955,10 +1021,10 @@ class _ShareDialogState extends State<_ShareDialog>
                   Expanded(
                     child: TextButton(
                       onPressed: () => Navigator.pop(context),
-                      child: Text('Cancel'),
+                      child: const Text('Cancel'),
                     ),
                   ),
-                  SizedBox(width: 12),
+                  const SizedBox(width: 12),
                   Expanded(
                     flex: 2,
                     child: ElevatedButton(
@@ -990,7 +1056,7 @@ class _ShareDialogState extends State<_ShareDialog>
                                 });
                               },
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: Color(0xFF416240),
+                        backgroundColor: const Color(0xFF416240),
                         foregroundColor: Colors.white,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(8),
@@ -1017,7 +1083,7 @@ class _ShareDialogState extends State<_ShareDialog>
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(Icons.group_off_rounded, size: 48, color: Colors.grey[300]),
-            SizedBox(height: 16),
+            const SizedBox(height: 16),
             Text(
               'No groups available',
               style: TextStyle(color: Colors.grey[600]),
@@ -1028,7 +1094,7 @@ class _ShareDialogState extends State<_ShareDialog>
     }
 
     return ListView.builder(
-      padding: EdgeInsets.all(16),
+      padding: const EdgeInsets.all(16),
       itemCount: widget.groups.length,
       itemBuilder: (context, index) {
         final group = widget.groups[index];
@@ -1036,10 +1102,10 @@ class _ShareDialogState extends State<_ShareDialog>
         final isSelected = _selectedGroupIds.contains(groupId);
 
         return Container(
-          margin: EdgeInsets.only(bottom: 8),
+          margin: const EdgeInsets.only(bottom: 8),
           decoration: BoxDecoration(
             border: Border.all(
-              color: isSelected ? Color(0xFF416240) : Colors.grey[300]!,
+              color: isSelected ? const Color(0xFF416240) : Colors.grey[300]!,
             ),
             borderRadius: BorderRadius.circular(8),
           ),
@@ -1055,8 +1121,11 @@ class _ShareDialogState extends State<_ShareDialog>
               });
             },
             title: Text(group['name'] as String),
-            secondary: Icon(Icons.group_rounded, color: Color(0xFF416240)),
-            activeColor: Color(0xFF416240),
+            secondary: const Icon(
+              Icons.group_rounded,
+              color: Color(0xFF416240),
+            ),
+            activeColor: const Color(0xFF416240),
           ),
         );
       },
@@ -1074,7 +1143,7 @@ class _ShareDialogState extends State<_ShareDialog>
               size: 48,
               color: Colors.grey[300],
             ),
-            SizedBox(height: 16),
+            const SizedBox(height: 16),
             Text(
               'No doctors available',
               style: TextStyle(color: Colors.grey[600]),
@@ -1085,7 +1154,7 @@ class _ShareDialogState extends State<_ShareDialog>
     }
 
     return ListView.builder(
-      padding: EdgeInsets.all(16),
+      padding: const EdgeInsets.all(16),
       itemCount: widget.doctors.length,
       itemBuilder: (context, index) {
         final doctor = widget.doctors[index];
@@ -1093,10 +1162,10 @@ class _ShareDialogState extends State<_ShareDialog>
         final isSelected = _selectedDoctorIds.contains(doctorId);
 
         return Container(
-          margin: EdgeInsets.only(bottom: 8),
+          margin: const EdgeInsets.only(bottom: 8),
           decoration: BoxDecoration(
             border: Border.all(
-              color: isSelected ? Color(0xFF416240) : Colors.grey[300]!,
+              color: isSelected ? const Color(0xFF416240) : Colors.grey[300]!,
             ),
             borderRadius: BorderRadius.circular(8),
           ),
@@ -1115,11 +1184,11 @@ class _ShareDialogState extends State<_ShareDialog>
             subtitle: Text(
               doctor['organization_name'] ?? 'Unknown Organization',
             ),
-            secondary: Icon(
+            secondary: const Icon(
               Icons.medical_services_rounded,
               color: Color(0xFF416240),
             ),
-            activeColor: Color(0xFF416240),
+            activeColor: const Color(0xFF416240),
           ),
         );
       },

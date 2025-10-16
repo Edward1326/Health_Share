@@ -159,145 +159,70 @@ class _DoctorsScreenState extends State<DoctorsScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8F9FA),
-      body: CustomScrollView(
-        physics: const BouncingScrollPhysics(),
-        slivers: [
-          // Modern App Bar
-          SliverAppBar(
-            expandedHeight: 140,
-            floating: false,
-            pinned: true,
-            backgroundColor: _primaryColor,
-            elevation: 0,
-            flexibleSpace: FlexibleSpaceBar(
-              titlePadding: const EdgeInsets.only(left: 56, bottom: 16),
-              title: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Your Doctors',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 20,
-                      letterSpacing: -0.5,
-                    ),
-                  ),
-                  Text(
-                    widget.orgName,
-                    style: TextStyle(
-                      color: Colors.white.withOpacity(0.75),
-                      fontSize: 12,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            leading: Padding(
-              padding: const EdgeInsets.all(8),
-              child: Material(
-                color: Colors.white.withOpacity(0.15),
-                shape: const CircleBorder(),
-                child: InkWell(
-                  onTap: () => Navigator.pop(context),
-                  customBorder: const CircleBorder(),
-                  child: const Icon(
-                    Icons.arrow_back_rounded,
-                    color: Colors.white,
-                    size: 22,
-                  ),
-                ),
-              ),
-            ),
-            actions: [
-              Padding(
-                padding: const EdgeInsets.all(8),
-                child: Material(
-                  color: Colors.white.withOpacity(0.15),
-                  shape: const CircleBorder(),
-                  child: InkWell(
-                    onTap: () async {
-                      await _fetchAssignedDoctors();
-                      if (mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: const Row(
-                              children: [
-                                Icon(
-                                  Icons.check_circle,
-                                  color: Colors.white,
-                                  size: 20,
-                                ),
-                                SizedBox(width: 12),
-                                Text('Refreshed successfully'),
-                              ],
-                            ),
-                            duration: const Duration(seconds: 2),
-                            backgroundColor: _primaryColor,
-                            behavior: SnackBarBehavior.floating,
-                            margin: const EdgeInsets.all(16),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                          ),
-                        );
-                      }
-                    },
-                    customBorder: const CircleBorder(),
-                    child: const Padding(
-                      padding: EdgeInsets.all(12),
-                      child: Icon(
-                        Icons.refresh_rounded,
-                        color: Colors.white,
-                        size: 20,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-            ],
-          ),
-
-          // Content
-          SliverToBoxAdapter(
-            child: FadeTransition(
-              opacity: _fadeAnimation,
-              child:
-                  _isLoading
-                      ? Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 80),
-                        child: Center(
-                          child: CircularProgressIndicator(
-                            color: _primaryColor,
-                            strokeWidth: 2.5,
-                          ),
-                        ),
-                      )
-                      : _assignedDoctors.isEmpty
-                      ? _buildEmptyState()
-                      : const SizedBox.shrink(),
+      backgroundColor: Colors.white,
+      appBar: AppBar(
+        backgroundColor: _primaryColor,
+        elevation: 0,
+        automaticallyImplyLeading: false,
+        leading: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: () => Navigator.pop(context),
+            child: const Icon(
+              Icons.arrow_back_rounded,
+              color: Colors.white,
+              size: 24,
             ),
           ),
-
-          // Doctor Cards List
-          if (!_isLoading && _assignedDoctors.isNotEmpty)
-            SliverPadding(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
-              sliver: SliverList(
-                delegate: SliverChildBuilderDelegate((context, index) {
-                  final doctor = _assignedDoctors[index];
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 12),
-                    child: _buildDoctorCard(doctor, index),
-                  );
-                }, childCount: _assignedDoctors.length),
+        ),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Your Doctors',
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w700,
+                fontSize: 20,
               ),
             ),
-        ],
+            Text(
+              widget.orgName,
+              style: TextStyle(
+                color: Colors.white.withOpacity(0.8),
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
+      ),
+      body: FadeTransition(
+        opacity: _fadeAnimation,
+        child:
+            _isLoading
+                ? Center(
+                  child: CircularProgressIndicator(
+                    color: _primaryColor,
+                    strokeWidth: 2.5,
+                  ),
+                )
+                : _assignedDoctors.isEmpty
+                ? _buildEmptyState()
+                : ListView.builder(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 16,
+                  ),
+                  itemCount: _assignedDoctors.length,
+                  itemBuilder: (context, index) {
+                    final doctor = _assignedDoctors[index];
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: _buildDoctorCard(doctor, index),
+                    );
+                  },
+                ),
       ),
     );
   }
@@ -322,141 +247,104 @@ class _DoctorsScreenState extends State<DoctorsScreen>
       },
       child: Material(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(12),
         child: InkWell(
           onTap: () {
             Navigator.push(
               context,
-              PageRouteBuilder(
-                pageBuilder:
-                    (context, animation, secondaryAnimation) =>
-                        OrgDoctorsFilesScreen(
-                          doctorId: doctor['doctor_id'].toString(),
-                          doctorName: doctorName,
-                          orgName: widget.orgName,
-                          assignmentId: doctor['id'].toString(),
-                        ),
-                transitionsBuilder: (
-                  context,
-                  animation,
-                  secondaryAnimation,
-                  child,
-                ) {
-                  return SlideTransition(
-                    position: animation.drive(
-                      Tween(
-                        begin: const Offset(1, 0),
-                        end: Offset.zero,
-                      ).chain(CurveTween(curve: Curves.easeInOutCubic)),
+              MaterialPageRoute(
+                builder:
+                    (context) => OrgDoctorsFilesScreen(
+                      doctorId: doctor['doctor_id'].toString(),
+                      doctorName: doctorName,
+                      orgName: widget.orgName,
+                      assignmentId: doctor['id'].toString(),
                     ),
-                    child: child,
-                  );
-                },
               ),
             );
           },
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(12),
           child: Container(
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(16),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.04),
-                  blurRadius: 10,
-                  offset: const Offset(0, 2),
-                ),
-              ],
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.grey[200]!, width: 1),
             ),
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Row(
-                children: [
-                  // Avatar
-                  Container(
-                    width: 56,
-                    height: 56,
-                    decoration: BoxDecoration(
-                      color: _primaryColor.withOpacity(0.1),
-                      shape: BoxShape.circle,
-                    ),
-                    child: Center(
-                      child: Text(
-                        initialChar,
-                        style: TextStyle(
-                          color: _primaryColor,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 22,
-                        ),
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              children: [
+                // Avatar
+                Container(
+                  width: 56,
+                  height: 56,
+                  decoration: BoxDecoration(
+                    color: _primaryColor.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Center(
+                    child: Text(
+                      initialChar,
+                      style: TextStyle(
+                        color: _primaryColor,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 22,
                       ),
                     ),
                   ),
-                  const SizedBox(width: 14),
-                  // Doctor Info
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                doctorName,
-                                style: const TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w700,
-                                  color: Color(0xFF1F2937),
-                                  height: 1.2,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            _buildStatusBadge(status),
-                          ],
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          department,
-                          style: const TextStyle(
-                            fontSize: 13,
-                            color: Color(0xFF64748B),
-                            fontWeight: FontWeight.w500,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        const SizedBox(height: 8),
-                        Row(
-                          children: [
-                            Icon(
-                              Icons.calendar_today_outlined,
-                              size: 13,
-                              color: const Color(0xFF94A3B8),
-                            ),
-                            const SizedBox(width: 6),
-                            Text(
-                              'Assigned $assignedDate',
+                ),
+                const SizedBox(width: 14),
+                // Doctor Info
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              doctorName,
                               style: const TextStyle(
-                                fontSize: 12,
-                                color: Color(0xFF94A3B8),
-                                fontWeight: FontWeight.w500,
+                                fontSize: 15,
+                                fontWeight: FontWeight.w700,
+                                color: Color(0xFF1F2937),
                               ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                             ),
-                          ],
+                          ),
+                          const SizedBox(width: 8),
+                          _buildStatusBadge(status),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        department,
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: Colors.grey[600],
+                          fontWeight: FontWeight.w500,
                         ),
-                      ],
-                    ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        'Assigned $assignedDate',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey[500],
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(width: 12),
-                  // Arrow
-                  Icon(
-                    Icons.chevron_right_rounded,
-                    color: const Color(0xFFCBD5E1),
-                    size: 24,
-                  ),
-                ],
-              ),
+                ),
+                const SizedBox(width: 12),
+                Icon(
+                  Icons.chevron_right_rounded,
+                  color: Colors.grey[400],
+                  size: 22,
+                ),
+              ],
             ),
           ),
         ),

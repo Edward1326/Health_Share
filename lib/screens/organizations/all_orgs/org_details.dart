@@ -33,6 +33,12 @@ class _OrgDetailsScreenState extends State<OrgDetailsScreen>
   bool _hasJoined = false;
   String? _membershipStatus;
 
+  // Design tokens
+  static const primaryColor = Color(0xFF416240);
+  static const accentColor = Color(0xFF6A8E6E);
+  static const lightBg = Color(0xFFF8FAF8);
+  static const cardBg = Colors.white;
+
   @override
   void initState() {
     super.initState();
@@ -51,7 +57,6 @@ class _OrgDetailsScreenState extends State<OrgDetailsScreen>
   Future<void> _loadOrganizationDetails() async {
     try {
       final orgData = await OrgService.fetchOrgDetails(widget.orgId);
-
       setState(() {
         _organizationData = orgData;
         _isLoading = false;
@@ -62,18 +67,8 @@ class _OrgDetailsScreenState extends State<OrgDetailsScreen>
         _isLoading = false;
       });
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'Error loading organization details: ${e.toString()}',
-            ),
-            backgroundColor: Colors.red[700],
-            behavior: SnackBarBehavior.floating,
-            margin: const EdgeInsets.all(16),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-          ),
+        _showErrorSnackbar(
+          'Error loading organization details: ${e.toString()}',
         );
       }
     }
@@ -111,17 +106,7 @@ class _OrgDetailsScreenState extends State<OrgDetailsScreen>
       });
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error loading doctors: ${e.toString()}'),
-            backgroundColor: Colors.red[700],
-            behavior: SnackBarBehavior.floating,
-            margin: const EdgeInsets.all(16),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-          ),
-        );
+        _showErrorSnackbar('Error loading doctors: ${e.toString()}');
       }
     }
   }
@@ -206,31 +191,47 @@ class _OrgDetailsScreenState extends State<OrgDetailsScreen>
         .toList();
   }
 
+  void _showErrorSnackbar(String msg) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(msg),
+          backgroundColor: Colors.red[700],
+          behavior: SnackBarBehavior.floating,
+          margin: const EdgeInsets.all(16),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8F9FA),
+      backgroundColor: lightBg,
       body:
           _isLoading
               ? Center(
                 child: CircularProgressIndicator(
-                  color: const Color(0xFF416240),
+                  color: primaryColor,
                   strokeWidth: 2.5,
                 ),
               )
               : CustomScrollView(
                 physics: const BouncingScrollPhysics(),
                 slivers: [
-                  // Modern App Bar
+                  // Enhanced Hero Header
                   SliverAppBar(
-                    expandedHeight: 200,
+                    expandedHeight: 260,
                     pinned: true,
-                    backgroundColor: const Color(0xFF416240),
+                    backgroundColor: primaryColor,
                     elevation: 0,
                     leading: Padding(
                       padding: const EdgeInsets.all(8),
                       child: Material(
-                        color: Colors.white.withOpacity(0.15),
+                        color: Colors.white.withOpacity(0.2),
                         shape: const CircleBorder(),
                         child: InkWell(
                           onTap: () => Navigator.pop(context),
@@ -238,13 +239,13 @@ class _OrgDetailsScreenState extends State<OrgDetailsScreen>
                           child: const Icon(
                             Icons.arrow_back_rounded,
                             color: Colors.white,
-                            size: 22,
+                            size: 24,
                           ),
                         ),
                       ),
                     ),
                     flexibleSpace: FlexibleSpaceBar(
-                      titlePadding: const EdgeInsets.only(left: 56, bottom: 56),
+                      titlePadding: const EdgeInsets.only(left: 56, bottom: 60),
                       title: Text(
                         _organizationData?['name'] ?? widget.orgName,
                         style: const TextStyle(
@@ -252,6 +253,8 @@ class _OrgDetailsScreenState extends State<OrgDetailsScreen>
                           fontWeight: FontWeight.w700,
                           fontSize: 20,
                         ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
                       background:
                           _organizationData?['image'] != null
@@ -263,9 +266,7 @@ class _OrgDetailsScreenState extends State<OrgDetailsScreen>
                                     fit: BoxFit.cover,
                                     errorBuilder:
                                         (context, error, stackTrace) =>
-                                            Container(
-                                              color: const Color(0xFF416240),
-                                            ),
+                                            Container(color: primaryColor),
                                   ),
                                   Container(
                                     decoration: BoxDecoration(
@@ -273,28 +274,34 @@ class _OrgDetailsScreenState extends State<OrgDetailsScreen>
                                         begin: Alignment.topCenter,
                                         end: Alignment.bottomCenter,
                                         colors: [
-                                          Colors.black.withOpacity(0.3),
-                                          Colors.black.withOpacity(0.6),
+                                          Colors.black.withOpacity(0.25),
+                                          Colors.black.withOpacity(0.65),
                                         ],
                                       ),
                                     ),
                                   ),
                                 ],
                               )
-                              : Container(color: const Color(0xFF416240)),
+                              : Container(color: primaryColor),
                     ),
                     bottom: PreferredSize(
-                      preferredSize: const Size.fromHeight(48),
+                      preferredSize: const Size.fromHeight(60),
                       child: Container(
-                        color: Colors.white,
+                        color: cardBg,
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
                         child: TabBar(
                           controller: _tabController,
-                          labelColor: const Color(0xFF416240),
-                          unselectedLabelColor: const Color(0xFF94A3B8),
-                          indicatorColor: const Color(0xFF416240),
+                          labelColor: primaryColor,
+                          unselectedLabelColor: Colors.grey[400],
+                          indicatorColor: primaryColor,
                           indicatorWeight: 3,
+                          indicatorPadding: const EdgeInsets.only(bottom: 8),
                           labelStyle: const TextStyle(
                             fontWeight: FontWeight.w700,
+                            fontSize: 14,
+                          ),
+                          unselectedLabelStyle: const TextStyle(
+                            fontWeight: FontWeight.w600,
                             fontSize: 14,
                           ),
                           tabs: [
@@ -305,20 +312,20 @@ class _OrgDetailsScreenState extends State<OrgDetailsScreen>
                                 children: [
                                   const Text('Doctors'),
                                   if (_doctors.isNotEmpty) ...[
-                                    const SizedBox(width: 6),
+                                    const SizedBox(width: 8),
                                     Container(
                                       padding: const EdgeInsets.symmetric(
-                                        horizontal: 6,
+                                        horizontal: 8,
                                         vertical: 2,
                                       ),
                                       decoration: BoxDecoration(
-                                        color: const Color(0xFF416240),
-                                        borderRadius: BorderRadius.circular(10),
+                                        color: primaryColor,
+                                        borderRadius: BorderRadius.circular(12),
                                       ),
                                       child: Text(
                                         '${_filteredDoctors.length}',
                                         style: const TextStyle(
-                                          fontSize: 11,
+                                          fontSize: 12,
                                           color: Colors.white,
                                           fontWeight: FontWeight.w700,
                                         ),
@@ -346,158 +353,192 @@ class _OrgDetailsScreenState extends State<OrgDetailsScreen>
 
   Widget _buildDetailsTab() {
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // About Section
           if (_organizationData?['description'] != null) ...[
-            Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.04),
-                    blurRadius: 10,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Row(
-                    children: [
-                      Icon(
-                        Icons.info_outline,
-                        size: 20,
-                        color: Color(0xFF416240),
-                      ),
-                      SizedBox(width: 10),
-                      Text(
-                        'About',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
-                          color: Color(0xFF1F2937),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    _organizationData!['description'],
-                    style: const TextStyle(
-                      fontSize: 14,
-                      height: 1.6,
-                      color: Color(0xFF475569),
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ],
+            _buildSectionCard(
+              icon: Icons.info_outline,
+              title: 'About',
+              child: Text(
+                _organizationData!['description'],
+                style: TextStyle(
+                  fontSize: 15,
+                  height: 1.7,
+                  color: Colors.grey[700],
+                  fontWeight: FontWeight.w500,
+                ),
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 20),
           ],
-          _buildInfoGrid(),
+          // Information Section
+          _buildInfoSection(),
+          const SizedBox(height: 20),
         ],
       ),
     );
   }
 
-  Widget _buildInfoGrid() {
-    final items = <Widget>[];
-
-    if (_organizationData?['organization_license'] != null) {
-      items.add(
-        _buildInfoItem(
-          Icons.verified_user_outlined,
-          'License',
-          _organizationData!['organization_license'],
-        ),
-      );
-    }
-
-    if (_organizationData?['email'] != null) {
-      items.add(
-        _buildInfoItem(
-          Icons.email_outlined,
-          'Email',
-          _organizationData!['email'],
-        ),
-      );
-    }
-
-    if (_organizationData?['contact_number'] != null) {
-      items.add(
-        _buildInfoItem(
-          Icons.phone_outlined,
-          'Contact',
-          _organizationData!['contact_number'],
-        ),
-      );
-    }
-
-    if (_organizationData?['location'] != null) {
-      items.add(
-        _buildInfoItem(
-          Icons.location_on_outlined,
-          'Location',
-          _organizationData!['location'],
-        ),
-      );
-    }
-
-    if (_organizationData?['created_at'] != null) {
-      items.add(
-        _buildInfoItem(
-          Icons.calendar_today_outlined,
-          'Established',
-          _formatDate(_organizationData!['created_at']),
-        ),
-      );
-    }
-
+  Widget _buildSectionCard({
+    required IconData icon,
+    required String title,
+    required Widget child,
+  }) {
     return Container(
-      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        color: cardBg,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: Colors.grey[100]!, width: 1),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.04),
-            blurRadius: 10,
+            blurRadius: 12,
             offset: const Offset(0, 2),
           ),
         ],
       ),
+      padding: const EdgeInsets.all(20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Row(
+          Row(
             children: [
-              Icon(Icons.business_outlined, size: 20, color: Color(0xFF416240)),
-              SizedBox(width: 10),
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: primaryColor.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(icon, size: 20, color: primaryColor),
+              ),
+              const SizedBox(width: 14),
               Text(
-                'Information',
-                style: TextStyle(
-                  fontSize: 16,
+                title,
+                style: const TextStyle(
+                  fontSize: 17,
                   fontWeight: FontWeight.w700,
-                  color: Color(0xFF1F2937),
+                  color: Colors.black87,
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 20),
-          ...List.generate(items.length, (index) {
-            return Column(
+          const SizedBox(height: 18),
+          child,
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInfoSection() {
+    final items = <Map<String, dynamic>>[];
+
+    if (_organizationData?['organization_license'] != null) {
+      items.add({
+        'icon': Icons.verified_user_outlined,
+        'label': 'License',
+        'value': _organizationData!['organization_license'],
+      });
+    }
+
+    if (_organizationData?['email'] != null) {
+      items.add({
+        'icon': Icons.email_outlined,
+        'label': 'Email',
+        'value': _organizationData!['email'],
+      });
+    }
+
+    if (_organizationData?['contact_number'] != null) {
+      items.add({
+        'icon': Icons.phone_outlined,
+        'label': 'Phone',
+        'value': _organizationData!['contact_number'],
+      });
+    }
+
+    if (_organizationData?['location'] != null) {
+      items.add({
+        'icon': Icons.location_on_outlined,
+        'label': 'Location',
+        'value': _organizationData!['location'],
+      });
+    }
+
+    if (_organizationData?['created_at'] != null) {
+      items.add({
+        'icon': Icons.calendar_today_outlined,
+        'label': 'Established',
+        'value': _formatDate(_organizationData!['created_at']),
+      });
+    }
+
+    return Container(
+      decoration: BoxDecoration(
+        color: cardBg,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: Colors.grey[100]!, width: 1),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 12,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: primaryColor.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(
+                  Icons.business_outlined,
+                  size: 20,
+                  color: primaryColor,
+                ),
+              ),
+              const SizedBox(width: 14),
+              const Text(
+                'Organization Info',
+                style: TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.black87,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 24),
+          ...List.generate(
+            items.length,
+            (index) => Column(
               children: [
-                if (index > 0) const SizedBox(height: 16),
-                items[index],
+                _buildInfoItem(
+                  items[index]['icon'] as IconData,
+                  items[index]['label'] as String,
+                  items[index]['value'] as String,
+                ),
+                if (index < items.length - 1)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    child: Divider(
+                      color: Colors.grey[200],
+                      height: 1,
+                      thickness: 1,
+                    ),
+                  ),
               ],
-            );
-          }),
+            ),
+          ),
         ],
       ),
     );
@@ -508,33 +549,34 @@ class _OrgDetailsScreenState extends State<OrgDetailsScreen>
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Container(
-          width: 36,
-          height: 36,
+          width: 48,
+          height: 48,
           decoration: BoxDecoration(
-            color: const Color(0xFF416240).withOpacity(0.1),
-            borderRadius: BorderRadius.circular(10),
+            color: primaryColor.withOpacity(0.08),
+            borderRadius: BorderRadius.circular(14),
           ),
-          child: Icon(icon, size: 18, color: const Color(0xFF416240)),
+          child: Icon(icon, size: 22, color: primaryColor),
         ),
-        const SizedBox(width: 14),
+        const SizedBox(width: 16),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
                 label,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 12,
-                  color: Color(0xFF64748B),
+                  color: Colors.grey[600],
                   fontWeight: FontWeight.w600,
+                  letterSpacing: 0.3,
                 ),
               ),
-              const SizedBox(height: 3),
+              const SizedBox(height: 6),
               Text(
                 value,
                 style: const TextStyle(
-                  fontSize: 14,
-                  color: Color(0xFF1F2937),
+                  fontSize: 15,
+                  color: Colors.black87,
                   fontWeight: FontWeight.w600,
                 ),
               ),
@@ -548,94 +590,84 @@ class _OrgDetailsScreenState extends State<OrgDetailsScreen>
   Widget _buildDoctorsTab() {
     return Column(
       children: [
-        if (_departments.length > 1)
-          Container(
-            height: 52,
-            margin: const EdgeInsets.only(top: 12),
-            child: ListView.builder(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              scrollDirection: Axis.horizontal,
-              itemCount: _departments.length,
-              itemBuilder: (context, index) {
-                final department = _departments[index];
-                final isSelected = _selectedDepartment == department;
-                return Padding(
-                  padding: const EdgeInsets.only(right: 8),
-                  child: Material(
-                    color: isSelected ? const Color(0xFF416240) : Colors.white,
-                    borderRadius: BorderRadius.circular(12),
-                    child: InkWell(
-                      onTap: () {
-                        setState(() {
-                          _selectedDepartment = department;
-                        });
-                      },
-                      borderRadius: BorderRadius.circular(12),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 10,
-                        ),
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(12),
-                          border:
-                              isSelected
-                                  ? null
-                                  : Border.all(
-                                    color: const Color(0xFFE5E7EB),
-                                    width: 1,
-                                  ),
-                          boxShadow:
-                              isSelected
-                                  ? [
-                                    BoxShadow(
-                                      color: Colors.black.withOpacity(0.04),
-                                      blurRadius: 10,
-                                      offset: const Offset(0, 2),
-                                    ),
-                                  ]
-                                  : null,
-                        ),
-                        child: Text(
-                          department,
-                          style: TextStyle(
-                            color:
-                                isSelected
-                                    ? Colors.white
-                                    : const Color(0xFF64748B),
-                            fontWeight: FontWeight.w600,
-                            fontSize: 13,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
+        if (_departments.length > 1) _buildDepartmentFilter(),
         Expanded(
           child:
               _isLoadingDoctors
                   ? Center(
                     child: CircularProgressIndicator(
-                      color: const Color(0xFF416240),
+                      color: primaryColor,
                       strokeWidth: 2.5,
                     ),
                   )
                   : _filteredDoctors.isEmpty
                   ? _buildEmptyDoctorsState()
-                  : ListView.builder(
-                    padding: const EdgeInsets.all(16),
-                    itemCount: _filteredDoctors.length,
-                    itemBuilder: (context, index) {
-                      final doctor = _filteredDoctors[index];
-                      final user = doctor['User'];
-                      return _buildDoctorCard(doctor, user);
-                    },
-                  ),
+                  : _buildDoctorsList(),
         ),
       ],
+    );
+  }
+
+  Widget _buildDepartmentFilter() {
+    return Container(
+      color: cardBg,
+      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: List.generate(_departments.length, (index) {
+            final dept = _departments[index];
+            final isSelected = _selectedDepartment == dept;
+            return Padding(
+              padding: EdgeInsets.only(
+                right: index < _departments.length - 1 ? 10 : 0,
+              ),
+              child: _buildDepartmentChip(dept, isSelected),
+            );
+          }),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDepartmentChip(String dept, bool isSelected) {
+    return Material(
+      color: isSelected ? primaryColor : Colors.grey[100],
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        onTap: () => setState(() => _selectedDepartment = dept),
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            border:
+                isSelected
+                    ? null
+                    : Border.all(color: Colors.grey[300]!, width: 1.5),
+          ),
+          child: Text(
+            dept,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: isSelected ? Colors.white : Colors.grey[700],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDoctorsList() {
+    return ListView.builder(
+      padding: const EdgeInsets.all(16),
+      itemCount: _filteredDoctors.length,
+      itemBuilder: (context, index) {
+        final doctor = _filteredDoctors[index];
+        final user = doctor['User'];
+        return _buildDoctorCard(doctor, user, index);
+      },
     );
   }
 
@@ -647,19 +679,19 @@ class _OrgDetailsScreenState extends State<OrgDetailsScreen>
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Container(
-              width: 80,
-              height: 80,
+              width: 100,
+              height: 100,
               decoration: BoxDecoration(
-                color: const Color(0xFF416240).withOpacity(0.1),
+                color: primaryColor.withOpacity(0.1),
                 shape: BoxShape.circle,
               ),
               child: const Icon(
                 Icons.medical_services_outlined,
-                color: Color(0xFF416240),
-                size: 36,
+                color: primaryColor,
+                size: 48,
               ),
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 24),
             Text(
               _selectedDepartment == 'All'
                   ? 'No Doctors Yet'
@@ -667,10 +699,10 @@ class _OrgDetailsScreenState extends State<OrgDetailsScreen>
               style: const TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.w700,
-                color: Color(0xFF1F2937),
+                color: Colors.black87,
               ),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 10),
             Text(
               _selectedDepartment == 'All'
                   ? 'This organization hasn\'t added any doctors yet'
@@ -691,108 +723,144 @@ class _OrgDetailsScreenState extends State<OrgDetailsScreen>
   Widget _buildDoctorCard(
     Map<String, dynamic> doctor,
     Map<String, dynamic>? user,
+    int index,
   ) {
     final fullName = _formatFullName(user);
     final initial = fullName.isNotEmpty ? fullName[0].toUpperCase() : 'D';
+    final department = doctor['department']?.toString().trim() ?? 'General';
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 10,
-            offset: const Offset(0, 2),
+    return TweenAnimationBuilder<double>(
+      duration: Duration(milliseconds: 300 + (index * 50)),
+      tween: Tween(begin: 0.0, end: 1.0),
+      curve: Curves.easeOut,
+      builder: (context, value, child) {
+        return Opacity(
+          opacity: value,
+          child: Transform.translate(
+            offset: Offset(0, 20 * (1 - value)),
+            child: child,
           ),
-        ],
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
+        );
+      },
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 14),
+        decoration: BoxDecoration(
+          color: cardBg,
           borderRadius: BorderRadius.circular(16),
-          onTap: () {},
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Row(
-              children: [
-                Container(
-                  width: 52,
-                  height: 52,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF416240).withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: Center(
-                    child: Text(
-                      initial,
-                      style: const TextStyle(
-                        color: Color(0xFF416240),
-                        fontSize: 20,
-                        fontWeight: FontWeight.w700,
+          border: Border.all(color: Colors.grey[100]!, width: 1),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.04),
+              blurRadius: 10,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(16),
+            onTap: () {},
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Container(
+                    width: 60,
+                    height: 60,
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [
+                          primaryColor.withOpacity(0.15),
+                          primaryColor.withOpacity(0.05),
+                        ],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Center(
+                      child: Text(
+                        initial,
+                        style: const TextStyle(
+                          color: primaryColor,
+                          fontSize: 24,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
                     ),
                   ),
-                ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Dr. $fullName',
-                        style: const TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w700,
-                          color: Color(0xFF1F2937),
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      const SizedBox(height: 4),
-                      if (doctor['department'] != null &&
-                          doctor['department'].toString().trim().isNotEmpty)
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
                         Text(
-                          doctor['department'],
+                          'Dr. $fullName',
                           style: const TextStyle(
-                            fontSize: 13,
-                            color: Color(0xFF64748B),
-                            fontWeight: FontWeight.w500,
+                            fontSize: 15,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.black87,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: primaryColor.withOpacity(0.08),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            department,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: primaryColor,
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
                         ),
-                      const SizedBox(height: 6),
-                      if (user?['email'] != null)
-                        Row(
-                          children: [
-                            const Icon(
-                              Icons.email_outlined,
-                              size: 13,
-                              color: Color(0xFF94A3B8),
-                            ),
-                            const SizedBox(width: 6),
-                            Expanded(
-                              child: Text(
-                                user!['email'],
-                                style: const TextStyle(
-                                  fontSize: 12,
-                                  color: Color(0xFF94A3B8),
-                                  fontWeight: FontWeight.w500,
-                                ),
-                                overflow: TextOverflow.ellipsis,
+                        if (user?['email'] != null) ...[
+                          const SizedBox(height: 8),
+                          Row(
+                            children: [
+                              Icon(
+                                Icons.email_outlined,
+                                size: 14,
+                                color: Colors.grey[500],
                               ),
-                            ),
-                          ],
-                        ),
-                    ],
+                              const SizedBox(width: 6),
+                              Expanded(
+                                child: Text(
+                                  user!['email'],
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: Colors.grey[600],
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                  maxLines: 1,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ],
+                    ),
                   ),
-                ),
-                const Icon(
-                  Icons.chevron_right_rounded,
-                  color: Color(0xFFCBD5E1),
-                  size: 22,
-                ),
-              ],
+                  const SizedBox(width: 8),
+                  Icon(
+                    Icons.chevron_right_rounded,
+                    color: Colors.grey[300],
+                    size: 24,
+                  ),
+                ],
+              ),
             ),
           ),
         ),

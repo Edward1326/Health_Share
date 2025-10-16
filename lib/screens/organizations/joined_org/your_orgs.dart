@@ -23,6 +23,7 @@ class _YourOrgsScreenState extends State<YourOrgsScreen>
 
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
+  bool _isSearchExpanded = false;
 
   List<Map<String, dynamic>> _joinedOrganizations = [];
   List<Map<String, dynamic>> _invitations = [];
@@ -33,6 +34,7 @@ class _YourOrgsScreenState extends State<YourOrgsScreen>
   static const primaryColor = Color(0xFF416240);
   static const accentColor = Color(0xFF6A8E6E);
   static const lightBg = Color(0xFFF8FAF8);
+  static const borderColor = Color(0xFFE5E7EB);
 
   @override
   void initState() {
@@ -137,109 +139,166 @@ class _YourOrgsScreenState extends State<YourOrgsScreen>
 
   @override
   Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isDesktop = screenWidth > 600;
+    final isTablet = screenWidth > 600 && screenWidth <= 900;
+    final isLargeScreen = screenWidth > 900;
+
+    // Responsive dimensions
+    final titleFontSize = isLargeScreen ? 24.0 : (isTablet ? 22.0 : 20.0);
+    final toolbarHeight = isDesktop ? 72.0 : 64.0;
+    final searchExpandedWidth =
+        isLargeScreen ? 350.0 : (isTablet ? 280.0 : screenWidth * 0.55);
+
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: lightBg,
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
         automaticallyImplyLeading: false,
-        title: const Text(
-          'Your Organizations',
-          style: TextStyle(
-            color: primaryColor,
-            fontWeight: FontWeight.bold,
-            fontSize: 28,
-          ),
-        ),
-        actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 8.0),
-            child: Stack(
-              alignment: Alignment.center,
-              children: [
-                IconButton(
-                  icon: Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: primaryColor.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(12),
+        toolbarHeight: toolbarHeight,
+        title: Padding(
+          padding: EdgeInsets.symmetric(horizontal: isDesktop ? 20 : 0),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Health Share',
+                  style: TextStyle(
+                    color: primaryColor,
+                    fontWeight: FontWeight.bold,
+                    fontSize: titleFontSize,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              // Search icon/bar
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 300),
+                curve: Curves.easeInOut,
+                width: _isSearchExpanded ? searchExpandedWidth : 51,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: _isSearchExpanded ? lightBg : Colors.transparent,
+                  borderRadius: BorderRadius.circular(24),
+                  border: Border.all(
+                    color: _isSearchExpanded ? borderColor : Colors.transparent,
+                    width: 1.5,
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    IconButton(
+                      icon: Icon(
+                        _isSearchExpanded
+                            ? Icons.close_rounded
+                            : Icons.search_rounded,
+                        color: primaryColor,
+                        size: 24,
+                      ),
+                      onPressed: () {
+                        setState(() {
+                          _isSearchExpanded = !_isSearchExpanded;
+                          if (!_isSearchExpanded) {
+                            _searchController.clear();
+                            _searchQuery = '';
+                          }
+                        });
+                      },
                     ),
-                    child: Icon(
+                    if (_isSearchExpanded)
+                      Expanded(
+                        child: TextField(
+                          controller: _searchController,
+                          autofocus: true,
+                          onChanged:
+                              (value) => setState(() => _searchQuery = value),
+                          style: const TextStyle(
+                            fontSize: 15,
+                            color: primaryColor,
+                          ),
+                          decoration: InputDecoration(
+                            hintText: 'Search organizations...',
+                            hintStyle: TextStyle(
+                              color: primaryColor.withOpacity(0.4),
+                              fontSize: 14,
+                            ),
+                            border: InputBorder.none,
+                            contentPadding: const EdgeInsets.only(right: 16),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              // Mail/Invitation icon
+              Stack(
+                alignment: Alignment.center,
+                children: [
+                  IconButton(
+                    icon: Icon(
                       Icons.mail_outline_rounded,
                       color:
                           _invitationCount > 0
                               ? primaryColor
                               : primaryColor.withOpacity(0.5),
-                      size: 22,
+                      size: 24,
                     ),
+                    onPressed: _showInvitationsDialog,
                   ),
-                  onPressed: _showInvitationsDialog,
-                ),
-                if (_invitationCount > 0)
-                  Positioned(
-                    right: 8,
-                    top: 8,
-                    child: Container(
-                      padding: const EdgeInsets.all(5),
-                      decoration: BoxDecoration(
-                        color: Colors.red,
-                        shape: BoxShape.circle,
-                        border: Border.all(color: Colors.white, width: 2),
-                      ),
-                      constraints: const BoxConstraints(
-                        minWidth: 18,
-                        minHeight: 18,
-                      ),
-                      child: Center(
-                        child: Text(
-                          '$_invitationCount',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 10,
-                            fontWeight: FontWeight.bold,
+                  if (_invitationCount > 0)
+                    Positioned(
+                      right: 8,
+                      top: 8,
+                      child: Container(
+                        padding: const EdgeInsets.all(5),
+                        decoration: BoxDecoration(
+                          color: Colors.red,
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.white, width: 2),
+                        ),
+                        constraints: const BoxConstraints(
+                          minWidth: 18,
+                          minHeight: 18,
+                        ),
+                        child: Center(
+                          child: Text(
+                            '$_invitationCount',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
                         ),
                       ),
                     ),
-                  ),
-              ],
-            ),
+                ],
+              ),
+            ],
           ),
-        ],
+        ),
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(1),
-          child: Container(height: 1, color: primaryColor.withOpacity(0.1)),
+          child: Container(height: 1, color: borderColor),
         ),
       ),
       body: FadeTransition(
         opacity: _fadeAnimation,
         child: SlideTransition(
           position: _slideAnimation,
-          child: Column(
-            children: [
-              const SizedBox(height: 16),
-              Padding(
-                padding: EdgeInsets.symmetric(
-                  horizontal: MediaQuery.of(context).size.width > 600 ? 24 : 16,
-                ),
-                child: _buildSearchBar(),
-              ),
-              const SizedBox(height: 8),
-              Expanded(
-                child:
-                    _isLoading
-                        ? const Center(
-                          child: CircularProgressIndicator(
-                            color: primaryColor,
-                            strokeWidth: 3,
-                          ),
-                        )
-                        : _filteredOrganizations.isEmpty
-                        ? _buildEmptyState()
-                        : _buildOrgGrid(),
-              ),
-            ],
-          ),
+          child:
+              _isLoading
+                  ? const Center(
+                    child: CircularProgressIndicator(
+                      color: primaryColor,
+                      strokeWidth: 2.5,
+                    ),
+                  )
+                  : _filteredOrganizations.isEmpty
+                  ? _buildEmptyState()
+                  : _buildOrgGrid(),
         ),
       ),
       bottomNavigationBar: MainNavBar(
@@ -249,71 +308,16 @@ class _YourOrgsScreenState extends State<YourOrgsScreen>
     );
   }
 
-  Widget _buildSearchBar() {
-    return Container(
-      constraints: const BoxConstraints(maxWidth: 800),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: primaryColor.withOpacity(0.2), width: 1.5),
-        boxShadow: [
-          BoxShadow(
-            color: primaryColor.withOpacity(0.08),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: TextFormField(
-        controller: _searchController,
-        onChanged: (value) => setState(() => _searchQuery = value),
-        style: const TextStyle(fontSize: 15, color: primaryColor),
-        decoration: InputDecoration(
-          hintText: 'Search your organizations...',
-          hintStyle: TextStyle(
-            color: primaryColor.withOpacity(0.4),
-            fontSize: 15,
-          ),
-          prefixIcon: Icon(
-            Icons.search_rounded,
-            color: primaryColor.withOpacity(0.6),
-            size: 22,
-          ),
-          suffixIcon:
-              _searchQuery.isNotEmpty
-                  ? IconButton(
-                    icon: Icon(
-                      Icons.clear_rounded,
-                      color: primaryColor.withOpacity(0.6),
-                      size: 20,
-                    ),
-                    onPressed: () {
-                      _searchController.clear();
-                      setState(() => _searchQuery = '');
-                    },
-                  )
-                  : null,
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(14),
-            borderSide: BorderSide.none,
-          ),
-          filled: true,
-          fillColor: Colors.white,
-          contentPadding: const EdgeInsets.symmetric(
-            horizontal: 16,
-            vertical: 16,
-          ),
-        ),
-      ),
-    );
-  }
-
   Widget _buildOrgGrid() {
     final orgs = _filteredOrganizations;
+    final screenWidth = MediaQuery.of(context).size.width;
+    final horizontalPadding =
+        screenWidth > 900 ? 60.0 : (screenWidth > 600 ? 40.0 : 20.0);
+
     return GridView.builder(
       padding: EdgeInsets.symmetric(
-        horizontal: MediaQuery.of(context).size.width > 600 ? 24 : 16,
-        vertical: 16,
+        horizontal: horizontalPadding,
+        vertical: 20,
       ),
       gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: _getCrossAxisCount(context),
@@ -355,16 +359,13 @@ class _YourOrgsScreenState extends State<YourOrgsScreen>
         },
         child: Container(
           decoration: BoxDecoration(
-            color: lightBg,
+            color: Colors.white,
             borderRadius: BorderRadius.circular(20),
-            border: Border.all(
-              color: primaryColor.withOpacity(0.12),
-              width: 1.5,
-            ),
+            border: Border.all(color: borderColor, width: 1),
             boxShadow: [
               BoxShadow(
-                color: primaryColor.withOpacity(0.08),
-                blurRadius: 10,
+                color: Colors.black.withOpacity(0.06),
+                blurRadius: 16,
                 offset: const Offset(0, 4),
               ),
             ],
@@ -491,16 +492,16 @@ class _YourOrgsScreenState extends State<YourOrgsScreen>
               width: 120,
               height: 120,
               decoration: BoxDecoration(
-                color: primaryColor.withOpacity(0.1),
+                color: primaryColor.withOpacity(0.08),
                 shape: BoxShape.circle,
               ),
               child: Icon(
                 Icons.groups_rounded,
-                color: primaryColor.withOpacity(0.4),
-                size: 60,
+                color: primaryColor.withOpacity(0.3),
+                size: 56,
               ),
             ),
-            const SizedBox(height: 32),
+            const SizedBox(height: 28),
             const Text(
               'No organizations joined yet',
               style: TextStyle(
@@ -510,12 +511,11 @@ class _YourOrgsScreenState extends State<YourOrgsScreen>
               ),
               textAlign: TextAlign.center,
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 10),
             Text(
               'Accept an invitation or browse all organizations to join',
               style: TextStyle(
                 fontSize: 15,
-                fontWeight: FontWeight.w500,
                 color: primaryColor.withOpacity(0.6),
               ),
               textAlign: TextAlign.center,

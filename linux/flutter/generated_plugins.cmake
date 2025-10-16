@@ -5,7 +5,6 @@
 list(APPEND FLUTTER_PLUGIN_LIST
   fast_rsa
   gtk
-  open_file_linux
   url_launcher_linux
 )
 
