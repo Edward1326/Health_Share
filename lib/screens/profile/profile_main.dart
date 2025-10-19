@@ -22,7 +22,6 @@ class _ProfileScreenState extends State<ProfileScreen>
   late Animation<double> _fadeAnimation;
   int _selectedIndex = 4;
 
-  // User data
   Map<String, dynamic>? _userData;
   bool _isLoading = true;
   String? _errorMessage;
@@ -82,27 +81,23 @@ class _ProfileScreenState extends State<ProfileScreen>
 
   String _getFullName() {
     if (_userData == null) return 'Loading...';
-
     final firstName = _userData!['first_name'] ?? '';
     final middleName = _userData!['middle_name'] ?? '';
     final lastName = _userData!['last_name'] ?? '';
-
     return [
       firstName,
       middleName,
       lastName,
-    ].where((name) => name.isNotEmpty).join(' ');
+    ].where((n) => n.isNotEmpty).join(' ');
   }
 
   String _getInitials() {
     if (_userData == null) return '?';
     final firstName = _userData!['first_name'] ?? '';
     final lastName = _userData!['last_name'] ?? '';
-
     String initials = '';
     if (firstName.isNotEmpty) initials += firstName[0];
     if (lastName.isNotEmpty) initials += lastName[0];
-
     return initials.toUpperCase();
   }
 
@@ -137,7 +132,6 @@ class _ProfileScreenState extends State<ProfileScreen>
                         (context) => EditProfileScreen(userData: _userData!),
                   ),
                 );
-
                 if (result == true) {
                   _loadUserData();
                 }
@@ -174,60 +168,7 @@ class _ProfileScreenState extends State<ProfileScreen>
     }
 
     if (_errorMessage != null) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(32),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Container(
-                width: 80,
-                height: 80,
-                decoration: BoxDecoration(
-                  color: Colors.red.withOpacity(0.1),
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(
-                  Icons.error_outline,
-                  size: 40,
-                  color: Colors.red[400],
-                ),
-              ),
-              const SizedBox(height: 20),
-              Text(
-                'Failed to load profile',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w700,
-                  color: Colors.grey[800],
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                _errorMessage!,
-                style: TextStyle(fontSize: 14, color: Colors.grey[600]),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 24),
-              ElevatedButton(
-                onPressed: _loadUserData,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF416240),
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 24,
-                    vertical: 12,
-                  ),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                ),
-                child: const Text('Retry'),
-              ),
-            ],
-          ),
-        ),
-      );
+      return _buildErrorState();
     }
 
     return FadeTransition(
@@ -297,6 +238,8 @@ class _ProfileScreenState extends State<ProfileScreen>
   }
 
   Widget _buildProfileHeader() {
+    final imageUrl = _userData?['image'];
+
     return Container(
       width: double.infinity,
       decoration: const BoxDecoration(
@@ -307,24 +250,31 @@ class _ProfileScreenState extends State<ProfileScreen>
         padding: const EdgeInsets.fromLTRB(16, 24, 16, 32),
         child: Column(
           children: [
-            Container(
-              width: 100,
-              height: 100,
-              decoration: BoxDecoration(
-                color: const Color(0xFF416240).withOpacity(0.1),
-                shape: BoxShape.circle,
-              ),
-              child: Center(
-                child: Text(
-                  _getInitials(),
-                  style: const TextStyle(
-                    fontSize: 36,
-                    fontWeight: FontWeight.w700,
-                    color: Color(0xFF416240),
+            if (imageUrl != null && imageUrl.toString().isNotEmpty)
+              CircleAvatar(
+                radius: 55,
+                backgroundColor: const Color(0xFF416240).withOpacity(0.1),
+                backgroundImage: NetworkImage(imageUrl),
+              )
+            else
+              Container(
+                width: 110,
+                height: 110,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF416240).withOpacity(0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: Center(
+                  child: Text(
+                    _getInitials(),
+                    style: const TextStyle(
+                      fontSize: 36,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF416240),
+                    ),
                   ),
                 ),
               ),
-            ),
             const SizedBox(height: 16),
             Text(
               _getFullName(),
@@ -343,6 +293,63 @@ class _ProfileScreenState extends State<ProfileScreen>
                 color: Colors.grey[600],
                 fontWeight: FontWeight.w500,
               ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildErrorState() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              width: 80,
+              height: 80,
+              decoration: BoxDecoration(
+                color: Colors.red.withOpacity(0.1),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons.error_outline,
+                size: 40,
+                color: Colors.red[400],
+              ),
+            ),
+            const SizedBox(height: 20),
+            Text(
+              'Failed to load profile',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+                color: Colors.grey[800],
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              _errorMessage!,
+              style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 24),
+            ElevatedButton(
+              onPressed: _loadUserData,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF416240),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24,
+                  vertical: 12,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+              child: const Text('Retry'),
             ),
           ],
         ),
@@ -435,13 +442,9 @@ class _ProfileScreenState extends State<ProfileScreen>
   }
 
   String _formatArrayValue(dynamic values) {
-    if (values == null) {
-      return 'Not provided';
-    } else if (values is List) {
-      return values.isNotEmpty ? values.join(', ') : 'Not provided';
-    } else if (values is String) {
-      return values.isNotEmpty ? values : 'Not provided';
-    }
+    if (values == null) return 'Not provided';
+    if (values is List && values.isNotEmpty) return values.join(', ');
+    if (values is String && values.isNotEmpty) return values;
     return 'Not provided';
   }
 
@@ -458,32 +461,19 @@ class _ProfileScreenState extends State<ProfileScreen>
           ),
         ],
       ),
-      child: Column(
-        children: [
-          _buildActionItem(
-            icon: Icons.lock_outline,
-            title: 'Change Password',
-            subtitle: 'Update your account password',
-            color: const Color(0xFF416240),
-            onTap: () async {
-              final result = await Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const ChangePasswordScreen(),
-                ),
-              );
-              // Optionally refresh profile if needed
-            },
-          ),
-          const Divider(height: 1, color: Color(0xFFF1F5F9)),
-          _buildActionItem(
-            icon: Icons.privacy_tip_outlined,
-            title: 'Privacy Settings',
-            subtitle: 'Manage your privacy preferences',
-            color: const Color(0xFF10B981),
-            onTap: () {},
-          ),
-        ],
+      child: _buildActionItem(
+        icon: Icons.lock_outline,
+        title: 'Change Password',
+        subtitle: 'Update your account password',
+        color: const Color(0xFF416240),
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => const ChangePasswordScreen(),
+            ),
+          );
+        },
       ),
     );
   }

@@ -34,10 +34,11 @@ class _OrgDetailsScreenState extends State<OrgDetailsScreen>
   String? _membershipStatus;
 
   // Design tokens
-  static const primaryColor = Color(0xFF416240);
-  static const accentColor = Color(0xFF6A8E6E);
+  static const primaryColor = Color(0xFF03989E);
+  static const accentColor = Color(0xFF04B1B8);
   static const lightBg = Color(0xFFF8FAF8);
   static const cardBg = Colors.white;
+  static const borderColor = Color(0xFFE5E7EB);
 
   @override
   void initState() {
@@ -390,8 +391,8 @@ class _OrgDetailsScreenState extends State<OrgDetailsScreen>
     return Container(
       decoration: BoxDecoration(
         color: cardBg,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: Colors.grey[100]!, width: 1),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: borderColor, width: 1),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.04),
@@ -478,8 +479,8 @@ class _OrgDetailsScreenState extends State<OrgDetailsScreen>
     return Container(
       decoration: BoxDecoration(
         color: cardBg,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: Colors.grey[100]!, width: 1),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: borderColor, width: 1),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.04),
@@ -553,7 +554,7 @@ class _OrgDetailsScreenState extends State<OrgDetailsScreen>
           height: 48,
           decoration: BoxDecoration(
             color: primaryColor.withOpacity(0.08),
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(12),
           ),
           child: Icon(icon, size: 22, color: primaryColor),
         ),
@@ -743,11 +744,11 @@ class _OrgDetailsScreenState extends State<OrgDetailsScreen>
         );
       },
       child: Container(
-        margin: const EdgeInsets.only(bottom: 14),
+        margin: const EdgeInsets.only(bottom: 12),
         decoration: BoxDecoration(
           color: cardBg,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: Colors.grey[100]!, width: 1),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: borderColor, width: 1),
           boxShadow: [
             BoxShadow(
               color: Colors.black.withOpacity(0.04),
@@ -759,16 +760,16 @@ class _OrgDetailsScreenState extends State<OrgDetailsScreen>
         child: Material(
           color: Colors.transparent,
           child: InkWell(
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(14),
             onTap: () {},
             child: Padding(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(14),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
                   Container(
-                    width: 60,
-                    height: 60,
+                    width: 56,
+                    height: 56,
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
                         colors: [
@@ -778,20 +779,20 @@ class _OrgDetailsScreenState extends State<OrgDetailsScreen>
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
                       ),
-                      borderRadius: BorderRadius.circular(16),
+                      borderRadius: BorderRadius.circular(12),
                     ),
                     child: Center(
                       child: Text(
                         initial,
                         style: const TextStyle(
                           color: primaryColor,
-                          fontSize: 24,
+                          fontSize: 22,
                           fontWeight: FontWeight.w700,
                         ),
                       ),
                     ),
                   ),
-                  const SizedBox(width: 16),
+                  const SizedBox(width: 14),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -799,47 +800,47 @@ class _OrgDetailsScreenState extends State<OrgDetailsScreen>
                         Text(
                           'Dr. $fullName',
                           style: const TextStyle(
-                            fontSize: 15,
+                            fontSize: 14,
                             fontWeight: FontWeight.w700,
                             color: Colors.black87,
                           ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
-                        const SizedBox(height: 8),
+                        const SizedBox(height: 6),
                         Container(
                           padding: const EdgeInsets.symmetric(
-                            horizontal: 10,
-                            vertical: 4,
+                            horizontal: 8,
+                            vertical: 3,
                           ),
                           decoration: BoxDecoration(
                             color: primaryColor.withOpacity(0.08),
-                            borderRadius: BorderRadius.circular(8),
+                            borderRadius: BorderRadius.circular(6),
                           ),
                           child: Text(
                             department,
                             style: TextStyle(
-                              fontSize: 12,
+                              fontSize: 11,
                               color: primaryColor,
                               fontWeight: FontWeight.w600,
                             ),
                           ),
                         ),
                         if (user?['email'] != null) ...[
-                          const SizedBox(height: 8),
+                          const SizedBox(height: 6),
                           Row(
                             children: [
                               Icon(
                                 Icons.email_outlined,
-                                size: 14,
+                                size: 12,
                                 color: Colors.grey[500],
                               ),
-                              const SizedBox(width: 6),
+                              const SizedBox(width: 4),
                               Expanded(
                                 child: Text(
                                   user!['email'],
                                   style: TextStyle(
-                                    fontSize: 12,
+                                    fontSize: 11,
                                     color: Colors.grey[600],
                                     fontWeight: FontWeight.w500,
                                   ),
@@ -857,7 +858,7 @@ class _OrgDetailsScreenState extends State<OrgDetailsScreen>
                   Icon(
                     Icons.chevron_right_rounded,
                     color: Colors.grey[300],
-                    size: 24,
+                    size: 20,
                   ),
                 ],
               ),

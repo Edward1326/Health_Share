@@ -104,7 +104,7 @@ class MainNavBar extends StatelessWidget {
     required bool isCompact,
   }) {
     final isSelected = selectedIndex == index;
-    final primaryColor = const Color(0xFF416240);
+    final primaryColor = const Color(0xFF03989E);
 
     return Expanded(
       child: GestureDetector(

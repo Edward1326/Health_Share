@@ -37,7 +37,12 @@ class FetchGroupService {
           .from('Group_Members')
           .select('''
             *,
-            User!user_id(id, email, person_id)
+            User!user_id(
+              id, 
+              email, 
+              person_id,
+              Person!person_id(first_name, middle_name, last_name)
+            )
           ''')
           .eq('group_id', groupId)
           .order('added_at', ascending: true);

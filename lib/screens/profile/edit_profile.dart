@@ -1,5 +1,8 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:path/path.dart' as path;
 
 class EditProfileScreen extends StatefulWidget {
   final Map<String, dynamic> userData;
@@ -14,18 +17,25 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   final SupabaseClient _supabase = Supabase.instance.client;
   final _formKey = GlobalKey<FormState>();
 
-  // Controllers for editable fields
+  // Controllers
   late TextEditingController _addressController;
   late TextEditingController _contactController;
   late TextEditingController _allergiesController;
   late TextEditingController _medicalConditionsController;
   late TextEditingController _disabilitiesController;
 
-  // Dropdown values
+  // Dropdowns
   String? _selectedBloodType;
   String? _selectedSex;
 
-  // Blood type options
+  // Upload image
+  File? _selectedImage;
+  String? _uploadedImageUrl;
+  String? _oldImagePath; // Track old image for deletion
+
+  bool _isLoading = false;
+  bool _isUploadingImage = false;
+
   final List<String> _bloodTypes = [
     'O+',
     'O-',
@@ -37,10 +47,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     'AB-',
   ];
 
-  // Sex options
   final List<String> _sexOptions = ['Male', 'Female'];
-
-  bool _isLoading = false;
 
   @override
   void initState() {
@@ -55,7 +62,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     _contactController = TextEditingController(
       text: widget.userData['contact_number'] ?? '',
     );
-
     _allergiesController = TextEditingController(
       text: widget.userData['allergies'] ?? '',
     );
@@ -65,14 +71,28 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     _disabilitiesController = TextEditingController(
       text: widget.userData['disabilities'] ?? '',
     );
-
     _selectedBloodType = widget.userData['blood_type'];
     _selectedSex = widget.userData['sex'];
+    _uploadedImageUrl = widget.userData['image'];
+
+    // Extract old image path if exists
+    if (_uploadedImageUrl != null && _uploadedImageUrl!.isNotEmpty) {
+      _oldImagePath = _extractImagePath(_uploadedImageUrl!);
+    }
+  }
+
+  @override
+  void dispose() {
+    _addressController.dispose();
+    _contactController.dispose();
+    _allergiesController.dispose();
+    _medicalConditionsController.dispose();
+    _disabilitiesController.dispose();
+    super.dispose();
   }
 
   String _formatInput(String text) {
     if (text.trim().isEmpty) return '';
-
     return text
         .split(',')
         .map((item) => item.trim())
@@ -93,24 +113,131 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         .join(' ');
   }
 
-  @override
-  void dispose() {
-    _addressController.dispose();
-    _contactController.dispose();
-    _allergiesController.dispose();
-    _medicalConditionsController.dispose();
-    _disabilitiesController.dispose();
-    super.dispose();
+  // Extract filename from full URL
+  String? _extractImagePath(String url) {
+    try {
+      final uri = Uri.parse(url);
+      final pathSegments = uri.pathSegments;
+      if (pathSegments.length >= 3) {
+        // URL format: .../storage/v1/object/public/profile-images/filename
+        return pathSegments.last;
+      }
+    } catch (e) {
+      debugPrint('Error extracting image path: $e');
+    }
+    return null;
+  }
+
+  // Delete old image from storage
+  Future<void> _deleteOldImage(String imagePath) async {
+    try {
+      await _supabase.storage.from('profile-images').remove([imagePath]);
+      debugPrint('Old image deleted: $imagePath');
+    } catch (e) {
+      debugPrint('Error deleting old image: $e');
+      // Don't throw error, just log it
+    }
+  }
+
+  Future<void> _pickAndUploadImage() async {
+    try {
+      setState(() => _isUploadingImage = true);
+
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.image,
+        allowMultiple: false,
+      );
+
+      if (result == null || result.files.isEmpty) {
+        setState(() => _isUploadingImage = false);
+        return;
+      }
+
+      final file = File(result.files.single.path!);
+
+      // Validate file size (max 5MB)
+      final fileSize = await file.length();
+      if (fileSize > 5 * 1024 * 1024) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Image size must be less than 5MB'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+        setState(() => _isUploadingImage = false);
+        return;
+      }
+
+      setState(() {
+        _selectedImage = file;
+      });
+
+      // Generate unique filename
+      final fileExt = path.extension(file.path);
+      final fileName =
+          'profile_${widget.userData['id']}_${DateTime.now().millisecondsSinceEpoch}$fileExt';
+
+      // Delete old image if exists
+      if (_oldImagePath != null) {
+        await _deleteOldImage(_oldImagePath!);
+      }
+
+      // Upload new image
+      final uploadPath = await _supabase.storage
+          .from('profile-images')
+          .upload(
+            fileName,
+            file,
+            fileOptions: const FileOptions(cacheControl: '3600', upsert: false),
+          );
+
+      // Get public URL
+      final publicUrl = _supabase.storage
+          .from('profile-images')
+          .getPublicUrl(fileName);
+
+      // Update Person table with new image URL
+      await _supabase
+          .from('Person')
+          .update({'image': publicUrl})
+          .eq('id', widget.userData['id']);
+
+      setState(() {
+        _uploadedImageUrl = publicUrl;
+        _oldImagePath = fileName;
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Profile image updated successfully!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('Error uploading image: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error uploading image: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isUploadingImage = false);
+      }
+    }
   }
 
   Future<void> _saveProfile() async {
-    if (!_formKey.currentState!.validate()) {
-      return;
-    }
+    if (!_formKey.currentState!.validate()) return;
 
-    setState(() {
-      _isLoading = true;
-    });
+    setState(() => _isLoading = true);
 
     try {
       final updateData = {
@@ -162,11 +289,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         );
       }
     } finally {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -216,6 +339,117 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           key: _formKey,
           child: Column(
             children: [
+              // Profile Image Section
+              Center(
+                child: Column(
+                  children: [
+                    Stack(
+                      alignment: Alignment.bottomRight,
+                      children: [
+                        Container(
+                          width: 110,
+                          height: 110,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: const Color(0xFF667EEA).withOpacity(0.2),
+                            border: Border.all(
+                              color: const Color(0xFF667EEA).withOpacity(0.3),
+                              width: 3,
+                            ),
+                          ),
+                          child: ClipOval(
+                            child:
+                                _isUploadingImage
+                                    ? const Center(
+                                      child: CircularProgressIndicator(
+                                        color: Color(0xFF667EEA),
+                                      ),
+                                    )
+                                    : _selectedImage != null
+                                    ? Image.file(
+                                      _selectedImage!,
+                                      fit: BoxFit.cover,
+                                    )
+                                    : (_uploadedImageUrl != null &&
+                                        _uploadedImageUrl!.isNotEmpty)
+                                    ? Image.network(
+                                      _uploadedImageUrl!,
+                                      fit: BoxFit.cover,
+                                      errorBuilder: (
+                                        context,
+                                        error,
+                                        stackTrace,
+                                      ) {
+                                        return const Icon(
+                                          Icons.person,
+                                          size: 50,
+                                          color: Colors.white,
+                                        );
+                                      },
+                                      loadingBuilder: (
+                                        context,
+                                        child,
+                                        loadingProgress,
+                                      ) {
+                                        if (loadingProgress == null)
+                                          return child;
+                                        return const Center(
+                                          child: CircularProgressIndicator(
+                                            color: Color(0xFF667EEA),
+                                          ),
+                                        );
+                                      },
+                                    )
+                                    : const Icon(
+                                      Icons.person,
+                                      size: 50,
+                                      color: Colors.white,
+                                    ),
+                          ),
+                        ),
+                        Positioned(
+                          bottom: 0,
+                          right: 0,
+                          child: GestureDetector(
+                            onTap:
+                                _isUploadingImage ? null : _pickAndUploadImage,
+                            child: Container(
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF667EEA),
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: Colors.white,
+                                  width: 3,
+                                ),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withOpacity(0.2),
+                                    blurRadius: 8,
+                                    offset: const Offset(0, 2),
+                                  ),
+                                ],
+                              ),
+                              padding: const EdgeInsets.all(8),
+                              child: const Icon(
+                                Icons.camera_alt,
+                                size: 20,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Tap to change photo',
+                      style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                    ),
+                    const SizedBox(height: 16),
+                  ],
+                ),
+              ),
+
               _buildSectionCard(
                 title: 'Contact Information',
                 icon: Icons.contact_phone_outlined,
@@ -307,7 +541,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                   ),
                 ),
               ),
-
               const SizedBox(height: 20),
             ],
           ),
@@ -404,13 +637,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               borderRadius: BorderRadius.circular(12),
               borderSide: BorderSide(color: Colors.grey.withOpacity(0.2)),
             ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: Color(0xFF667EEA), width: 2),
-            ),
-            errorBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: Colors.red, width: 1),
+            focusedBorder: const OutlineInputBorder(
+              borderRadius: BorderRadius.all(Radius.circular(12)),
+              borderSide: BorderSide(color: Color(0xFF667EEA), width: 2),
             ),
             filled: true,
             fillColor: Colors.white,
@@ -452,34 +681,16 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               borderRadius: BorderRadius.circular(12),
               borderSide: BorderSide(color: Colors.grey.withOpacity(0.2)),
             ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: Colors.grey.withOpacity(0.2)),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: Color(0xFF667EEA), width: 2),
-            ),
-            errorBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: Colors.red, width: 1),
-            ),
             filled: true,
             fillColor: Colors.white,
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 16,
-              vertical: 16,
-            ),
           ),
           items:
-              options
-                  .map(
-                    (String option) => DropdownMenuItem<String>(
-                      value: option,
-                      child: Text(option),
-                    ),
-                  )
-                  .toList(),
+              options.map((String option) {
+                return DropdownMenuItem<String>(
+                  value: option,
+                  child: Text(option),
+                );
+              }).toList(),
           hint: Text(
             'Select $label',
             style: TextStyle(color: Colors.grey[500]),

@@ -20,7 +20,6 @@ class _GroupsScreenState extends State<GroupsScreen>
 
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
-  bool _isSearchExpanded = false;
 
   List<Map<String, dynamic>> _groups = [];
   bool _isLoading = false;
@@ -99,100 +98,80 @@ class _GroupsScreenState extends State<GroupsScreen>
     final isTablet = screenWidth > 600 && screenWidth <= 900;
     final isLargeScreen = screenWidth > 900;
 
-    // Responsive dimensions
     final titleFontSize = isLargeScreen ? 24.0 : (isTablet ? 22.0 : 20.0);
-    final toolbarHeight = isDesktop ? 72.0 : 64.0;
-    final searchExpandedWidth =
-        isLargeScreen ? 350.0 : (isTablet ? 280.0 : screenWidth * 0.6);
-    final horizontalPadding = isLargeScreen ? 60.0 : (isTablet ? 40.0 : 20.0);
+    final toolbarHeight = isDesktop ? 84.0 : 140.0;
 
     return Scaffold(
       backgroundColor: lightBg,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        automaticallyImplyLeading: false,
-        toolbarHeight: toolbarHeight,
-        title: Padding(
-          padding: EdgeInsets.symmetric(horizontal: isDesktop ? 20 : 0),
-          child: Row(
-            children: [
-              Expanded(
-                child: Text(
-                  'Health Share',
+      appBar: PreferredSize(
+        preferredSize: Size.fromHeight(toolbarHeight),
+        child: SafeArea(
+          child: Padding(
+            padding: EdgeInsets.symmetric(
+              horizontal: isDesktop ? 20 : 12,
+              vertical: 8,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Search bar (top)
+                Material(
+                  elevation: 0,
+                  color: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    child: Row(
+                      children: [
+                        const Icon(
+                          Icons.search_rounded,
+                          color: primaryColor,
+                          size: 20,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: TextField(
+                            controller: _searchController,
+                            onChanged: (v) => setState(() => _searchQuery = v),
+                            decoration: const InputDecoration(
+                              hintText: 'Search groups',
+                              border: InputBorder.none,
+                              isDense: true,
+                              contentPadding: EdgeInsets.symmetric(
+                                vertical: 12,
+                              ),
+                            ),
+                          ),
+                        ),
+                        if (_searchQuery.isNotEmpty)
+                          IconButton(
+                            icon: const Icon(Icons.close_rounded, size: 18),
+                            onPressed: () {
+                              setState(() {
+                                _searchController.clear();
+                                _searchQuery = '';
+                              });
+                            },
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                // My Groups title (bottom)
+                Text(
+                  'My Groups',
                   style: TextStyle(
                     color: primaryColor,
                     fontWeight: FontWeight.bold,
                     fontSize: titleFontSize,
                   ),
                 ),
-              ),
-              const SizedBox(width: 8),
-              // Search icon/bar on the right
-              AnimatedContainer(
-                duration: const Duration(milliseconds: 300),
-                curve: Curves.easeInOut,
-                width: _isSearchExpanded ? searchExpandedWidth : 51,
-                height: 48,
-                decoration: BoxDecoration(
-                  color: _isSearchExpanded ? lightBg : Colors.transparent,
-                  borderRadius: BorderRadius.circular(24),
-                  border: Border.all(
-                    color: _isSearchExpanded ? borderColor : Colors.transparent,
-                    width: 1.5,
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    IconButton(
-                      icon: Icon(
-                        _isSearchExpanded
-                            ? Icons.close_rounded
-                            : Icons.search_rounded,
-                        color: primaryColor,
-                        size: 24,
-                      ),
-                      onPressed: () {
-                        setState(() {
-                          _isSearchExpanded = !_isSearchExpanded;
-                          if (!_isSearchExpanded) {
-                            _searchController.clear();
-                            _searchQuery = '';
-                          }
-                        });
-                      },
-                    ),
-                    if (_isSearchExpanded)
-                      Expanded(
-                        child: TextField(
-                          controller: _searchController,
-                          autofocus: true,
-                          onChanged:
-                              (value) => setState(() => _searchQuery = value),
-                          style: const TextStyle(
-                            fontSize: 15,
-                            color: primaryColor,
-                          ),
-                          decoration: InputDecoration(
-                            hintText: 'Search groups...',
-                            hintStyle: TextStyle(
-                              color: primaryColor.withOpacity(0.4),
-                              fontSize: 14,
-                            ),
-                            border: InputBorder.none,
-                            contentPadding: const EdgeInsets.only(right: 16),
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-            ],
+              ],
+            ),
           ),
-        ),
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(1),
-          child: Container(height: 1, color: borderColor),
         ),
       ),
       body: FadeTransition(
@@ -209,7 +188,7 @@ class _GroupsScreenState extends State<GroupsScreen>
                   builder: (context, constraints) {
                     return GridView.builder(
                       padding: EdgeInsets.symmetric(
-                        horizontal: horizontalPadding,
+                        horizontal: isDesktop ? 60.0 : (isTablet ? 40.0 : 20.0),
                         vertical: 20,
                       ),
                       gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(

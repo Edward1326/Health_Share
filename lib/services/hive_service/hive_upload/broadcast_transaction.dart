@@ -149,37 +149,31 @@ class HiveTransactionBroadcaster {
   }
 
   /// Alternative method using condenser_api (synchronous only)
-  static Future<HiveBroadcastResult> broadcastTransactionCondenser(
+  /// Async fire-and-forget method using network_broadcast_api
+  static Future<void> broadcastTransactionCondenser(
     Map<String, dynamic> signedTransaction,
   ) async {
     try {
-      print('=== CONDENSER BROADCAST DEBUG START ===');
+      print('=== ASYNC BROADCAST START ===');
 
       if (!_isValidSignedTransaction(signedTransaction)) {
-        print('❌ Condenser transaction validation failed');
-        return HiveBroadcastResult.error('Invalid transaction format');
+        print('❌ Transaction validation failed');
+        return;
       }
-      print('✅ Condenser transaction validation passed');
+      print('✅ Transaction validation passed');
 
       final requestBody = {
         'jsonrpc': '2.0',
-        'method': 'condenser_api.broadcast_transaction_synchronous',
-        'params': [signedTransaction], // FIX: Pass transaction directly
+        'method': 'network_broadcast_api.broadcast_transaction',
+        'params': [signedTransaction],
         'id': DateTime.now().millisecondsSinceEpoch,
       };
 
-      print('🌐 Broadcasting via condenser_api to: $_hiveNodeUrl');
-      print(
-        '📝 Request method: condenser_api.broadcast_transaction_synchronous',
-      );
-      print('🔍 Request ID: ${requestBody['id']}');
+      print('🌐 Broadcasting asynchronously to: $_hiveNodeUrl');
+      print('📝 Request JSON: ${jsonEncode(requestBody)}');
 
-      print('📋 Full condenser request JSON:');
-      final requestJson = jsonEncode(requestBody);
-      print(requestJson);
-
-      print('🚀 Sending condenser HTTP POST request...');
-      final response = await http
+      // Fire-and-forget POST request
+      http
           .post(
             Uri.parse(_hiveNodeUrl),
             headers: {
@@ -187,88 +181,36 @@ class HiveTransactionBroadcaster {
               'Accept': 'application/json',
               'User-Agent': 'Flutter-Hive-Client/1.0',
             },
-            body: requestJson,
+            body: jsonEncode(requestBody),
           )
-          .timeout(
-            const Duration(seconds: 30),
-            onTimeout: () {
-              print('⏰ Condenser request timed out after 30 seconds');
-              throw Exception('Condenser request timeout');
-            },
-          );
+          .catchError((e) {
+            // Log errors without blocking
+            print('⚠️ Async broadcast failed: $e');
+          });
 
-      print('📡 Condenser response received:');
-      print('  - Status Code: ${response.statusCode}');
-      print('  - Content-Type: ${response.headers['content-type']}');
-      print('📄 Condenser response body:');
-      print(response.body);
-
-      if (response.statusCode != 200) {
-        print('❌ Condenser HTTP Error: ${response.statusCode}');
-        return HiveBroadcastResult.error(
-          'HTTP ${response.statusCode}: ${response.body}',
-        );
-      }
-
-      Map<String, dynamic> responseData;
-      try {
-        responseData = jsonDecode(response.body);
-        print('✅ Condenser response JSON parsed successfully');
-      } catch (e) {
-        print('❌ Failed to parse condenser response JSON: $e');
-        return HiveBroadcastResult.error('Invalid JSON response: $e');
-      }
-
-      if (responseData['error'] != null) {
-        final error = responseData['error'];
-        print('❌ Condenser RPC Error: $error');
-        final errorMessage = error['message'] ?? error.toString();
-        final errorCode = error['code'] ?? -1;
-        return HiveBroadcastResult.error('RPC Error $errorCode: $errorMessage');
-      }
-
-      final result = responseData['result'];
-      print('✅ Condenser broadcast successful!');
-      print('🎉 Condenser result: $result');
-      print('=== CONDENSER BROADCAST DEBUG END ===');
-
-      return HiveBroadcastResult.success(result);
+      print('🚀 Transaction sent asynchronously (not awaiting response)');
+      print('=== ASYNC BROADCAST END ===');
     } catch (e, stackTrace) {
-      print('💥 Condenser exception caught:');
-      print('❌ Error: $e');
-      print('🔍 Stack trace:');
+      print('💥 Exception during async broadcast: $e');
       print(stackTrace.toString());
-      print('=== CONDENSER BROADCAST DEBUG END (ERROR) ===');
-      return HiveBroadcastResult.error('Condenser broadcast failed: $e');
     }
   }
 
-  /// Smart broadcast (tries both APIs if one fails)
-  static Future<HiveBroadcastResult> smartBroadcast(
+  /// Smart async broadcast (fire-and-forget)
+  static Future<void> smartBroadcastAsync(
     Map<String, dynamic> signedTransaction,
   ) async {
-    print('🧠 Starting smart broadcast...');
-    print('🔄 Attempt 1: condenser_api');
-    var result = await broadcastTransactionCondenser(signedTransaction);
+    print('🧠 Starting smart async broadcast...');
 
-    if (result.success) {
-      print('✅ Smart broadcast succeeded with condenser_api');
-      return result;
-    }
+    // Attempt 1: condenser_api (async, fire-and-forget)
+    print('🔄 Attempt 1: condenser_api (async)');
+    broadcastTransactionCondenser(signedTransaction);
 
-    print('❌ condenser_api failed: ${result.getError()}');
-    print('🔄 Attempt 2: network_broadcast_api');
-    result = await broadcastTransaction(signedTransaction);
+    // Attempt 2: network_broadcast_api (async, fire-and-forget)
+    print('🔄 Attempt 2: network_broadcast_api (async)');
+    broadcastTransaction(signedTransaction);
 
-    if (result.success) {
-      print('✅ Smart broadcast succeeded with network_broadcast_api');
-      return result;
-    }
-
-    print('❌ Both APIs failed');
-    return HiveBroadcastResult.error(
-      'Both condenser_api and network_broadcast_api failed. Last error: ${result.getError()}',
-    );
+    print('🚀 Both broadcasts sent asynchronously. No response awaited.');
   }
 
   /// Validates that a transaction is properly signed

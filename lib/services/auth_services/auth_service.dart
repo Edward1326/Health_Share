@@ -173,11 +173,35 @@ class AuthService {
   // ============ ORIGINAL EMAIL/PASSWORD METHODS ============
 
   // Sign up with email and password (WITHOUT creating user profile yet)
+  // In AuthService class, replace the signUpWithEmailOnly method:
+
   Future<void> signUpWithEmailOnly(String email, String password) async {
     try {
+      print('Checking if email already exists...');
+
+      // 1. Check if email is already registered in User table
+      final existingUser =
+          await _supabase
+              .from('User')
+              .select()
+              .eq('email', email)
+              .maybeSingle();
+
+      if (existingUser != null) {
+        throw Exception(
+          'Email is already registered. Please use a different email or login.',
+        );
+      }
+
+      print('✅ Email is available');
       print('Registering email and password...');
+
+      // 2. Proceed with sign up
       await _supabase.auth.signUp(email: email, password: password);
       print('✅ Email registered. Awaiting OTP verification...');
+    } on Exception catch (e) {
+      print('❌ Sign up error: $e');
+      rethrow; // Re-throw to preserve the specific error message
     } catch (e) {
       print('❌ Sign up error: $e');
       throw Exception('Failed to register email: $e');

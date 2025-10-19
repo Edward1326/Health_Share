@@ -18,29 +18,31 @@ class _YourOrgsScreenState extends State<YourOrgsScreen>
   late Animation<double> _fadeAnimation;
   late AnimationController _slideController;
   late Animation<Offset> _slideAnimation;
+  late AnimationController _toggleIconController;
 
   int _selectedIndex = 3;
 
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
-  bool _isSearchExpanded = false;
 
   List<Map<String, dynamic>> _joinedOrganizations = [];
   List<Map<String, dynamic>> _invitations = [];
 
   bool _isLoading = false;
   int _invitationCount = 0;
+  bool _isList = true;
 
-  static const primaryColor = Color(0xFF416240);
-  static const accentColor = Color(0xFF6A8E6E);
-  static const lightBg = Color(0xFFF8FAF8);
-  static const borderColor = Color(0xFFE5E7EB);
+  // --- Updated color palette ---
+  static const primaryColor = Color(0xFF03989E);
+  static const accentColor = Color(0xFF4DC5C8);
+  static const lightBg = Color(0xFFF6FAFA);
+  static const borderColor = Color(0xFFE3E8E8);
 
   @override
   void initState() {
     super.initState();
     _fadeController = AnimationController(
-      duration: const Duration(milliseconds: 800),
+      duration: const Duration(milliseconds: 700),
       vsync: this,
     );
     _fadeAnimation = CurvedAnimation(
@@ -53,14 +55,21 @@ class _YourOrgsScreenState extends State<YourOrgsScreen>
       vsync: this,
     );
     _slideAnimation = Tween<Offset>(
-      begin: const Offset(0, 0.3),
+      begin: const Offset(0, 0.2),
       end: Offset.zero,
     ).animate(
       CurvedAnimation(parent: _slideController, curve: Curves.easeOutCubic),
     );
 
+    _toggleIconController = AnimationController(
+      duration: const Duration(milliseconds: 350),
+      vsync: this,
+    );
+
     _fadeController.forward();
     _slideController.forward();
+    _toggleIconController.value = _isList ? 0.0 : 1.0;
+
     _fetchInitialData();
   }
 
@@ -115,7 +124,7 @@ class _YourOrgsScreenState extends State<YourOrgsScreen>
     if (_searchQuery.isEmpty) return _joinedOrganizations;
     return _joinedOrganizations
         .where(
-          (org) => (org['name'] ?? '').toLowerCase().contains(
+          (org) => (org['name'] ?? '').toString().toLowerCase().contains(
             _searchQuery.toLowerCase(),
           ),
         )
@@ -124,15 +133,23 @@ class _YourOrgsScreenState extends State<YourOrgsScreen>
 
   int _getCrossAxisCount(BuildContext context) {
     final width = MediaQuery.of(context).size.width;
-    if (width > 1200) return 3;
-    if (width > 800) return 2;
-    return 1;
+    if (width > 1200) return 4;
+    if (width > 900) return 3;
+    if (width > 600) return 2;
+    return 2;
+  }
+
+  void _toggleLayout() {
+    setState(() {
+      _isList = !_isList;
+    });
   }
 
   @override
   void dispose() {
     _fadeController.dispose();
     _slideController.dispose();
+    _toggleIconController.dispose();
     _searchController.dispose();
     super.dispose();
   }
@@ -144,144 +161,168 @@ class _YourOrgsScreenState extends State<YourOrgsScreen>
     final isTablet = screenWidth > 600 && screenWidth <= 900;
     final isLargeScreen = screenWidth > 900;
 
-    // Responsive dimensions
     final titleFontSize = isLargeScreen ? 24.0 : (isTablet ? 22.0 : 20.0);
-    final toolbarHeight = isDesktop ? 72.0 : 64.0;
-    final searchExpandedWidth =
-        isLargeScreen ? 350.0 : (isTablet ? 280.0 : screenWidth * 0.55);
+    final toolbarHeight = isDesktop ? 84.0 : 140.0;
 
     return Scaffold(
       backgroundColor: lightBg,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        automaticallyImplyLeading: false,
-        toolbarHeight: toolbarHeight,
-        title: Padding(
-          padding: EdgeInsets.symmetric(horizontal: isDesktop ? 20 : 0),
-          child: Row(
-            children: [
-              Expanded(
-                child: Text(
-                  'Health Share',
-                  style: TextStyle(
-                    color: primaryColor,
-                    fontWeight: FontWeight.bold,
-                    fontSize: titleFontSize,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              // Search icon/bar
-              AnimatedContainer(
-                duration: const Duration(milliseconds: 300),
-                curve: Curves.easeInOut,
-                width: _isSearchExpanded ? searchExpandedWidth : 51,
-                height: 48,
-                decoration: BoxDecoration(
-                  color: _isSearchExpanded ? lightBg : Colors.transparent,
-                  borderRadius: BorderRadius.circular(24),
-                  border: Border.all(
-                    color: _isSearchExpanded ? borderColor : Colors.transparent,
-                    width: 1.5,
-                  ),
-                ),
-                child: Row(
+      appBar: PreferredSize(
+        preferredSize: Size.fromHeight(toolbarHeight),
+        child: SafeArea(
+          child: Padding(
+            padding: EdgeInsets.symmetric(
+              horizontal: isDesktop ? 20 : 12,
+              vertical: 8,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Search + invitations row
+                Row(
                   children: [
-                    IconButton(
-                      icon: Icon(
-                        _isSearchExpanded
-                            ? Icons.close_rounded
-                            : Icons.search_rounded,
-                        color: primaryColor,
-                        size: 24,
-                      ),
-                      onPressed: () {
-                        setState(() {
-                          _isSearchExpanded = !_isSearchExpanded;
-                          if (!_isSearchExpanded) {
-                            _searchController.clear();
-                            _searchQuery = '';
-                          }
-                        });
-                      },
-                    ),
-                    if (_isSearchExpanded)
-                      Expanded(
-                        child: TextField(
-                          controller: _searchController,
-                          autofocus: true,
-                          onChanged:
-                              (value) => setState(() => _searchQuery = value),
-                          style: const TextStyle(
-                            fontSize: 15,
-                            color: primaryColor,
-                          ),
-                          decoration: InputDecoration(
-                            hintText: 'Search organizations...',
-                            hintStyle: TextStyle(
-                              color: primaryColor.withOpacity(0.4),
-                              fontSize: 14,
-                            ),
-                            border: InputBorder.none,
-                            contentPadding: const EdgeInsets.only(right: 16),
+                    Expanded(
+                      child: Material(
+                        elevation: 0,
+                        color: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.search_rounded,
+                                color: primaryColor,
+                                size: 20,
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: TextField(
+                                  controller: _searchController,
+                                  onChanged:
+                                      (v) => setState(() => _searchQuery = v),
+                                  decoration: const InputDecoration(
+                                    hintText: 'Search organizations',
+                                    border: InputBorder.none,
+                                    isDense: true,
+                                    contentPadding: EdgeInsets.symmetric(
+                                      vertical: 12,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              if (_searchQuery.isNotEmpty)
+                                IconButton(
+                                  icon: const Icon(
+                                    Icons.close_rounded,
+                                    size: 18,
+                                  ),
+                                  onPressed: () {
+                                    setState(() {
+                                      _searchController.clear();
+                                      _searchQuery = '';
+                                    });
+                                  },
+                                ),
+                            ],
                           ),
                         ),
                       ),
+                    ),
+                    const SizedBox(width: 8),
+                    // Invitation icon with badge
+                    Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        Material(
+                          color: Colors.white,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: IconButton(
+                            icon: Icon(
+                              Icons.mail_outline_rounded,
+                              color:
+                                  _invitationCount > 0
+                                      ? primaryColor
+                                      : primaryColor.withOpacity(0.55),
+                              size: 24,
+                            ),
+                            onPressed: _showInvitationsDialog,
+                          ),
+                        ),
+                        if (_invitationCount > 0)
+                          Positioned(
+                            right: 6,
+                            top: 6,
+                            child: Container(
+                              padding: const EdgeInsets.all(5),
+                              decoration: BoxDecoration(
+                                color: Colors.red,
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: Colors.white,
+                                  width: 1.6,
+                                ),
+                              ),
+                              constraints: const BoxConstraints(
+                                minWidth: 18,
+                                minHeight: 18,
+                              ),
+                              child: Center(
+                                child: Text(
+                                  '$_invitationCount',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
                   ],
                 ),
-              ),
-              const SizedBox(width: 8),
-              // Mail/Invitation icon
-              Stack(
-                alignment: Alignment.center,
-                children: [
-                  IconButton(
-                    icon: Icon(
-                      Icons.mail_outline_rounded,
-                      color:
-                          _invitationCount > 0
-                              ? primaryColor
-                              : primaryColor.withOpacity(0.5),
-                      size: 24,
-                    ),
-                    onPressed: _showInvitationsDialog,
-                  ),
-                  if (_invitationCount > 0)
-                    Positioned(
-                      right: 8,
-                      top: 8,
-                      child: Container(
-                        padding: const EdgeInsets.all(5),
-                        decoration: BoxDecoration(
-                          color: Colors.red,
-                          shape: BoxShape.circle,
-                          border: Border.all(color: Colors.white, width: 2),
-                        ),
-                        constraints: const BoxConstraints(
-                          minWidth: 18,
-                          minHeight: 18,
-                        ),
-                        child: Center(
-                          child: Text(
-                            '$_invitationCount',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 10,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'My Organizations',
+                        style: TextStyle(
+                          color: primaryColor,
+                          fontWeight: FontWeight.bold,
+                          fontSize: titleFontSize,
                         ),
                       ),
                     ),
-                ],
-              ),
-            ],
+                    // Animated toggle icon
+                    GestureDetector(
+                      onTap: _toggleLayout,
+                      child: AnimatedBuilder(
+                        animation: _toggleIconController,
+                        builder: (context, child) {
+                          return Transform.rotate(
+                            angle: _toggleIconController.value * 0.5 * 3.14159,
+                            child: Icon(
+                              _isList
+                                  ? Icons.grid_view_rounded
+                                  : Icons.view_list_rounded,
+                              color: primaryColor,
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                  ],
+                ),
+              ],
+            ),
           ),
-        ),
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(1),
-          child: Container(height: 1, color: borderColor),
         ),
       ),
       body: FadeTransition(
@@ -298,6 +339,8 @@ class _YourOrgsScreenState extends State<YourOrgsScreen>
                   )
                   : _filteredOrganizations.isEmpty
                   ? _buildEmptyState()
+                  : _isList
+                  ? _buildOrgList()
                   : _buildOrgGrid(),
         ),
       ),
@@ -308,11 +351,137 @@ class _YourOrgsScreenState extends State<YourOrgsScreen>
     );
   }
 
+  // ---------------- List view (matches OrgsScreen style) ----------------
+  Widget _buildOrgList() {
+    final orgs = _filteredOrganizations;
+    final screenWidth = MediaQuery.of(context).size.width;
+    final horizontalPadding =
+        screenWidth > 900 ? 60.0 : (screenWidth > 600 ? 40.0 : 16.0);
+
+    return ListView.builder(
+      padding: EdgeInsets.symmetric(
+        horizontal: horizontalPadding,
+        vertical: 20,
+      ),
+      itemCount: orgs.length,
+      itemBuilder: (context, i) {
+        final org = orgs[i];
+        return TweenAnimationBuilder<double>(
+          duration: Duration(milliseconds: 250 + (i * 40)),
+          tween: Tween(begin: 0.0, end: 1.0),
+          curve: Curves.easeOut,
+          builder: (context, value, child) {
+            return Opacity(
+              opacity: value,
+              child: Transform.translate(
+                offset: Offset(0, 20 * (1 - value)),
+                child: child,
+              ),
+            );
+          },
+          child: Padding(
+            padding: const EdgeInsets.only(bottom: 14),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(14),
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder:
+                        (_) => DoctorsScreen(
+                          orgId: org['id'],
+                          orgName: org['name'],
+                        ),
+                  ),
+                );
+              },
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: borderColor),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.05),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  children: [
+                    // Left image
+                    ClipRRect(
+                      borderRadius: const BorderRadius.only(
+                        topLeft: Radius.circular(14),
+                        bottomLeft: Radius.circular(14),
+                      ),
+                      child: Image.network(
+                        org['image'] ?? '',
+                        width: 100,
+                        height: 100,
+                        fit: BoxFit.cover,
+                        errorBuilder:
+                            (_, __, ___) => Container(
+                              width: 100,
+                              height: 100,
+                              color: primaryColor.withOpacity(0.08),
+                              child: Icon(
+                                Icons.business_rounded,
+                                color: primaryColor.withOpacity(0.4),
+                                size: 40,
+                              ),
+                            ),
+                      ),
+                    ),
+
+                    // Right content
+                    Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.all(14),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              org['name'] ?? 'Unnamed Organization',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w700,
+                                fontSize: 16,
+                                color: primaryColor,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              org['description'] ?? 'No description available',
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: primaryColor.withOpacity(0.7),
+                              ),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  // ---------------- Grid view (matches OrgsScreen style) ----------------
   Widget _buildOrgGrid() {
     final orgs = _filteredOrganizations;
     final screenWidth = MediaQuery.of(context).size.width;
     final horizontalPadding =
-        screenWidth > 900 ? 60.0 : (screenWidth > 600 ? 40.0 : 20.0);
+        screenWidth > 900 ? 60.0 : (screenWidth > 600 ? 40.0 : 16.0);
+
+    final crossAxisCount = _getCrossAxisCount(context);
 
     return GridView.builder(
       padding: EdgeInsets.symmetric(
@@ -320,167 +489,117 @@ class _YourOrgsScreenState extends State<YourOrgsScreen>
         vertical: 20,
       ),
       gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: _getCrossAxisCount(context),
-        childAspectRatio: MediaQuery.of(context).size.width > 600 ? 2.5 : 2.2,
+        crossAxisCount: crossAxisCount,
         crossAxisSpacing: 16,
         mainAxisSpacing: 16,
+        childAspectRatio: 0.8,
       ),
       itemCount: orgs.length,
       itemBuilder: (context, i) {
+        final org = orgs[i];
         return TweenAnimationBuilder<double>(
-          duration: Duration(milliseconds: 300 + (i * 80)),
+          duration: Duration(milliseconds: 250 + (i * 40)),
           tween: Tween(begin: 0.0, end: 1.0),
           curve: Curves.easeOut,
           builder: (context, value, child) {
-            return Transform.scale(
-              scale: 0.85 + (value * 0.15),
-              child: Opacity(opacity: value, child: child),
+            return Opacity(
+              opacity: value,
+              child: Transform.scale(scale: 0.9 + (value * 0.1), child: child),
             );
           },
-          child: _buildOrgCard(orgs[i]),
-        );
-      },
-    );
-  }
-
-  Widget _buildOrgCard(Map<String, dynamic> org) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(20),
-        onTap: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder:
-                  (c) => DoctorsScreen(orgId: org['id'], orgName: org['name']),
-            ),
-          );
-        },
-        child: Container(
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: borderColor, width: 1),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.06),
-                blurRadius: 16,
-                offset: const Offset(0, 4),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(14),
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder:
+                      (_) =>
+                          DoctorsScreen(orgId: org['id'], orgName: org['name']),
+                ),
+              );
+            },
+            child: Container(
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: borderColor),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.05),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
               ),
-            ],
-          ),
-          child: Stack(
-            children: [
-              Padding(
-                padding: const EdgeInsets.all(20),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 64,
-                      height: 64,
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                          colors: [primaryColor, accentColor],
-                        ),
-                        borderRadius: BorderRadius.circular(16),
-                        boxShadow: [
-                          BoxShadow(
-                            color: primaryColor.withOpacity(0.3),
-                            blurRadius: 8,
-                            offset: const Offset(0, 4),
-                          ),
-                        ],
-                      ),
-                      child: const Icon(
-                        Icons.verified_user_rounded,
-                        color: Colors.white,
-                        size: 30,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Top image
+                  ClipRRect(
+                    borderRadius: const BorderRadius.only(
+                      topLeft: Radius.circular(14),
+                      topRight: Radius.circular(14),
+                    ),
+                    child: AspectRatio(
+                      aspectRatio: 16 / 9,
+                      child: Image.network(
+                        org['image'] ?? '',
+                        fit: BoxFit.cover,
+                        errorBuilder:
+                            (_, __, ___) => Container(
+                              color: primaryColor.withOpacity(0.08),
+                              child: Icon(
+                                Icons.business_rounded,
+                                color: primaryColor.withOpacity(0.4),
+                                size: 50,
+                              ),
+                            ),
                       ),
                     ),
-                    const SizedBox(width: 16),
-                    Expanded(
+                  ),
+
+                  // Bottom details
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.all(12),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           Text(
                             org['name'] ?? 'Unnamed Organization',
                             style: const TextStyle(
                               fontWeight: FontWeight.w700,
-                              fontSize: 17,
+                              fontSize: 15,
                               color: primaryColor,
-                              letterSpacing: 0.2,
                             ),
-                            maxLines: 1,
+                            maxLines: 2,
                             overflow: TextOverflow.ellipsis,
                           ),
-                          const SizedBox(height: 8),
+                          const SizedBox(height: 6),
                           Text(
                             org['description'] ?? 'No description available',
                             style: TextStyle(
-                              fontSize: 13,
-                              color: primaryColor.withOpacity(0.6),
-                              height: 1.4,
+                              fontSize: 12,
+                              color: primaryColor.withOpacity(0.7),
                             ),
-                            maxLines: 2,
+                            maxLines: 3,
                             overflow: TextOverflow.ellipsis,
                           ),
                         ],
                       ),
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
-              Positioned(
-                top: 12,
-                right: 12,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 6,
-                  ),
-                  decoration: BoxDecoration(
-                    color: primaryColor,
-                    borderRadius: BorderRadius.circular(20),
-                    boxShadow: [
-                      BoxShadow(
-                        color: primaryColor.withOpacity(0.3),
-                        blurRadius: 6,
-                        offset: const Offset(0, 2),
-                      ),
-                    ],
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: const [
-                      Icon(
-                        Icons.check_circle_rounded,
-                        color: Colors.white,
-                        size: 14,
-                      ),
-                      SizedBox(width: 4),
-                      Text(
-                        'Joined',
-                        style: TextStyle(
-                          fontWeight: FontWeight.w700,
-                          color: Colors.white,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 
+  // ---------------- Empty state ----------------
   Widget _buildEmptyState() {
     return Center(
       child: Padding(
@@ -526,6 +645,7 @@ class _YourOrgsScreenState extends State<YourOrgsScreen>
     );
   }
 
+  // ---------------- Invitations dialog ----------------
   void _showInvitationsDialog() {
     showDialog(
       context: context,
@@ -545,8 +665,8 @@ class _YourOrgsScreenState extends State<YourOrgsScreen>
                 ),
                 child: const Icon(
                   Icons.mail_outline_rounded,
-                  color: primaryColor,
                   size: 24,
+                  color: primaryColor,
                 ),
               ),
               const SizedBox(width: 12),
@@ -602,7 +722,7 @@ class _YourOrgsScreenState extends State<YourOrgsScreen>
                             color: lightBg,
                             borderRadius: BorderRadius.circular(16),
                             border: Border.all(
-                              color: primaryColor.withOpacity(0.1),
+                              color: primaryColor.withOpacity(0.06),
                             ),
                           ),
                           child: ListTile(
@@ -613,7 +733,7 @@ class _YourOrgsScreenState extends State<YourOrgsScreen>
                             leading: Container(
                               padding: const EdgeInsets.all(10),
                               decoration: BoxDecoration(
-                                color: primaryColor.withOpacity(0.15),
+                                color: primaryColor.withOpacity(0.12),
                                 borderRadius: BorderRadius.circular(12),
                               ),
                               child: const Icon(
