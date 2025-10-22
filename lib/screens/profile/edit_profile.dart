@@ -81,6 +81,13 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     }
   }
 
+  bool _isValidPhoneNumber(String phone) {
+    // Remove any spaces or dashes
+    final cleanPhone = phone.replaceAll(RegExp(r'[\s-]'), '');
+    // Check if it contains exactly 11 digits
+    return cleanPhone.length == 11 && RegExp(r'^\d{11}$').hasMatch(cleanPhone);
+  }
+
   @override
   void dispose() {
     _addressController.dispose();
@@ -236,6 +243,24 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
   Future<void> _saveProfile() async {
     if (!_formKey.currentState!.validate()) return;
+
+    // ✅ ADD THIS VALIDATION HERE (right after form validation)
+    final phone = _contactController.text.trim();
+    if (phone.isNotEmpty && !_isValidPhoneNumber(phone)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Row(
+            children: [
+              Icon(Icons.error_outline, color: Colors.white),
+              SizedBox(width: 12),
+              Expanded(child: Text('Phone number must be exactly 11 digits')),
+            ],
+          ),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
 
     setState(() => _isLoading = true);
 

@@ -6,49 +6,84 @@ import 'dart:convert';
 
 class AuthService {
   final SupabaseClient _supabase = Supabase.instance.client;
-  final GoogleSignIn _googleSignIn = GoogleSignIn(scopes: ['email', 'profile']);
+
+  // ✅ IMPORTANT: Add your Web Client ID here (from Google Cloud Console)
+  // This is the OAUTH 2.0 Web Application Client ID (NOT Android Client ID)
+  final GoogleSignIn _googleSignIn = GoogleSignIn(
+    scopes: ['email', 'profile'],
+    serverClientId:
+        '849402611639-1khgppikvge4kljpjsjvmfp0s0aqlb8s.apps.googleusercontent.com', // ← REPLACE THIS!
+  );
 
   // ============ GOOGLE SIGN IN / SIGN UP ============
 
-  // Sign up/in with Google (Native Google Sign-In)
   Future<AuthResponse> signInWithGoogle() async {
+    User? authUser;
+    GoogleSignInAccount? googleUser;
+
     try {
-      print('Starting Google Sign-In...');
+      print('');
+      print('╔═══════════════════════════════════════════╗');
+      print('║     GOOGLE SIGN-IN PROCESS STARTED       ║');
+      print('╚═══════════════════════════════════════════╝');
+      print('');
 
       // 1. Trigger native Google Sign-In
-      final googleUser = await _googleSignIn.signIn();
+      print('Step 1/5: Triggering native Google Sign-In...');
+      googleUser = await _googleSignIn.signIn();
+
       if (googleUser == null) {
+        print('❌ User cancelled Google Sign-In');
         throw Exception('Google Sign-In cancelled by user');
       }
 
       print('✅ Google Sign-In successful');
+      print('   📧 Email: ${googleUser.email}');
+      print('   👤 Display Name: ${googleUser.displayName}');
+      print('   🆔 Google ID: ${googleUser.id}');
 
       // 2. Get Google authentication tokens
+      print('');
+      print('Step 2/5: Getting authentication tokens...');
       final googleAuth = await googleUser.authentication;
       final accessToken = googleAuth.accessToken;
       final idToken = googleAuth.idToken;
 
       if (accessToken == null || idToken == null) {
+        print('❌ Failed to get tokens');
+        print('   Access Token: ${accessToken != null ? "EXISTS" : "NULL"}');
+        print('   ID Token: ${idToken != null ? "EXISTS" : "NULL"}');
         throw Exception('Failed to get Google authentication tokens');
       }
 
-      print('✅ Got Google tokens');
+      print('✅ Got Google tokens successfully');
+      print('   🔑 Access Token: ${accessToken.substring(0, 20)}...');
+      print('   🔑 ID Token: ${idToken.substring(0, 20)}...');
 
       // 3. Sign in with Supabase using Google provider
+      print('');
+      print('Step 3/5: Authenticating with Supabase...');
       final response = await _supabase.auth.signInWithIdToken(
         provider: OAuthProvider.google,
         idToken: idToken,
         accessToken: accessToken,
       );
 
-      final authUser = response.user;
+      authUser = response.user;
       if (authUser == null) {
+        print('❌ Supabase authentication failed - no user returned');
         throw Exception('Failed to authenticate with Supabase');
       }
 
       print('✅ Authenticated with Supabase');
+      print('   🆔 Supabase User ID: ${authUser.id}');
+      print('   📧 Supabase Email: ${authUser.email}');
 
       // 4. Check if user profile already exists
+      print('');
+      print('Step 4/5: Checking for existing user profile...');
+      print('   Querying "User" table for id: ${authUser.id}');
+
       final existingUser =
           await _supabase
               .from('User')
@@ -57,17 +92,57 @@ class AuthService {
               .maybeSingle();
 
       if (existingUser == null) {
-        // New user - create profile with Google data
-        print('Creating new user profile from Google data...');
+        print('   ℹ️  No existing profile found - NEW USER');
+        print('');
+        print('Step 5/5: Creating new user profile...');
+        print('═══════════════════════════════════════════');
+
+        // CRITICAL: Actually create the profile
         await _createUserProfileFromGoogle(authUser, googleUser);
+
+        print('═══════════════════════════════════════════');
+        print('✅ Profile creation completed successfully!');
       } else {
-        // Existing user - just sign them in
-        print('✅ Existing user signed in');
+        print('   ✅ Existing profile found - RETURNING USER');
+        print('   Person ID: ${existingUser['person_id']}');
+        print('   Email: ${existingUser['email']}');
       }
 
+      print('');
+      print('╔═══════════════════════════════════════════╗');
+      print('║   GOOGLE SIGN-IN COMPLETED SUCCESSFULLY  ║');
+      print('╚═══════════════════════════════════════════╝');
+      print('');
+
       return response;
-    } catch (e) {
-      print('❌ Google Sign-In error: $e');
+    } catch (e, stackTrace) {
+      print('');
+      print('╔═══════════════════════════════════════════╗');
+      print('║         GOOGLE SIGN-IN FAILED!            ║');
+      print('╚═══════════════════════════════════════════╝');
+      print('');
+      print('Error Type: ${e.runtimeType}');
+      print('Error Message: $e');
+      print('');
+      print('Stack Trace:');
+      print(stackTrace.toString());
+      print('');
+
+      // If we have authUser, try to clean up
+      if (authUser != null) {
+        try {
+          print('🧹 Cleaning up: Signing out from Supabase...');
+          await _supabase.auth.signOut();
+        } catch (_) {}
+      }
+
+      if (googleUser != null) {
+        try {
+          print('🧹 Cleaning up: Signing out from Google...');
+          await _googleSignIn.signOut();
+        } catch (_) {}
+      }
+
       throw Exception('Google Sign-In failed: $e');
     }
   }
@@ -77,6 +152,11 @@ class AuthService {
     User authUser,
     GoogleSignInAccount googleUser,
   ) async {
+    print('');
+    print('═══════════════════════════════════════════');
+    print('🔧 CREATING USER PROFILE FROM GOOGLE DATA');
+    print('═══════════════════════════════════════════');
+
     try {
       // 1. Parse Google user's name
       final nameParts = _parseFullName(googleUser.displayName ?? 'Google User');
@@ -86,16 +166,36 @@ class AuthService {
       final email = googleUser.email;
       final photoUrl = googleUser.photoUrl;
 
-      print('User: $firstName $middleName $lastName');
+      print('👤 Parsed Name:');
+      print('   First: $firstName');
+      print('   Middle: $middleName');
+      print('   Last: $lastName');
+      print('   Email: $email');
+      print('   Photo URL: $photoUrl');
+      print('   Auth User ID: ${authUser.id}');
 
       // 2. Generate RSA key pair
-      print('Generating RSA keys...');
+      print('');
+      print('🔐 Generating RSA key pair (2048 bits)...');
       final keyPair = await RSA.generate(2048);
       final publicPem = keyPair.publicKey;
       final privatePem = keyPair.privateKey;
+      print('✅ RSA keys generated successfully');
+      print('   Public Key Length: ${publicPem.length} chars');
+      print('   Private Key Length: ${privatePem.length} chars');
 
-      // 3. Insert into person table
-      print('Creating person record...');
+      // 3. Insert into Person table
+      print('');
+      print('📝 Step 1/2: Creating Person record...');
+      print('   Inserting into "Person" table with data:');
+      print('   {');
+      print('     first_name: "$firstName",');
+      print('     middle_name: "$middleName",');
+      print('     last_name: "$lastName",');
+      print('     contact_number: "",');
+      print('     auth_user_id: "${authUser.id}"');
+      print('   }');
+
       final personInsertResponse =
           await _supabase
               .from('Person')
@@ -103,8 +203,7 @@ class AuthService {
                 'first_name': firstName,
                 'middle_name': middleName,
                 'last_name': lastName,
-                'contact_number':
-                    '', // Empty since Google doesn't provide phone
+                'contact_number': '',
                 'created_at': DateTime.now().toIso8601String(),
                 'auth_user_id': authUser.id,
               })
@@ -112,9 +211,20 @@ class AuthService {
               .single();
 
       final personId = personInsertResponse['id'];
+      print('✅ Person record created successfully!');
+      print('   Person ID: $personId');
 
-      // 4. Insert into users table with RSA keys
-      print('Creating user record with RSA keys...');
+      // 4. Insert into User table with RSA keys
+      print('');
+      print('📝 Step 2/2: Creating User record with RSA keys...');
+      print('   Inserting into "User" table with data:');
+      print('   {');
+      print('     id: "${authUser.id}",');
+      print('     email: "$email",');
+      print('     person_id: "$personId",');
+
+      print('   }');
+
       await _supabase.from('User').insert({
         'id': authUser.id,
         'email': email,
@@ -123,33 +233,72 @@ class AuthService {
         'rsa_private_key': privatePem,
         'key_created_at': DateTime.now().toIso8601String(),
         'person_id': personId,
-        'profile_photo_url': photoUrl, // Optional: store Google profile photo
       });
 
-      print('🔐 Google user profile and RSA keys created successfully');
-    } catch (e) {
-      print('❌ Error creating user profile from Google: $e');
-      throw Exception('Failed to create user profile: $e');
+      print('✅ User record created successfully!');
+      print('');
+      print('🎉 PROFILE CREATION COMPLETE!');
+      print('═══════════════════════════════════════════');
+      print('');
+    } catch (e, stackTrace) {
+      print('');
+      print('❌❌❌ ERROR CREATING USER PROFILE ❌❌❌');
+      print('Error Type: ${e.runtimeType}');
+      print('Error Message: $e');
+      print('');
+      print('Stack Trace:');
+      print(stackTrace.toString());
+      print('═══════════════════════════════════════════');
+      print('');
+
+      // Re-throw with more context
+      throw Exception('Failed to create user profile from Google data: $e');
     }
   }
 
   // Helper method to parse full name into first, middle, last
   Map<String, String> _parseFullName(String fullName) {
-    final parts = fullName.trim().split(' ');
+    print('');
+    print('📝 Parsing full name: "$fullName"');
+
+    // Clean and split the name
+    final parts = fullName.trim().split(RegExp(r'\s+'));
+    print('   Split into ${parts.length} parts: $parts');
 
     String firstName = '';
     String middleName = '';
     String lastName = '';
 
-    if (parts.isNotEmpty) {
+    if (parts.isEmpty) {
+      print('   ⚠️  No name parts found, using default "User"');
+      firstName = 'User';
+    } else if (parts.length == 1) {
+      // Only first name
       firstName = parts[0];
-    }
-    if (parts.length == 2) {
+      print('   ✓ Single name detected');
+    } else if (parts.length == 2) {
+      // First and last name only
+      firstName = parts[0];
       lastName = parts[1];
-    } else if (parts.length > 2) {
+      print('   ✓ First and last name detected');
+    } else if (parts.length == 3) {
+      // First, middle, and last name
+      firstName = parts[0];
+      middleName = parts[1];
+      lastName = parts[2];
+      print('   ✓ First, middle, and last name detected');
+    } else {
+      // More than 3 parts: first, multiple middle names, last
+      firstName = parts[0];
       middleName = parts.sublist(1, parts.length - 1).join(' ');
       lastName = parts[parts.length - 1];
+      print('   ✓ Complex name with multiple middle names detected');
     }
+
+    print('   Result:');
+    print('     First:  "$firstName"');
+    print('     Middle: "$middleName"');
+    print('     Last:   "$lastName"');
 
     return {
       'firstName': firstName,
@@ -170,10 +319,7 @@ class AuthService {
     }
   }
 
-  // ============ ORIGINAL EMAIL/PASSWORD METHODS ============
-
-  // Sign up with email and password (WITHOUT creating user profile yet)
-  // In AuthService class, replace the signUpWithEmailOnly method:
+  // ============ EMAIL/PASSWORD REGISTRATION & LOGIN ============
 
   Future<void> signUpWithEmailOnly(String email, String password) async {
     try {
@@ -196,19 +342,19 @@ class AuthService {
       print('✅ Email is available');
       print('Registering email and password...');
 
-      // 2. Proceed with sign up
+      // 2. Proceed with sign up (Supabase sends OTP automatically)
       await _supabase.auth.signUp(email: email, password: password);
-      print('✅ Email registered. Awaiting OTP verification...');
+      print('✅ Email registered. OTP sent automatically by Supabase');
     } on Exception catch (e) {
       print('❌ Sign up error: $e');
-      rethrow; // Re-throw to preserve the specific error message
+      rethrow;
     } catch (e) {
       print('❌ Sign up error: $e');
       throw Exception('Failed to register email: $e');
     }
   }
 
-  // Send OTP to email
+  // Send OTP to email (for resend functionality)
   Future<void> sendOTP(String email) async {
     try {
       print('Sending OTP to $email...');
@@ -220,7 +366,7 @@ class AuthService {
     }
   }
 
-  // Verify OTP and create user profile (NOW called after OTP verification)
+  // Verify OTP and create user profile
   Future<AuthResponse> verifyOTPAndCreateProfile(
     String email,
     String token,
@@ -302,14 +448,14 @@ class AuthService {
     );
   }
 
-  // Hash password for comparison (to prevent reuse)
+  // ============ PASSWORD MANAGEMENT ============
+
   String _hashPassword(String password) {
     final bytes = utf8.encode(password);
     final digest = sha256.convert(bytes);
     return digest.toString();
   }
 
-  // Check if new password is same as current password
   Future<bool> _isPasswordReused(
     String currentPassword,
     String newPassword,
@@ -333,7 +479,6 @@ class AuthService {
     }
   }
 
-  // Verify OTP and change password (with password reuse prevention)
   Future<void> verifyOTPAndChangePassword(
     String email,
     String otp,
@@ -343,7 +488,6 @@ class AuthService {
     try {
       print('Verifying OTP for password change...');
 
-      // 1. Verify OTP
       final response = await _supabase.auth.verifyOTP(
         email: email,
         token: otp,
@@ -356,7 +500,6 @@ class AuthService {
 
       print('✅ OTP verified');
 
-      // 2. Re-authenticate with current password
       print('Verifying current password...');
       await _supabase.auth.signInWithPassword(
         email: email,
@@ -364,7 +507,6 @@ class AuthService {
       );
       print('✅ Current password verified');
 
-      // 3. Check if new password is same as current password
       print('Checking password reuse...');
       final isReused = await _isPasswordReused(currentPassword, newPassword);
       if (isReused) {
@@ -374,12 +516,10 @@ class AuthService {
       }
       print('✅ Password is not reused');
 
-      // 4. Update password
       print('Updating password...');
       await _supabase.auth.updateUser(UserAttributes(password: newPassword));
       print('✅ Password changed successfully');
 
-      // 5. Store password hash in password history
       try {
         final userId = _supabase.auth.currentUser?.id;
         if (userId != null) {
@@ -399,7 +539,6 @@ class AuthService {
     }
   }
 
-  // Send OTP for password reset
   Future<void> sendPasswordResetOTP(String email) async {
     try {
       print('Sending password reset OTP to $email...');
@@ -411,7 +550,6 @@ class AuthService {
     }
   }
 
-  // Verify OTP for password reset
   Future<void> verifyPasswordResetOTP(String email, String otp) async {
     try {
       print('Verifying OTP for password reset...');
@@ -433,7 +571,6 @@ class AuthService {
     }
   }
 
-  // Update password after OTP verification
   Future<void> updatePasswordAfterVerification(String newPassword) async {
     try {
       print('Updating password...');
@@ -462,7 +599,6 @@ class AuthService {
     }
   }
 
-  // Reset password with OTP verification
   Future<void> resetPasswordWithOTP(
     String email,
     String otp,
@@ -506,7 +642,6 @@ class AuthService {
     }
   }
 
-  // Original change password method
   Future<void> changePassword(String newPassword) async {
     try {
       final user = _supabase.auth.currentUser;

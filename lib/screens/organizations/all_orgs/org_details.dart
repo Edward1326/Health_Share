@@ -22,8 +22,13 @@ class OrgDetailsScreen extends StatefulWidget {
 }
 
 class _OrgDetailsScreenState extends State<OrgDetailsScreen>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   late TabController _tabController;
+  late AnimationController _staggerController;
+  late AnimationController _headerController;
+  late Animation<double> _headerSlideAnimation;
+  late Animation<double> _headerScaleAnimation;
+
   Map<String, dynamic>? _organizationData;
   List<Map<String, dynamic>> _doctors = [];
   List<String> _departments = ['All'];
@@ -33,44 +38,99 @@ class _OrgDetailsScreenState extends State<OrgDetailsScreen>
   bool _hasJoined = false;
   String? _membershipStatus;
 
+  String _searchQuery = '';
+  final TextEditingController _searchController = TextEditingController();
+  bool _isSearchVisible = false;
+
   // Design tokens
-  static const primaryColor = Color(0xFF03989E);
-  static const accentColor = Color(0xFF04B1B8);
-  static const lightBg = Color(0xFFF8FAF8);
-  static const cardBg = Colors.white;
-  static const borderColor = Color(0xFFE5E7EB);
+  late Color _primaryColor;
+  late Color _accentColor;
+  late Color _bg;
+  late Color _card;
+  late Color _textPrimary;
+  late Color _textSecondary;
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
-    _loadOrganizationDetails();
-    _checkMembershipStatus();
-    _loadDoctors();
+
+    _tabController.addListener(() {
+      if (_tabController.indexIsChanging) {
+        setState(() {
+          if (_tabController.index == 0) {
+            _isSearchVisible = false;
+            _searchController.clear();
+            _searchQuery = '';
+          }
+        });
+      }
+    });
+
+    _staggerController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1000),
+    );
+    _headerController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 800),
+    );
+
+    _headerSlideAnimation = Tween<double>(begin: 50, end: 0).animate(
+      CurvedAnimation(parent: _headerController, curve: Curves.easeOutCubic),
+    );
+
+    _headerScaleAnimation = Tween<double>(begin: 0.9, end: 1.0).animate(
+      CurvedAnimation(parent: _headerController, curve: Curves.easeOutBack),
+    );
+
+    _initializeColors();
+    _initializeScreen();
+  }
+
+  void _initializeColors() {
+    _primaryColor = const Color(0xFF03989E);
+    _accentColor = const Color(0xFF04B1B8);
+    _bg = const Color(0xFFF7F9FC);
+    _card = Colors.white;
+    _textPrimary = const Color(0xFF1A1A2E);
+    _textSecondary = const Color(0xFF6B7280);
+  }
+
+  Future<void> _initializeScreen() async {
+    setState(() => _isLoading = true);
+    await Future.wait([
+      _loadOrganizationDetails(),
+      _checkMembershipStatus(),
+      _loadDoctors(),
+    ]);
+    if (mounted) {
+      setState(() => _isLoading = false);
+      _headerController.forward();
+      await Future.delayed(const Duration(milliseconds: 200));
+      _staggerController.forward();
+    }
   }
 
   @override
   void dispose() {
     _tabController.dispose();
+    _staggerController.dispose();
+    _headerController.dispose();
+    _searchController.dispose();
     super.dispose();
   }
 
   Future<void> _loadOrganizationDetails() async {
     try {
       final orgData = await OrgService.fetchOrgDetails(widget.orgId);
-      setState(() {
-        _organizationData = orgData;
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() => _organizationData = orgData);
+      }
     } catch (e) {
       print('Error loading organization details: $e');
-      setState(() {
-        _isLoading = false;
-      });
       if (mounted) {
-        _showErrorSnackbar(
-          'Error loading organization details: ${e.toString()}',
-        );
+        _showError('Error loading organization details: ${e.toString()}');
       }
     }
   }
@@ -81,33 +141,34 @@ class _OrgDetailsScreenState extends State<OrgDetailsScreen>
     try {
       final doctors = await OrgDoctorService.fetchOrgDoctors(widget.orgId);
 
-      setState(() {
-        _doctors = doctors;
-        _isLoadingDoctors = false;
+      if (mounted) {
+        setState(() {
+          _doctors = doctors;
+          _isLoadingDoctors = false;
 
-        final departmentSet = <String>{};
-        for (final doctor in _doctors) {
-          final dept = doctor['department']?.toString().trim();
-          if (dept != null && dept.isNotEmpty) {
-            departmentSet.add(dept);
+          final departmentSet = <String>{};
+          for (final doctor in _doctors) {
+            final dept = doctor['department']?.toString().trim();
+            if (dept != null && dept.isNotEmpty) {
+              departmentSet.add(dept);
+            }
           }
-        }
 
-        final sortedDepartments = departmentSet.toList()..sort();
-        _departments = ['All', ...sortedDepartments];
-      });
+          final sortedDepartments = departmentSet.toList()..sort();
+          _departments = ['All', ...sortedDepartments];
+        });
+      }
 
       print('Successfully loaded ${_doctors.length} doctors');
     } catch (e, stackTrace) {
       print('Error loading doctors: $e');
       print('Error stack trace: $stackTrace');
-      setState(() {
-        _isLoadingDoctors = false;
-        _doctors = [];
-      });
-
       if (mounted) {
-        _showErrorSnackbar('Error loading doctors: ${e.toString()}');
+        setState(() {
+          _isLoadingDoctors = false;
+          _doctors = [];
+        });
+        _showError('Error loading doctors: ${e.toString()}');
       }
     }
   }
@@ -124,7 +185,7 @@ class _OrgDetailsScreenState extends State<OrgDetailsScreen>
         user.id,
       );
 
-      if (status != null) {
+      if (mounted && status != null) {
         setState(() {
           _hasJoined = true;
           _membershipStatus = status;
@@ -132,6 +193,19 @@ class _OrgDetailsScreenState extends State<OrgDetailsScreen>
       }
     } catch (e) {
       print('Error checking membership status: $e');
+    }
+  }
+
+  Future<void> _refreshData() async {
+    setState(() => _isLoading = true);
+    await Future.wait([
+      _loadOrganizationDetails(),
+      _checkMembershipStatus(),
+      _loadDoctors(),
+    ]);
+    if (mounted) {
+      setState(() => _isLoading = false);
+      _showSuccess('Refreshed successfully');
     }
   }
 
@@ -184,220 +258,590 @@ class _OrgDetailsScreenState extends State<OrgDetailsScreen>
   }
 
   List<Map<String, dynamic>> get _filteredDoctors {
-    if (_selectedDepartment == 'All') {
-      return _doctors;
-    }
-    return _doctors
-        .where((doctor) => doctor['department'] == _selectedDepartment)
-        .toList();
-  }
+    var filtered =
+        _selectedDepartment == 'All'
+            ? _doctors
+            : _doctors
+                .where((doctor) => doctor['department'] == _selectedDepartment)
+                .toList();
 
-  void _showErrorSnackbar(String msg) {
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(msg),
-          backgroundColor: Colors.red[700],
-          behavior: SnackBarBehavior.floating,
-          margin: const EdgeInsets.all(16),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-        ),
-      );
-    }
+    if (_searchQuery.isEmpty) return filtered;
+
+    return filtered.where((doctor) {
+      final fullName = _formatFullName(doctor['User']).toLowerCase();
+      final dept = (doctor['department'] ?? '').toString().toLowerCase();
+      final email = (doctor['User']?['email'] ?? '').toString().toLowerCase();
+      final query = _searchQuery.toLowerCase();
+
+      return fullName.contains(query) ||
+          dept.contains(query) ||
+          email.contains(query);
+    }).toList();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: lightBg,
-      body:
-          _isLoading
-              ? Center(
-                child: CircularProgressIndicator(
-                  color: primaryColor,
-                  strokeWidth: 2.5,
-                ),
-              )
-              : CustomScrollView(
-                physics: const BouncingScrollPhysics(),
-                slivers: [
-                  // Enhanced Hero Header
-                  SliverAppBar(
-                    expandedHeight: 260,
-                    pinned: true,
-                    backgroundColor: primaryColor,
-                    elevation: 0,
-                    leading: Padding(
-                      padding: const EdgeInsets.all(8),
-                      child: Material(
-                        color: Colors.white.withOpacity(0.2),
-                        shape: const CircleBorder(),
-                        child: InkWell(
-                          onTap: () => Navigator.pop(context),
-                          customBorder: const CircleBorder(),
-                          child: const Icon(
-                            Icons.arrow_back_rounded,
-                            color: Colors.white,
-                            size: 24,
-                          ),
-                        ),
-                      ),
-                    ),
-                    flexibleSpace: FlexibleSpaceBar(
-                      titlePadding: const EdgeInsets.only(left: 56, bottom: 60),
-                      title: Text(
-                        _organizationData?['name'] ?? widget.orgName,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 20,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      background:
-                          _organizationData?['image'] != null
-                              ? Stack(
-                                fit: StackFit.expand,
-                                children: [
-                                  Image.network(
-                                    _organizationData!['image'],
-                                    fit: BoxFit.cover,
-                                    errorBuilder:
-                                        (context, error, stackTrace) =>
-                                            Container(color: primaryColor),
-                                  ),
-                                  Container(
-                                    decoration: BoxDecoration(
-                                      gradient: LinearGradient(
-                                        begin: Alignment.topCenter,
-                                        end: Alignment.bottomCenter,
-                                        colors: [
-                                          Colors.black.withOpacity(0.25),
-                                          Colors.black.withOpacity(0.65),
-                                        ],
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              )
-                              : Container(color: primaryColor),
-                    ),
-                    bottom: PreferredSize(
-                      preferredSize: const Size.fromHeight(60),
-                      child: Container(
-                        color: cardBg,
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        child: TabBar(
-                          controller: _tabController,
-                          labelColor: primaryColor,
-                          unselectedLabelColor: Colors.grey[400],
-                          indicatorColor: primaryColor,
-                          indicatorWeight: 3,
-                          indicatorPadding: const EdgeInsets.only(bottom: 8),
-                          labelStyle: const TextStyle(
-                            fontWeight: FontWeight.w700,
-                            fontSize: 14,
-                          ),
-                          unselectedLabelStyle: const TextStyle(
-                            fontWeight: FontWeight.w600,
-                            fontSize: 14,
-                          ),
-                          tabs: [
-                            const Tab(text: 'Overview'),
-                            Tab(
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  const Text('Doctors'),
-                                  if (_doctors.isNotEmpty) ...[
-                                    const SizedBox(width: 8),
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 8,
-                                        vertical: 2,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: primaryColor,
-                                        borderRadius: BorderRadius.circular(12),
-                                      ),
-                                      child: Text(
-                                        '${_filteredDoctors.length}',
-                                        style: const TextStyle(
-                                          fontSize: 12,
-                                          color: Colors.white,
-                                          fontWeight: FontWeight.w700,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                  SliverFillRemaining(
-                    child: TabBarView(
-                      controller: _tabController,
-                      children: [_buildDetailsTab(), _buildDoctorsTab()],
-                    ),
-                  ),
+      backgroundColor: _bg,
+      extendBodyBehindAppBar: true,
+      body: Stack(
+        children: [
+          Container(
+            height: 300,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  _primaryColor.withOpacity(0.08),
+                  _accentColor.withOpacity(0.05),
+                  _bg,
                 ],
               ),
-    );
-  }
-
-  Widget _buildDetailsTab() {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // About Section
-          if (_organizationData?['description'] != null) ...[
-            _buildSectionCard(
-              icon: Icons.info_outline,
-              title: 'About',
-              child: Text(
-                _organizationData!['description'],
-                style: TextStyle(
-                  fontSize: 15,
-                  height: 1.7,
-                  color: Colors.grey[700],
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
             ),
-            const SizedBox(height: 20),
-          ],
-          // Information Section
-          _buildInfoSection(),
-          const SizedBox(height: 20),
+          ),
+          SafeArea(
+            child: Column(
+              children: [
+                _buildAppBar(context),
+                _buildHeader(),
+                const SizedBox(height: 28),
+                _buildTabBar(),
+                Expanded(
+                  child: Column(
+                    children: [
+                      if (_isSearchVisible && _tabController.index == 1)
+                        _buildSearchField(),
+                      const SizedBox(height: 20),
+                      Expanded(
+                        child:
+                            _isLoading
+                                ? _buildLoadingState()
+                                : TabBarView(
+                                  controller: _tabController,
+                                  children: [
+                                    _buildDetailsContent(),
+                                    _buildDoctorsContent(),
+                                  ],
+                                ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildSectionCard({
+  Widget _buildAppBar(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
+      child: Row(
+        children: [
+          _buildIconButton(
+            icon: Icons.arrow_back_ios_new_rounded,
+            onTap: () => Navigator.pop(context),
+          ),
+          const Spacer(),
+          if (_tabController.index == 1)
+            _buildIconButton(
+              icon:
+                  _isSearchVisible
+                      ? Icons.search_off_rounded
+                      : Icons.search_rounded,
+              onTap: () {
+                setState(() => _isSearchVisible = !_isSearchVisible);
+                if (!_isSearchVisible) {
+                  _searchController.clear();
+                  _searchQuery = '';
+                }
+              },
+            ),
+          if (_tabController.index == 1) const SizedBox(width: 12),
+          _buildIconButton(icon: Icons.refresh_rounded, onTap: _refreshData),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildIconButton({
+    required IconData icon,
+    required VoidCallback onTap,
+  }) {
+    return Material(
+      color: Colors.white.withOpacity(0.95),
+      borderRadius: BorderRadius.circular(16),
+      elevation: 0,
+      shadowColor: _primaryColor.withOpacity(0.1),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: _primaryColor.withOpacity(0.08),
+              width: 1.5,
+            ),
+          ),
+          child: Icon(icon, color: _primaryColor, size: 20),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHeader() {
+    final avatarTag = 'org_avatar_${widget.orgId}';
+    return AnimatedBuilder(
+      animation: _headerController,
+      builder: (context, child) {
+        return Opacity(
+          opacity: _headerController.value,
+          child: Transform.translate(
+            offset: Offset(0, _headerSlideAnimation.value),
+            child: Transform.scale(
+              scale: _headerScaleAnimation.value,
+              child: child,
+            ),
+          ),
+        );
+      },
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+        child: Container(
+          decoration: BoxDecoration(
+            color: _card,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: _primaryColor.withOpacity(0.06),
+              width: 1,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.04),
+                blurRadius: 20,
+                offset: const Offset(0, 4),
+                spreadRadius: 0,
+              ),
+              BoxShadow(
+                color: _primaryColor.withOpacity(0.02),
+                blurRadius: 40,
+                offset: const Offset(0, 8),
+                spreadRadius: 0,
+              ),
+            ],
+          ),
+          child: Stack(
+            children: [
+              // Subtle gradient overlay
+              Positioned.fill(
+                child: Container(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(20),
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        _primaryColor.withOpacity(0.02),
+                        Colors.transparent,
+                        _accentColor.withOpacity(0.01),
+                      ],
+                      stops: const [0.0, 0.5, 1.0],
+                    ),
+                  ),
+                ),
+              ),
+
+              // Content
+              Padding(
+                padding: const EdgeInsets.all(20),
+                child: Row(
+                  children: [
+                    // Organization Avatar with refined styling
+                    Hero(
+                      tag: avatarTag,
+                      child: Container(
+                        width: 72,
+                        height: 72,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: _primaryColor.withOpacity(0.08),
+                            width: 2,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: _primaryColor.withOpacity(0.12),
+                              blurRadius: 16,
+                              offset: const Offset(0, 4),
+                              spreadRadius: 0,
+                            ),
+                          ],
+                        ),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(14),
+                          child:
+                              _organizationData?['image'] != null
+                                  ? Image.network(
+                                    _organizationData!['image'],
+                                    fit: BoxFit.cover,
+                                    errorBuilder:
+                                        (context, error, stackTrace) =>
+                                            _buildFallbackLogo(),
+                                  )
+                                  : _buildFallbackLogo(),
+                        ),
+                      ),
+                    ),
+
+                    const SizedBox(width: 16),
+
+                    // Organization Info with refined typography
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            _organizationData?['name'] ?? widget.orgName,
+                            style: TextStyle(
+                              color: _textPrimary,
+                              fontSize: 20,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: -0.4,
+                              height: 1.2,
+                            ),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+
+                          if (_organizationData?['description'] != null) ...[
+                            const SizedBox(height: 8),
+                            Container(
+                              padding: const EdgeInsets.only(right: 8),
+                              child: Text(
+                                _organizationData!['description'],
+                                style: TextStyle(
+                                  color: _textSecondary,
+                                  fontSize: 13,
+                                  height: 1.5,
+                                  fontWeight: FontWeight.w400,
+                                  letterSpacing: 0.1,
+                                ),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+
+                          // Optional: Add a subtle status indicator
+                          if (_hasJoined) ...[
+                            const SizedBox(height: 10),
+                            Row(
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 4,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: _primaryColor.withOpacity(0.08),
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(
+                                        Icons.check_circle,
+                                        size: 12,
+                                        color: _primaryColor,
+                                      ),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        'Member',
+                                        style: TextStyle(
+                                          color: _primaryColor,
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w600,
+                                          letterSpacing: 0.2,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // 🧩 Fallback icon when no image
+  Widget _buildFallbackLogo() {
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [_primaryColor, _accentColor],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+      ),
+      child: const Center(
+        child: Icon(
+          Icons.local_hospital_rounded,
+          size: 38,
+          color: Colors.white,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTabBar() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: Container(
+        padding: const EdgeInsets.all(6),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(18),
+          color: _card,
+          border: Border.all(color: _primaryColor.withOpacity(0.1), width: 1.5),
+          boxShadow: [
+            BoxShadow(
+              color: _primaryColor.withOpacity(0.06),
+              blurRadius: 16,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: TabBar(
+          controller: _tabController,
+          labelColor: Colors.white,
+          unselectedLabelColor: _textSecondary,
+          indicator: BoxDecoration(
+            gradient: LinearGradient(colors: [_primaryColor, _accentColor]),
+            borderRadius: BorderRadius.circular(14),
+            boxShadow: [
+              BoxShadow(
+                color: _primaryColor.withOpacity(0.4),
+                blurRadius: 12,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          onTap: (index) {
+            if (index == 0 && _isSearchVisible) {
+              setState(() {
+                _isSearchVisible = false;
+                _searchController.clear();
+                _searchQuery = '';
+              });
+            }
+          },
+          indicatorSize: TabBarIndicatorSize.tab,
+          dividerColor: Colors.transparent,
+          labelStyle: const TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w800,
+            letterSpacing: 0.5,
+          ),
+          unselectedLabelStyle: const TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+          ),
+          tabs: const [
+            Tab(
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.info_outline_rounded, size: 16),
+                  SizedBox(width: 6),
+                  Text('DETAILS'),
+                ],
+              ),
+            ),
+            Tab(
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.medical_services_outlined, size: 16),
+                  SizedBox(width: 6),
+                  Text('DOCTORS'),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSearchField() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+      child: Container(
+        decoration: BoxDecoration(
+          color: _card,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: _primaryColor.withOpacity(0.2), width: 2),
+          boxShadow: [
+            BoxShadow(
+              color: _primaryColor.withOpacity(0.08),
+              blurRadius: 20,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: TextField(
+          controller: _searchController,
+          onChanged: (v) => setState(() => _searchQuery = v),
+          style: TextStyle(
+            color: _textPrimary,
+            fontWeight: FontWeight.w600,
+            fontSize: 15,
+          ),
+          decoration: InputDecoration(
+            hintText: 'Search doctors...',
+            hintStyle: TextStyle(
+              color: _textSecondary.withOpacity(0.5),
+              fontWeight: FontWeight.w500,
+            ),
+            prefixIcon: Container(
+              padding: const EdgeInsets.all(12),
+              child: Icon(Icons.search_rounded, color: _primaryColor, size: 24),
+            ),
+            suffixIcon:
+                _searchQuery.isNotEmpty
+                    ? IconButton(
+                      icon: Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color: _primaryColor.withOpacity(0.1),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          Icons.close_rounded,
+                          color: _primaryColor,
+                          size: 18,
+                        ),
+                      ),
+                      onPressed: () {
+                        _searchController.clear();
+                        setState(() => _searchQuery = '');
+                      },
+                    )
+                    : null,
+            filled: true,
+            fillColor: _card,
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 20,
+              vertical: 18,
+            ),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(20),
+              borderSide: BorderSide.none,
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(20),
+              borderSide: BorderSide.none,
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(20),
+              borderSide: BorderSide.none,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLoadingState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  _primaryColor.withOpacity(0.1),
+                  _accentColor.withOpacity(0.1),
+                ],
+              ),
+              shape: BoxShape.circle,
+            ),
+            child: CircularProgressIndicator(
+              color: _primaryColor,
+              strokeWidth: 3.5,
+            ),
+          ),
+          const SizedBox(height: 24),
+          Text(
+            'Loading organization data...',
+            style: TextStyle(
+              color: _textSecondary,
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDetailsContent() {
+    return RefreshIndicator(
+      onRefresh: _refreshData,
+      color: _primaryColor,
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(20, 0, 20, 100),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (_organizationData?['description'] != null) ...[
+              _buildInfoCard(
+                icon: Icons.description_outlined,
+                title: 'About',
+                content: _organizationData!['description'],
+              ),
+              const SizedBox(height: 16),
+            ],
+            _buildOrganizationInfo(),
+            const SizedBox(height: 20),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildInfoCard({
     required IconData icon,
     required String title,
-    required Widget child,
+    required String content,
   }) {
     return Container(
       decoration: BoxDecoration(
-        color: cardBg,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: borderColor, width: 1),
+        color: _card,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: _primaryColor.withOpacity(0.08), width: 1.5),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 12,
-            offset: const Offset(0, 2),
+            color: _primaryColor.withOpacity(0.06),
+            blurRadius: 16,
+            offset: const Offset(0, 4),
           ),
         ],
       ),
@@ -410,30 +854,39 @@ class _OrgDetailsScreenState extends State<OrgDetailsScreen>
               Container(
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: primaryColor.withOpacity(0.1),
+                  color: _primaryColor.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: Icon(icon, size: 20, color: primaryColor),
+                child: Icon(icon, size: 22, color: _primaryColor),
               ),
-              const SizedBox(width: 14),
+              const SizedBox(width: 12),
               Text(
                 title,
-                style: const TextStyle(
-                  fontSize: 17,
-                  fontWeight: FontWeight.w700,
-                  color: Colors.black87,
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                  color: _primaryColor,
+                  letterSpacing: -0.3,
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 18),
-          child,
+          const SizedBox(height: 16),
+          Text(
+            content,
+            style: TextStyle(
+              fontSize: 15,
+              height: 1.6,
+              color: _textSecondary,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildInfoSection() {
+  Widget _buildOrganizationInfo() {
     final items = <Map<String, dynamic>>[];
 
     if (_organizationData?['organization_license'] != null) {
@@ -478,14 +931,14 @@ class _OrgDetailsScreenState extends State<OrgDetailsScreen>
 
     return Container(
       decoration: BoxDecoration(
-        color: cardBg,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: borderColor, width: 1),
+        color: _card,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: _primaryColor.withOpacity(0.08), width: 1.5),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 12,
-            offset: const Offset(0, 2),
+            color: _primaryColor.withOpacity(0.06),
+            blurRadius: 16,
+            offset: const Offset(0, 4),
           ),
         ],
       ),
@@ -498,27 +951,28 @@ class _OrgDetailsScreenState extends State<OrgDetailsScreen>
               Container(
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: primaryColor.withOpacity(0.1),
+                  color: _primaryColor.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: const Icon(
+                child: Icon(
                   Icons.business_outlined,
-                  size: 20,
-                  color: primaryColor,
+                  size: 22,
+                  color: _primaryColor,
                 ),
               ),
-              const SizedBox(width: 14),
-              const Text(
+              const SizedBox(width: 12),
+              Text(
                 'Organization Info',
                 style: TextStyle(
-                  fontSize: 17,
-                  fontWeight: FontWeight.w700,
-                  color: Colors.black87,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                  color: _primaryColor,
+                  letterSpacing: -0.3,
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 20),
           ...List.generate(
             items.length,
             (index) => Column(
@@ -532,7 +986,7 @@ class _OrgDetailsScreenState extends State<OrgDetailsScreen>
                   Padding(
                     padding: const EdgeInsets.symmetric(vertical: 16),
                     child: Divider(
-                      color: Colors.grey[200],
+                      color: _primaryColor.withOpacity(0.08),
                       height: 1,
                       thickness: 1,
                     ),
@@ -553,12 +1007,12 @@ class _OrgDetailsScreenState extends State<OrgDetailsScreen>
           width: 48,
           height: 48,
           decoration: BoxDecoration(
-            color: primaryColor.withOpacity(0.08),
+            color: _primaryColor.withOpacity(0.1),
             borderRadius: BorderRadius.circular(12),
           ),
-          child: Icon(icon, size: 22, color: primaryColor),
+          child: Icon(icon, size: 22, color: _primaryColor),
         ),
-        const SizedBox(width: 16),
+        const SizedBox(width: 14),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -567,18 +1021,20 @@ class _OrgDetailsScreenState extends State<OrgDetailsScreen>
                 label,
                 style: TextStyle(
                   fontSize: 12,
-                  color: Colors.grey[600],
+                  color: _textSecondary,
                   fontWeight: FontWeight.w600,
-                  letterSpacing: 0.3,
+                  letterSpacing: 0.5,
+                  height: 1.2,
                 ),
               ),
-              const SizedBox(height: 6),
+              const SizedBox(height: 4),
               Text(
                 value,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 15,
-                  color: Colors.black87,
-                  fontWeight: FontWeight.w600,
+                  color: _textPrimary,
+                  fontWeight: FontWeight.w700,
+                  height: 1.4,
                 ),
               ),
             ],
@@ -588,31 +1044,30 @@ class _OrgDetailsScreenState extends State<OrgDetailsScreen>
     );
   }
 
-  Widget _buildDoctorsTab() {
-    return Column(
-      children: [
-        if (_departments.length > 1) _buildDepartmentFilter(),
-        Expanded(
-          child:
-              _isLoadingDoctors
-                  ? Center(
-                    child: CircularProgressIndicator(
-                      color: primaryColor,
-                      strokeWidth: 2.5,
-                    ),
-                  )
-                  : _filteredDoctors.isEmpty
-                  ? _buildEmptyDoctorsState()
-                  : _buildDoctorsList(),
-        ),
-      ],
+  Widget _buildDoctorsContent() {
+    return RefreshIndicator(
+      onRefresh: _refreshData,
+      color: _primaryColor,
+      child: Column(
+        children: [
+          if (_departments.length > 1) _buildDepartmentFilter(),
+          Expanded(
+            child:
+                _isLoadingDoctors
+                    ? _buildLoadingState()
+                    : _filteredDoctors.isEmpty
+                    ? _buildEmptyDoctorsState()
+                    : _buildDoctorsList(),
+          ),
+        ],
+      ),
     );
   }
 
   Widget _buildDepartmentFilter() {
     return Container(
-      color: cardBg,
-      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+      color: _card,
+      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
         child: Row(
@@ -633,26 +1088,40 @@ class _OrgDetailsScreenState extends State<OrgDetailsScreen>
 
   Widget _buildDepartmentChip(String dept, bool isSelected) {
     return Material(
-      color: isSelected ? primaryColor : Colors.grey[100],
-      borderRadius: BorderRadius.circular(16),
+      color: Colors.transparent,
       child: InkWell(
         onTap: () => setState(() => _selectedDepartment = dept),
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(20),
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 11),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
+            color: isSelected ? _primaryColor : Colors.grey[100],
+            borderRadius: BorderRadius.circular(20),
             border:
                 isSelected
                     ? null
-                    : Border.all(color: Colors.grey[300]!, width: 1.5),
+                    : Border.all(
+                      color: _primaryColor.withOpacity(0.15),
+                      width: 1.5,
+                    ),
+            boxShadow:
+                isSelected
+                    ? [
+                      BoxShadow(
+                        color: _primaryColor.withOpacity(0.3),
+                        blurRadius: 8,
+                        offset: const Offset(0, 4),
+                      ),
+                    ]
+                    : null,
           ),
           child: Text(
             dept,
             style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-              color: isSelected ? Colors.white : Colors.grey[700],
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+              color: isSelected ? Colors.white : _textSecondary,
+              letterSpacing: 0.2,
             ),
           ),
         ),
@@ -662,12 +1131,27 @@ class _OrgDetailsScreenState extends State<OrgDetailsScreen>
 
   Widget _buildDoctorsList() {
     return ListView.builder(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.fromLTRB(20, 20, 20, 100),
       itemCount: _filteredDoctors.length,
       itemBuilder: (context, index) {
         final doctor = _filteredDoctors[index];
-        final user = doctor['User'];
-        return _buildDoctorCard(doctor, user, index);
+        return AnimatedBuilder(
+          animation: _staggerController,
+          builder: (context, child) {
+            final progress = (_staggerController.value - (index * 0.06)).clamp(
+              0.0,
+              1.0,
+            );
+            return Opacity(
+              opacity: progress,
+              child: Transform.translate(
+                offset: Offset(0, 30 * (1 - progress)),
+                child: child,
+              ),
+            );
+          },
+          child: _buildDoctorCard(doctor, index),
+        );
       },
     );
   }
@@ -675,43 +1159,53 @@ class _OrgDetailsScreenState extends State<OrgDetailsScreen>
   Widget _buildEmptyDoctorsState() {
     return Center(
       child: Padding(
-        padding: const EdgeInsets.all(40),
+        padding: const EdgeInsets.all(32),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Container(
-              width: 100,
-              height: 100,
+              width: 120,
+              height: 120,
               decoration: BoxDecoration(
-                color: primaryColor.withOpacity(0.1),
+                gradient: LinearGradient(
+                  colors: [
+                    _primaryColor.withOpacity(0.15),
+                    _accentColor.withOpacity(0.1),
+                  ],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
                 shape: BoxShape.circle,
               ),
-              child: const Icon(
+              child: Icon(
                 Icons.medical_services_outlined,
-                color: primaryColor,
-                size: 48,
+                size: 56,
+                color: _primaryColor,
               ),
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 28),
             Text(
               _selectedDepartment == 'All'
                   ? 'No Doctors Yet'
                   : 'No Doctors in $_selectedDepartment',
-              style: const TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w700,
-                color: Colors.black87,
+              style: TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.w900,
+                color: _textPrimary,
+                letterSpacing: -0.5,
               ),
+              textAlign: TextAlign.center,
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 12),
             Text(
               _selectedDepartment == 'All'
                   ? 'This organization hasn\'t added any doctors yet'
                   : 'Try selecting a different department',
               style: TextStyle(
-                fontSize: 14,
-                color: Colors.grey[600],
+                color: _textSecondary,
+                fontSize: 16,
                 fontWeight: FontWeight.w500,
+                height: 1.5,
               ),
               textAlign: TextAlign.center,
             ),
@@ -721,150 +1215,251 @@ class _OrgDetailsScreenState extends State<OrgDetailsScreen>
     );
   }
 
-  Widget _buildDoctorCard(
-    Map<String, dynamic> doctor,
-    Map<String, dynamic>? user,
-    int index,
-  ) {
+  Widget _buildDoctorCard(Map<String, dynamic> doctor, int index) {
+    final user = doctor['User'];
     final fullName = _formatFullName(user);
     final initial = fullName.isNotEmpty ? fullName[0].toUpperCase() : 'D';
     final department = doctor['department']?.toString().trim() ?? 'General';
+    final email = user?['email'];
 
-    return TweenAnimationBuilder<double>(
-      duration: Duration(milliseconds: 300 + (index * 50)),
-      tween: Tween(begin: 0.0, end: 1.0),
-      curve: Curves.easeOut,
-      builder: (context, value, child) {
-        return Opacity(
-          opacity: value,
-          child: Transform.translate(
-            offset: Offset(0, 20 * (1 - value)),
-            child: child,
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      child: Material(
+        color: _card,
+        borderRadius: BorderRadius.circular(20),
+        elevation: 0,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(20),
+          onTap: () {
+            // Handle doctor tap - navigate to doctor profile if needed
+          },
+          child: Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: _primaryColor.withOpacity(0.08),
+                width: 1.5,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: _primaryColor.withOpacity(0.04),
+                  blurRadius: 12,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 56,
+                  height: 56,
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [_primaryColor, _accentColor],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: _primaryColor.withOpacity(0.25),
+                        blurRadius: 8,
+                        offset: const Offset(0, 3),
+                      ),
+                    ],
+                  ),
+                  child: Center(
+                    child: Text(
+                      initial,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 24,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: -0.5,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Dr. $fullName',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w800,
+                          color: _textPrimary,
+                          letterSpacing: -0.3,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: _accentColor.withOpacity(0.12),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: _accentColor.withOpacity(0.25),
+                            width: 1,
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.medical_services_rounded,
+                              size: 12,
+                              color: _primaryColor,
+                            ),
+                            const SizedBox(width: 4),
+                            Flexible(
+                              child: Text(
+                                department,
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: _primaryColor,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      if (email != null) ...[
+                        const SizedBox(height: 6),
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.email_rounded,
+                              size: 12,
+                              color: _textSecondary,
+                            ),
+                            const SizedBox(width: 4),
+                            Expanded(
+                              child: Text(
+                                email,
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: _textSecondary,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                                maxLines: 1,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: _primaryColor.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(
+                    Icons.arrow_forward_ios_rounded,
+                    color: _primaryColor,
+                    size: 14,
+                  ),
+                ),
+              ],
+            ),
           ),
-        );
-      },
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 12),
-        decoration: BoxDecoration(
-          color: cardBg,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: borderColor, width: 1),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.04),
-              blurRadius: 10,
-              offset: const Offset(0, 2),
+        ),
+      ),
+    );
+  }
+
+  void _showError(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.2),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.error_rounded,
+                color: Colors.white,
+                size: 20,
+              ),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Text(
+                message,
+                style: const TextStyle(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 15,
+                ),
+              ),
             ),
           ],
         ),
-        child: Material(
-          color: Colors.transparent,
-          child: InkWell(
-            borderRadius: BorderRadius.circular(14),
-            onTap: () {},
-            child: Padding(
-              padding: const EdgeInsets.all(14),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  Container(
-                    width: 56,
-                    height: 56,
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [
-                          primaryColor.withOpacity(0.15),
-                          primaryColor.withOpacity(0.05),
-                        ],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Center(
-                      child: Text(
-                        initial,
-                        style: const TextStyle(
-                          color: primaryColor,
-                          fontSize: 22,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Dr. $fullName',
-                          style: const TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w700,
-                            color: Colors.black87,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        const SizedBox(height: 6),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 3,
-                          ),
-                          decoration: BoxDecoration(
-                            color: primaryColor.withOpacity(0.08),
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: Text(
-                            department,
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: primaryColor,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ),
-                        if (user?['email'] != null) ...[
-                          const SizedBox(height: 6),
-                          Row(
-                            children: [
-                              Icon(
-                                Icons.email_outlined,
-                                size: 12,
-                                color: Colors.grey[500],
-                              ),
-                              const SizedBox(width: 4),
-                              Expanded(
-                                child: Text(
-                                  user!['email'],
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    color: Colors.grey[600],
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                  overflow: TextOverflow.ellipsis,
-                                  maxLines: 1,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Icon(
-                    Icons.chevron_right_rounded,
-                    color: Colors.grey[300],
-                    size: 20,
-                  ),
-                ],
+        backgroundColor: Colors.red,
+        behavior: SnackBarBehavior.floating,
+        margin: const EdgeInsets.all(16),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        padding: const EdgeInsets.all(16),
+        duration: const Duration(seconds: 4),
+      ),
+    );
+  }
+
+  void _showSuccess(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.2),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.check_circle_rounded,
+                color: Colors.white,
+                size: 20,
               ),
             ),
-          ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Text(
+                message,
+                style: const TextStyle(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 15,
+                ),
+              ),
+            ),
+          ],
         ),
+        backgroundColor: _primaryColor,
+        behavior: SnackBarBehavior.floating,
+        margin: const EdgeInsets.all(16),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        padding: const EdgeInsets.all(16),
+        duration: const Duration(seconds: 3),
       ),
     );
   }

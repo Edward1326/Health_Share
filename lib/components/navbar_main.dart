@@ -78,7 +78,7 @@ class MainNavBar extends StatelessWidget {
               _buildNavItem(
                 context: context,
                 icon: Icons.verified_rounded,
-                label: 'Your Orgs',
+                label: 'My Orgs',
                 index: 3,
                 isCompact: isCompact,
               ),
@@ -104,8 +104,7 @@ class MainNavBar extends StatelessWidget {
     required bool isCompact,
   }) {
     final isSelected = selectedIndex == index;
-    final primaryColor = const Color(0xFF03989E);
-
+    final primaryColor = const Color(0xFF416240);
     return Expanded(
       child: GestureDetector(
         onTap: () => _handleNavigation(context, index),

@@ -18,7 +18,6 @@ class _YourOrgsScreenState extends State<YourOrgsScreen>
   late Animation<double> _fadeAnimation;
   late AnimationController _slideController;
   late Animation<Offset> _slideAnimation;
-  late AnimationController _toggleIconController;
 
   int _selectedIndex = 3;
 
@@ -32,17 +31,16 @@ class _YourOrgsScreenState extends State<YourOrgsScreen>
   int _invitationCount = 0;
   bool _isList = true;
 
-  // --- Updated color palette ---
-  static const primaryColor = Color(0xFF03989E);
-  static const accentColor = Color(0xFF4DC5C8);
-  static const lightBg = Color(0xFFF6FAFA);
-  static const borderColor = Color(0xFFE3E8E8);
+  static const primaryColor = Color(0xFF416240);
+  static const accentColor = Color(0xFFA3B18A);
+  static const lightBg = Color(0xFFF8FAF8);
+  static const borderColor = Color(0xFFE5E7EB);
 
   @override
   void initState() {
     super.initState();
     _fadeController = AnimationController(
-      duration: const Duration(milliseconds: 700),
+      duration: const Duration(milliseconds: 800),
       vsync: this,
     );
     _fadeAnimation = CurvedAnimation(
@@ -55,21 +53,14 @@ class _YourOrgsScreenState extends State<YourOrgsScreen>
       vsync: this,
     );
     _slideAnimation = Tween<Offset>(
-      begin: const Offset(0, 0.2),
+      begin: const Offset(0, 0.3),
       end: Offset.zero,
     ).animate(
       CurvedAnimation(parent: _slideController, curve: Curves.easeOutCubic),
     );
 
-    _toggleIconController = AnimationController(
-      duration: const Duration(milliseconds: 350),
-      vsync: this,
-    );
-
     _fadeController.forward();
     _slideController.forward();
-    _toggleIconController.value = _isList ? 0.0 : 1.0;
-
     _fetchInitialData();
   }
 
@@ -131,14 +122,6 @@ class _YourOrgsScreenState extends State<YourOrgsScreen>
         .toList();
   }
 
-  int _getCrossAxisCount(BuildContext context) {
-    final width = MediaQuery.of(context).size.width;
-    if (width > 1200) return 4;
-    if (width > 900) return 3;
-    if (width > 600) return 2;
-    return 2;
-  }
-
   void _toggleLayout() {
     setState(() {
       _isList = !_isList;
@@ -149,7 +132,6 @@ class _YourOrgsScreenState extends State<YourOrgsScreen>
   void dispose() {
     _fadeController.dispose();
     _slideController.dispose();
-    _toggleIconController.dispose();
     _searchController.dispose();
     super.dispose();
   }
@@ -177,7 +159,7 @@ class _YourOrgsScreenState extends State<YourOrgsScreen>
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Search + invitations row
+                // Search bar with invitation button
                 Row(
                   children: [
                     Expanded(
@@ -191,7 +173,7 @@ class _YourOrgsScreenState extends State<YourOrgsScreen>
                           padding: const EdgeInsets.symmetric(horizontal: 12),
                           child: Row(
                             children: [
-                              Icon(
+                              const Icon(
                                 Icons.search_rounded,
                                 color: primaryColor,
                                 size: 20,
@@ -233,49 +215,53 @@ class _YourOrgsScreenState extends State<YourOrgsScreen>
                     const SizedBox(width: 8),
                     // Invitation icon with badge
                     Stack(
-                      alignment: Alignment.center,
                       children: [
                         Material(
+                          elevation: 0,
                           color: Colors.white,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12),
                           ),
-                          child: IconButton(
-                            icon: Icon(
-                              Icons.mail_outline_rounded,
-                              color:
-                                  _invitationCount > 0
-                                      ? primaryColor
-                                      : primaryColor.withOpacity(0.55),
-                              size: 24,
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(12),
+                            onTap: _showInvitationsDialog,
+                            child: Container(
+                              padding: const EdgeInsets.all(12),
+                              child: Icon(
+                                Icons.mail_outline_rounded,
+                                color:
+                                    _invitationCount > 0
+                                        ? primaryColor
+                                        : primaryColor.withOpacity(0.5),
+                                size: 20,
+                              ),
                             ),
-                            onPressed: _showInvitationsDialog,
                           ),
                         ),
                         if (_invitationCount > 0)
                           Positioned(
-                            right: 6,
-                            top: 6,
+                            right: 4,
+                            top: 4,
                             child: Container(
-                              padding: const EdgeInsets.all(5),
+                              padding: const EdgeInsets.all(4),
                               decoration: BoxDecoration(
                                 color: Colors.red,
                                 shape: BoxShape.circle,
                                 border: Border.all(
                                   color: Colors.white,
-                                  width: 1.6,
+                                  width: 1.5,
                                 ),
                               ),
                               constraints: const BoxConstraints(
-                                minWidth: 18,
-                                minHeight: 18,
+                                minWidth: 16,
+                                minHeight: 16,
                               ),
                               child: Center(
                                 child: Text(
                                   '$_invitationCount',
                                   style: const TextStyle(
                                     color: Colors.white,
-                                    fontSize: 10,
+                                    fontSize: 9,
                                     fontWeight: FontWeight.bold,
                                   ),
                                 ),
@@ -287,6 +273,7 @@ class _YourOrgsScreenState extends State<YourOrgsScreen>
                   ],
                 ),
                 const SizedBox(height: 12),
+                // Title + layout toggle
                 Row(
                   children: [
                     Expanded(
@@ -299,25 +286,16 @@ class _YourOrgsScreenState extends State<YourOrgsScreen>
                         ),
                       ),
                     ),
-                    // Animated toggle icon
-                    GestureDetector(
-                      onTap: _toggleLayout,
-                      child: AnimatedBuilder(
-                        animation: _toggleIconController,
-                        builder: (context, child) {
-                          return Transform.rotate(
-                            angle: _toggleIconController.value * 0.5 * 3.14159,
-                            child: Icon(
-                              _isList
-                                  ? Icons.grid_view_rounded
-                                  : Icons.view_list_rounded,
-                              color: primaryColor,
-                            ),
-                          );
-                        },
+                    IconButton(
+                      icon: Icon(
+                        _isList
+                            ? Icons.grid_view_rounded
+                            : Icons.view_list_rounded,
+                        color: primaryColor,
                       ),
+                      onPressed: _toggleLayout,
+                      iconSize: 20,
                     ),
-                    const SizedBox(width: 8),
                   ],
                 ),
               ],
@@ -351,7 +329,6 @@ class _YourOrgsScreenState extends State<YourOrgsScreen>
     );
   }
 
-  // ---------------- List view (matches OrgsScreen style) ----------------
   Widget _buildOrgList() {
     final orgs = _filteredOrganizations;
     final screenWidth = MediaQuery.of(context).size.width;
@@ -474,14 +451,19 @@ class _YourOrgsScreenState extends State<YourOrgsScreen>
     );
   }
 
-  // ---------------- Grid view (matches OrgsScreen style) ----------------
   Widget _buildOrgGrid() {
     final orgs = _filteredOrganizations;
     final screenWidth = MediaQuery.of(context).size.width;
     final horizontalPadding =
         screenWidth > 900 ? 60.0 : (screenWidth > 600 ? 40.0 : 16.0);
 
-    final crossAxisCount = _getCrossAxisCount(context);
+    int crossAxisCount = 2;
+    if (screenWidth > 1200)
+      crossAxisCount = 4;
+    else if (screenWidth > 900)
+      crossAxisCount = 3;
+    else if (screenWidth < 600)
+      crossAxisCount = 2;
 
     return GridView.builder(
       padding: EdgeInsets.symmetric(
@@ -599,11 +581,10 @@ class _YourOrgsScreenState extends State<YourOrgsScreen>
     );
   }
 
-  // ---------------- Empty state ----------------
   Widget _buildEmptyState() {
     return Center(
       child: Padding(
-        padding: const EdgeInsets.all(32.0),
+        padding: const EdgeInsets.all(40.0),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
@@ -628,7 +609,6 @@ class _YourOrgsScreenState extends State<YourOrgsScreen>
                 fontWeight: FontWeight.w700,
                 color: primaryColor,
               ),
-              textAlign: TextAlign.center,
             ),
             const SizedBox(height: 10),
             Text(
@@ -645,7 +625,6 @@ class _YourOrgsScreenState extends State<YourOrgsScreen>
     );
   }
 
-  // ---------------- Invitations dialog ----------------
   void _showInvitationsDialog() {
     showDialog(
       context: context,
@@ -653,7 +632,7 @@ class _YourOrgsScreenState extends State<YourOrgsScreen>
         return AlertDialog(
           backgroundColor: Colors.white,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(24),
+            borderRadius: BorderRadius.circular(20),
           ),
           title: Row(
             children: [
@@ -665,7 +644,7 @@ class _YourOrgsScreenState extends State<YourOrgsScreen>
                 ),
                 child: const Icon(
                   Icons.mail_outline_rounded,
-                  size: 24,
+                  size: 22,
                   color: primaryColor,
                 ),
               ),
@@ -720,42 +699,45 @@ class _YourOrgsScreenState extends State<YourOrgsScreen>
                         return Container(
                           decoration: BoxDecoration(
                             color: lightBg,
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(
-                              color: primaryColor.withOpacity(0.06),
-                            ),
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(color: borderColor),
                           ),
-                          child: ListTile(
-                            contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 8,
-                            ),
-                            leading: Container(
-                              padding: const EdgeInsets.all(10),
-                              decoration: BoxDecoration(
-                                color: primaryColor.withOpacity(0.12),
-                                borderRadius: BorderRadius.circular(12),
+                          padding: const EdgeInsets.all(14),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.all(8),
+                                    decoration: BoxDecoration(
+                                      color: primaryColor.withOpacity(0.1),
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                    child: const Icon(
+                                      Icons.business_rounded,
+                                      color: primaryColor,
+                                      size: 20,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Text(
+                                      name,
+                                      style: const TextStyle(
+                                        color: primaryColor,
+                                        fontWeight: FontWeight.w700,
+                                        fontSize: 15,
+                                      ),
+                                    ),
+                                  ),
+                                ],
                               ),
-                              child: const Icon(
-                                Icons.business_rounded,
-                                color: primaryColor,
-                                size: 24,
-                              ),
-                            ),
-                            title: Text(
-                              name,
-                              style: const TextStyle(
-                                color: primaryColor,
-                                fontWeight: FontWeight.w700,
-                                fontSize: 15,
-                              ),
-                            ),
-                            subtitle: Padding(
-                              padding: const EdgeInsets.only(top: 8),
-                              child: Row(
+                              const SizedBox(height: 12),
+                              Row(
                                 children: [
                                   Expanded(
-                                    child: ElevatedButton.icon(
+                                    child: ElevatedButton(
                                       onPressed: () {
                                         Navigator.pop(context);
                                         _handleInvitation(
@@ -763,16 +745,11 @@ class _YourOrgsScreenState extends State<YourOrgsScreen>
                                           'accepted',
                                         );
                                       },
-                                      icon: const Icon(
-                                        Icons.check_circle_rounded,
-                                        size: 16,
-                                      ),
-                                      label: const Text('Accept'),
                                       style: ElevatedButton.styleFrom(
                                         backgroundColor: primaryColor,
                                         foregroundColor: Colors.white,
                                         padding: const EdgeInsets.symmetric(
-                                          vertical: 10,
+                                          vertical: 12,
                                         ),
                                         shape: RoundedRectangleBorder(
                                           borderRadius: BorderRadius.circular(
@@ -781,11 +758,17 @@ class _YourOrgsScreenState extends State<YourOrgsScreen>
                                         ),
                                         elevation: 0,
                                       ),
+                                      child: const Text(
+                                        'Accept',
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
                                     ),
                                   ),
                                   const SizedBox(width: 8),
                                   Expanded(
-                                    child: OutlinedButton.icon(
+                                    child: OutlinedButton(
                                       onPressed: () {
                                         Navigator.pop(context);
                                         _handleInvitation(
@@ -793,15 +776,10 @@ class _YourOrgsScreenState extends State<YourOrgsScreen>
                                           'declined',
                                         );
                                       },
-                                      icon: const Icon(
-                                        Icons.cancel_rounded,
-                                        size: 16,
-                                      ),
-                                      label: const Text('Decline'),
                                       style: OutlinedButton.styleFrom(
                                         foregroundColor: Colors.red,
                                         padding: const EdgeInsets.symmetric(
-                                          vertical: 10,
+                                          vertical: 12,
                                         ),
                                         side: const BorderSide(
                                           color: Colors.red,
@@ -813,11 +791,17 @@ class _YourOrgsScreenState extends State<YourOrgsScreen>
                                           ),
                                         ),
                                       ),
+                                      child: const Text(
+                                        'Decline',
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
                                     ),
                                   ),
                                 ],
                               ),
-                            ),
+                            ],
                           ),
                         );
                       },
@@ -831,7 +815,7 @@ class _YourOrgsScreenState extends State<YourOrgsScreen>
                 style: TextStyle(
                   color: primaryColor,
                   fontWeight: FontWeight.w600,
-                  fontSize: 16,
+                  fontSize: 15,
                 ),
               ),
             ),
@@ -845,25 +829,13 @@ class _YourOrgsScreenState extends State<YourOrgsScreen>
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Row(
-            children: [
-              const Icon(Icons.error_outline_rounded, color: Colors.white),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  msg,
-                  style: const TextStyle(fontWeight: FontWeight.w500),
-                ),
-              ),
-            ],
-          ),
+          content: Text(msg),
           backgroundColor: const Color(0xFFD32F2F),
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
           ),
           margin: const EdgeInsets.all(16),
-          elevation: 6,
         ),
       );
     }
@@ -873,28 +845,13 @@ class _YourOrgsScreenState extends State<YourOrgsScreen>
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Row(
-            children: [
-              const Icon(
-                Icons.check_circle_outline_rounded,
-                color: Colors.white,
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  msg,
-                  style: const TextStyle(fontWeight: FontWeight.w500),
-                ),
-              ),
-            ],
-          ),
+          content: Text(msg),
           backgroundColor: primaryColor,
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
           ),
           margin: const EdgeInsets.all(16),
-          elevation: 6,
         ),
       );
     }

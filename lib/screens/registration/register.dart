@@ -73,6 +73,19 @@ class _RegisterScreenState extends State<RegisterScreen>
     super.dispose();
   }
 
+  bool _isValidEmail(String email) {
+    final emailLower = email.toLowerCase();
+    return emailLower.contains('@gmail.com') ||
+        emailLower.contains('@yahoo.com');
+  }
+
+  bool _isValidPhoneNumber(String phone) {
+    // Remove any spaces or dashes
+    final cleanPhone = phone.replaceAll(RegExp(r'[\s-]'), '');
+    // Check if it contains exactly 11 digits
+    return cleanPhone.length == 11 && RegExp(r'^\d{11}$').hasMatch(cleanPhone);
+  }
+
   bool _isStrongPassword(String password) {
     final hasUppercase = password.contains(RegExp(r'[A-Z]'));
     final hasLowercase = password.contains(RegExp(r'[a-z]'));
@@ -134,8 +147,54 @@ class _RegisterScreenState extends State<RegisterScreen>
       return;
     }
 
+    final email = _emailController.text.trim();
+    final phone = _phoneController.text.trim();
     final password = _passwordController.text.trim();
     final confirmPassword = _confirmPasswordController.text.trim();
+
+    // ✅ VALIDATE EMAIL
+    if (!_isValidEmail(email)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Row(
+            children: [
+              Icon(Icons.error_outline, color: Colors.white),
+              SizedBox(width: 12),
+              Expanded(
+                child: Text('Email must be from @gmail.com or @yahoo.com'),
+              ),
+            ],
+          ),
+          backgroundColor: Colors.red[700],
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+        ),
+      );
+      return;
+    }
+
+    // ✅ VALIDATE PHONE NUMBER
+    if (!_isValidPhoneNumber(phone)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Row(
+            children: [
+              Icon(Icons.error_outline, color: Colors.white),
+              SizedBox(width: 12),
+              Expanded(child: Text('Phone number must be exactly 11 digits')),
+            ],
+          ),
+          backgroundColor: Colors.red[700],
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+        ),
+      );
+      return;
+    }
 
     if (!_isStrongPassword(password)) {
       final errorMessage = _getPasswordErrorMessage(password);
@@ -181,75 +240,52 @@ class _RegisterScreenState extends State<RegisterScreen>
 
     setState(() => _isLoading = true);
 
-    final email = _emailController.text.trim();
     final firstName = _firstNameController.text.trim();
     final middleName = _middleNameController.text.trim();
     final lastName = _lastNameController.text.trim();
-    final phone = _phoneController.text.trim();
 
     try {
+      // ✅ This already sends OTP automatically!
       await authService.signUpWithEmailOnly(email, password);
 
       if (mounted) {
-        try {
-          await authService.sendOTP(email);
+        setState(() => _isLoading = false);
 
-          if (mounted) {
-            setState(() => _isLoading = false);
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: const Row(
-                  children: [
-                    Icon(Icons.check_circle, color: Colors.white),
-                    SizedBox(width: 12),
-                    Text('Check your email for OTP'),
-                  ],
-                ),
-                backgroundColor: primaryGreen,
-                behavior: SnackBarBehavior.floating,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
-            );
+        // ✅ Show success message
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Row(
+              children: [
+                Icon(Icons.check_circle, color: Colors.white),
+                SizedBox(width: 12),
+                Text('Check your email for OTP'),
+              ],
+            ),
+            backgroundColor: primaryGreen,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+        );
 
-            await Future.delayed(const Duration(milliseconds: 500));
-            if (mounted) {
-              Navigator.pushReplacement(
-                context,
-                MaterialPageRoute(
-                  builder:
-                      (context) => EmailVerificationScreen(
-                        email: email,
-                        firstName: firstName,
-                        middleName: middleName,
-                        lastName: lastName,
-                        phone: phone,
-                      ),
-                ),
-              );
-            }
-          }
-        } catch (e) {
-          if (mounted) {
-            setState(() => _isLoading = false);
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: const Row(
-                  children: [
-                    Icon(Icons.error_outline, color: Colors.white),
-                    SizedBox(width: 12),
-                    Text('Failed to send OTP'),
-                  ],
-                ),
-                backgroundColor: Colors.red[700],
-                behavior: SnackBarBehavior.floating,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
-            );
-          }
+        await Future.delayed(const Duration(milliseconds: 500));
+
+        if (mounted) {
+          // ✅ Navigate to OTP verification screen
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(
+              builder:
+                  (context) => EmailVerificationScreen(
+                    email: email,
+                    firstName: firstName,
+                    middleName: middleName,
+                    lastName: lastName,
+                    phone: phone,
+                  ),
+            ),
+          );
         }
       }
     } catch (e) {
@@ -765,7 +801,7 @@ class _RegisterScreenState extends State<RegisterScreen>
                   width: 24,
                 ),
         label: Text(
-          _isGoogleLoading ? 'Signing up...' : 'Sign up with Google',
+          _isGoogleLoading ? 'Signing up...' : 'Continue with Google',
           style: const TextStyle(
             fontSize: 16,
             fontWeight: FontWeight.w600,

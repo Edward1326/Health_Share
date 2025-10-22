@@ -592,7 +592,7 @@ class _LoginScreenState extends State<LoginScreen>
                     ),
                     const SizedBox(width: 12),
                     const Text(
-                      'Sign in with Google',
+                      'Continue with Google',
                       style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w600,

@@ -25,8 +25,8 @@ class _GroupsScreenState extends State<GroupsScreen>
   bool _isLoading = false;
   String? _currentUserId;
 
-  static const primaryColor = Color(0xFF03989E);
-  static const accentColor = Color(0xFF04B1B8);
+  static const primaryColor = const Color(0xFF416240);
+  static const accentColor = const Color(0xFFA3B18A);
   static const lightBg = Color(0xFFF8FAF8);
   static const borderColor = Color(0xFFE5E7EB);
 

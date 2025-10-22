@@ -34,8 +34,9 @@ class _FilesScreenState extends State<FilesScreen>
 
   List<FileItem> items = [];
 
-  static const primaryColor = Color(0xFF03989E);
-  static const accentColor = Color(0xFF04B1B8);
+  static const primaryColor = const Color(0xFF416240);
+  static const accentColor = const Color(0xFFA3B18A);
+
   static const lightBg = Color(0xFFF8FAF8);
   static const borderColor = Color(0xFFE5E7EB);
 
@@ -853,7 +854,7 @@ class _FilesScreenState extends State<FilesScreen>
                             ),
                             const SizedBox(height: 6),
                             Text(
-                              '${item.size} • ${_formatDate(item.dateAdded)}',
+                              '${item.size} • ${_formatDateTime(item.dateAdded)}',
                               style: TextStyle(
                                 fontSize: 13,
                                 color: Colors.grey[600],
@@ -1113,6 +1114,22 @@ class _FilesScreenState extends State<FilesScreen>
     return '${date.day}/${date.month}/${date.year}';
   }
 
+  String _formatDateTime(DateTime date) {
+    final day = date.day.toString().padLeft(2, '0');
+    final month = date.month.toString().padLeft(2, '0');
+    final year = date.year;
+
+    int hour = date.hour;
+    final minute = date.minute.toString().padLeft(2, '0');
+    final period = hour >= 12 ? 'PM' : 'AM';
+
+    // Convert 24-hour to 12-hour format
+    hour = hour % 12;
+    if (hour == 0) hour = 12;
+
+    return '$day/$month/$year $hour:$minute $period';
+  }
+
   List<FileItem> get _filteredItems {
     List<FileItem> filtered = items;
 
@@ -1334,7 +1351,7 @@ class _FilesScreenState extends State<FilesScreen>
                 const SizedBox(height: 6),
                 Text('Size: ${item.size}'),
                 const SizedBox(height: 6),
-                Text('Uploaded: ${_formatDate(item.dateAdded)}'),
+                Text('Uploaded: ${_formatDateTime(item.dateAdded)}'),
                 const SizedBox(height: 6),
                 Text('Category: ${item.category}'),
               ],

@@ -26,7 +26,8 @@ class _OrgsScreenState extends State<OrgsScreen> with TickerProviderStateMixin {
   bool _isLoading = false;
   bool _isList = true;
 
-  static const primaryColor = Color(0xFF03989E);
+  static const primaryColor = const Color(0xFF416240);
+  static const accentColor = const Color(0xFFA3B18A);
   static const lightBg = Color(0xFFF8FAF8);
   static const borderColor = Color(0xFFE5E7EB);
 
@@ -169,7 +170,7 @@ class _OrgsScreenState extends State<OrgsScreen> with TickerProviderStateMixin {
                   children: [
                     Expanded(
                       child: Text(
-                        'My Organizations',
+                        'Organizations',
                         style: TextStyle(
                           color: primaryColor,
                           fontWeight: FontWeight.bold,

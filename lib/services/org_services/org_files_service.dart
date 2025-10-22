@@ -136,27 +136,29 @@ class OrgFilesService {
           for (final file in sharedFilesDetails) {
             final fileId = file['id'] as String;
             if (!allUniqueFiles.containsKey(fileId)) {
-              // Try to find sharing record
-              final shareRecord =
-                  await _supabase
-                      .from('File_Shares')
-                      .select(
-                        'shared_by_user_id, shared_with_user_id, shared_at, shared_with_doctor',
-                      )
-                      .eq('file_id', fileId)
-                      .or(
-                        'shared_by_user_id.eq.$userId,shared_with_user_id.eq.$userId,shared_with_doctor.eq.$doctorUserId',
-                      )
-                      .isFilter('revoked_at', null)
-                      .limit(1)
-                      .maybeSingle();
+              // Try to find sharing record - FIXED QUERY
+              final shareRecords = await _supabase
+                  .from('File_Shares')
+                  .select(
+                    'shared_by_user_id, shared_with_user_id, shared_at, shared_with_doctor',
+                  )
+                  .eq('file_id', fileId)
+                  .isFilter('revoked_at', null)
+                  .or(
+                    'and(shared_by_user_id.eq.$userId,shared_with_user_id.eq.$doctorUserId),'
+                    'and(shared_by_user_id.eq.$doctorUserId,shared_with_user_id.eq.$userId),'
+                    'shared_with_doctor.eq.$doctorUserId',
+                  )
+                  .order('shared_at', ascending: true);
 
               String sharedBy = 'Unknown';
               String sharedWith = 'Unknown';
-              String sharedAt = DateTime.now().toIso8601String();
+              String? sharedAt;
 
-              if (shareRecord != null) {
-                sharedAt = shareRecord['shared_at'] ?? sharedAt;
+              // Use the first (earliest) share record found
+              if (shareRecords.isNotEmpty) {
+                final shareRecord = shareRecords.first;
+                sharedAt = shareRecord['shared_at'];
 
                 if (shareRecord['shared_with_doctor'] == doctorUserId) {
                   sharedBy = 'You';
@@ -170,18 +172,33 @@ class OrgFilesService {
                 }
               }
 
-              allUniqueFiles[fileId] = {
-                ...file,
-                'shared_at': sharedAt,
-                'shared_by': sharedBy,
-                'shared_with': sharedWith,
-              };
+              // Only add if we found a valid share record
+              if (sharedAt != null) {
+                allUniqueFiles[fileId] = {
+                  ...file,
+                  'shared_at': sharedAt,
+                  'shared_by': sharedBy,
+                  'shared_with': sharedWith,
+                };
+              } else {
+                // If no share record found, use uploaded_at as fallback
+                print(
+                  '⚠️ No share record found for file $fileId, using uploaded_at as fallback',
+                );
+                allUniqueFiles[fileId] = {
+                  ...file,
+                  'shared_at':
+                      file['uploaded_at'] ?? DateTime.now().toIso8601String(),
+                  'shared_by': sharedBy,
+                  'shared_with': sharedWith,
+                };
+              }
             }
           }
         }
       }
 
-      // Sort by date and return
+      // Sort by shared_at date and return
       final filesList = allUniqueFiles.values.toList();
       filesList.sort((a, b) {
         final dateA = DateTime.parse(a['shared_at']);
@@ -231,7 +248,7 @@ class OrgFilesService {
         allUniqueFiles[fileId] = {
           ...file,
           'share_id': share['id'],
-          'shared_at': share['shared_at'],
+          'shared_at': share['shared_at'], // This is from File_Shares.shared_at
           'shared_by': sharedBy,
           'shared_with': sharedWith,
         };

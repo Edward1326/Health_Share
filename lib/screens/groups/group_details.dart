@@ -42,6 +42,11 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen>
   late Color _textSecondary;
 
   late AnimationController _staggerController;
+  late AnimationController _headerController;
+  late AnimationController _fabController;
+  late Animation<double> _headerSlideAnimation;
+  late Animation<double> _headerScaleAnimation;
+  late Animation<double> _fabAnimation;
 
   String _searchQuery = '';
   final TextEditingController _searchController = TextEditingController();
@@ -51,21 +56,43 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen>
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
+
     _staggerController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 700),
+      duration: const Duration(milliseconds: 1000),
     );
+    _headerController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 800),
+    );
+    _fabController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 600),
+    );
+
+    _headerSlideAnimation = Tween<double>(begin: 50, end: 0).animate(
+      CurvedAnimation(parent: _headerController, curve: Curves.easeOutCubic),
+    );
+
+    _headerScaleAnimation = Tween<double>(begin: 0.9, end: 1.0).animate(
+      CurvedAnimation(parent: _headerController, curve: Curves.easeOutBack),
+    );
+
+    _fabAnimation = Tween<double>(begin: 0, end: 1).animate(
+      CurvedAnimation(parent: _fabController, curve: Curves.elasticOut),
+    );
+
     _initializeColors();
     _initializeScreen();
   }
 
   void _initializeColors() {
-    _primaryColor = const Color(0xFF03989E);
-    _accentColor = const Color(0xFF04B1B8);
-    _bg = const Color(0xFFF6F8FA);
+    _primaryColor = const Color(0xFF416240);
+    _accentColor = const Color(0xFFA3B18A);
+    _bg = const Color(0xFFF7F9FC);
     _card = Colors.white;
-    _textPrimary = const Color(0xFF1A1A1A);
-    _textSecondary = Colors.grey[600]!;
+    _textPrimary = const Color(0xFF1A1A2E);
+    _textSecondary = const Color(0xFF6B7280);
   }
 
   Future<void> _initializeScreen() async {
@@ -76,8 +103,16 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen>
       widget.groupData,
     );
     await Future.wait([_fetchMembers(), _fetchSharedFiles()]);
-    if (mounted) setState(() => _isLoading = false);
-    _staggerController.forward();
+    if (mounted) {
+      setState(() => _isLoading = false);
+      _headerController.forward();
+      await Future.delayed(const Duration(milliseconds: 200));
+      _staggerController.forward();
+      if (_isGroupOwner) {
+        await Future.delayed(const Duration(milliseconds: 400));
+        _fabController.forward();
+      }
+    }
   }
 
   Future<void> _fetchMembers() async {
@@ -135,6 +170,8 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen>
   void dispose() {
     _tabController.dispose();
     _staggerController.dispose();
+    _headerController.dispose();
+    _fabController.dispose();
     _searchController.dispose();
     super.dispose();
   }
@@ -143,246 +180,57 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen>
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: _bg,
-      floatingActionButton: _isGroupOwner ? _buildFAB() : null,
-      body: SafeArea(
-        child: Column(
-          children: [
-            _buildHeader(context),
-            _buildTabBar(),
-            if (_isSearchVisible) _buildSearchField(),
-            Expanded(
-              child: RefreshIndicator(
-                onRefresh: _refreshData,
-                color: _primaryColor,
-                child: _isLoading ? _buildLoadingState() : _buildTabView(),
+      extendBodyBehindAppBar: true,
+      body: Stack(
+        children: [
+          // Gradient background
+          Container(
+            height: 300,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  _primaryColor.withOpacity(0.08),
+                  _accentColor.withOpacity(0.05),
+                  _bg,
+                ],
               ),
             ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildHeader(BuildContext context) {
-    final avatarTag = 'group_avatar_${widget.groupId}';
-    return Padding(
-      padding: const EdgeInsets.only(left: 16, right: 16, top: 8, bottom: 16),
-      child: Column(
-        children: [
-          // Back button row
-          Row(
-            children: [
-              IconButton(
-                onPressed: () => Navigator.pop(context),
-                icon: const Icon(Icons.arrow_back),
-                style: IconButton.styleFrom(
-                  backgroundColor: Colors.white,
-                  foregroundColor: _primaryColor,
-                ),
-              ),
-              const Spacer(),
-              IconButton(
-                onPressed: () {
-                  setState(() => _isSearchVisible = !_isSearchVisible);
-                  if (!_isSearchVisible) {
-                    _searchController.clear();
-                    _searchQuery = '';
-                  }
-                },
-                icon: Icon(_isSearchVisible ? Icons.search_off : Icons.search),
-                style: IconButton.styleFrom(
-                  backgroundColor: Colors.white,
-                  foregroundColor: _primaryColor,
-                ),
-              ),
-              const SizedBox(width: 8),
-              PopupMenuButton<String>(
-                color: Colors.white,
-                icon: Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Icon(Icons.more_vert, color: _primaryColor),
-                ),
-                onSelected: (v) {
-                  if (v == 'refresh') _refreshData();
-                  if (v == 'leave') _showLeaveGroupDialog();
-                },
-                itemBuilder:
-                    (_) => [
-                      const PopupMenuItem(
-                        value: 'refresh',
-                        child: Row(
-                          children: [
-                            Icon(Icons.refresh, size: 20),
-                            SizedBox(width: 12),
-                            Text('Refresh'),
-                          ],
-                        ),
-                      ),
-                      const PopupMenuItem(
-                        value: 'leave',
-                        child: Row(
-                          children: [
-                            Icon(
-                              Icons.exit_to_app,
-                              size: 20,
-                              color: Colors.red,
-                            ),
-                            SizedBox(width: 12),
-                            Text(
-                              'Leave Group',
-                              style: TextStyle(color: Colors.red),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-              ),
-            ],
           ),
-          const SizedBox(height: 16),
-          // Gradient glass card
-          ClipRRect(
-            borderRadius: BorderRadius.circular(20),
-            child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
-              child: Container(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [
-                      _primaryColor.withOpacity(0.95),
-                      _accentColor.withOpacity(0.95),
-                    ],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  borderRadius: BorderRadius.circular(20),
-                  boxShadow: [
-                    BoxShadow(
-                      color: _primaryColor.withOpacity(0.3),
-                      blurRadius: 20,
-                      offset: const Offset(0, 10),
-                    ),
-                  ],
-                ),
-                padding: const EdgeInsets.all(20),
-                child: Column(
-                  children: [
-                    Row(
-                      children: [
-                        Hero(
-                          tag: avatarTag,
-                          child: Container(
-                            width: 70,
-                            height: 70,
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              shape: BoxShape.circle,
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withOpacity(0.2),
-                                  blurRadius: 12,
-                                  offset: const Offset(0, 4),
-                                ),
+          SafeArea(
+            child: Column(
+              children: [
+                _buildAppBar(context),
+                Expanded(
+                  child: RefreshIndicator(
+                    onRefresh: _refreshData,
+                    color: _primaryColor,
+                    child: CustomScrollView(
+                      slivers: [
+                        SliverToBoxAdapter(child: _buildHeader()),
+                        SliverToBoxAdapter(child: const SizedBox(height: 28)),
+                        SliverToBoxAdapter(child: _buildTabBar()),
+                        if (_isSearchVisible)
+                          SliverToBoxAdapter(child: _buildSearchField()),
+                        SliverToBoxAdapter(child: const SizedBox(height: 20)),
+                        if (_isLoading)
+                          SliverFillRemaining(child: _buildLoadingState())
+                        else
+                          SliverFillRemaining(
+                            child: TabBarView(
+                              controller: _tabController,
+                              children: [
+                                _buildFilesContent(),
+                                _buildMembersContent(),
                               ],
                             ),
-                            child: Center(
-                              child: Text(
-                                (widget.groupName.isNotEmpty
-                                        ? widget.groupName[0]
-                                        : 'G')
-                                    .toUpperCase(),
-                                style: TextStyle(
-                                  color: _primaryColor,
-                                  fontSize: 32,
-                                  fontWeight: FontWeight.w800,
-                                ),
-                              ),
-                            ),
                           ),
-                        ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                widget.groupName,
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 22,
-                                  fontWeight: FontWeight.bold,
-                                  letterSpacing: 0.5,
-                                ),
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              const SizedBox(height: 8),
-                              Wrap(
-                                spacing: 8,
-                                runSpacing: 8,
-                                children: [
-                                  _buildInfoChip(
-                                    Icons.group,
-                                    '${_members.length} members',
-                                  ),
-                                  _buildInfoChip(
-                                    Icons.folder,
-                                    '${_filesByUser.length} shared',
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
-                        ),
                       ],
                     ),
-                    const SizedBox(height: 16),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: ElevatedButton.icon(
-                            onPressed: _refreshData,
-                            icon: const Icon(Icons.refresh, size: 18),
-                            label: const Text('Refresh'),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.white.withOpacity(0.2),
-                              foregroundColor: Colors.white,
-                              elevation: 0,
-                              padding: const EdgeInsets.symmetric(vertical: 12),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: OutlinedButton.icon(
-                            onPressed: _showLeaveGroupDialog,
-                            icon: const Icon(Icons.exit_to_app, size: 18),
-                            label: const Text('Leave'),
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(vertical: 12),
-                              side: BorderSide(
-                                color: Colors.white.withOpacity(0.3),
-                                width: 1.5,
-                              ),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
+                  ),
                 ),
-              ),
+              ],
             ),
           ),
         ],
@@ -390,25 +238,293 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen>
     );
   }
 
-  Widget _buildInfoChip(IconData icon, String label) {
+  Widget _buildAppBar(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
+      child: Row(
+        children: [
+          _buildIconButton(
+            icon: Icons.arrow_back_ios_new_rounded,
+            onTap: () => Navigator.pop(context),
+          ),
+          const Spacer(),
+          _buildIconButton(
+            icon:
+                _isSearchVisible
+                    ? Icons.search_off_rounded
+                    : Icons.search_rounded,
+            onTap: () {
+              setState(() => _isSearchVisible = !_isSearchVisible);
+              if (!_isSearchVisible) {
+                _searchController.clear();
+                _searchQuery = '';
+              }
+            },
+          ),
+          const SizedBox(width: 12),
+          _buildIconButton(icon: Icons.refresh_rounded, onTap: _refreshData),
+          const SizedBox(width: 12),
+          _buildMenuButton(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildIconButton({
+    required IconData icon,
+    required VoidCallback onTap,
+  }) {
+    return Material(
+      color: Colors.white.withOpacity(0.95),
+      borderRadius: BorderRadius.circular(16),
+      elevation: 0,
+      shadowColor: _primaryColor.withOpacity(0.1),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: _primaryColor.withOpacity(0.08),
+              width: 1.5,
+            ),
+          ),
+          child: Icon(icon, color: _primaryColor, size: 20),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMenuButton() {
+    return PopupMenuButton<String>(
+      color: Colors.white,
+      elevation: 12,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      offset: const Offset(0, 12),
+      shadowColor: Colors.black.withOpacity(0.1),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.95),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: _primaryColor.withOpacity(0.08),
+            width: 1.5,
+          ),
+        ),
+        child: Icon(Icons.more_vert_rounded, color: _primaryColor, size: 20),
+      ),
+      onSelected: (v) {
+        if (v == 'leave') _showLeaveGroupDialog();
+        if (v == 'add') _showAddMemberDialog();
+      },
+      itemBuilder:
+          (_) => [
+            if (_isGroupOwner)
+              PopupMenuItem(
+                value: 'add',
+                height: 56,
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: _primaryColor.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Icon(
+                        Icons.person_add_rounded,
+                        size: 18,
+                        color: _primaryColor,
+                      ),
+                    ),
+                    const SizedBox(width: 14),
+                    Text(
+                      'Add Member',
+                      style: TextStyle(
+                        color: _primaryColor,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 15,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            PopupMenuItem(
+              value: 'leave',
+              height: 56,
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.red.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(
+                      Icons.exit_to_app_rounded,
+                      size: 18,
+                      color: Colors.red,
+                    ),
+                  ),
+                  const SizedBox(width: 14),
+                  const Text(
+                    'Leave Group',
+                    style: TextStyle(
+                      color: Colors.red,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 15,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+    );
+  }
+
+  Widget _buildHeader() {
+    final avatarTag = 'group_avatar_${widget.groupId}';
+    return AnimatedBuilder(
+      animation: _headerController,
+      builder: (context, child) {
+        return Opacity(
+          opacity: _headerController.value,
+          child: Transform.translate(
+            offset: Offset(0, _headerSlideAnimation.value),
+            child: Transform.scale(
+              scale: _headerScaleAnimation.value,
+              child: child,
+            ),
+          ),
+        );
+      },
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20),
+        child: Container(
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: _card,
+            borderRadius: BorderRadius.circular(28),
+            border: Border.all(
+              color: _primaryColor.withOpacity(0.12),
+              width: 1.5,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: _primaryColor.withOpacity(0.08),
+                blurRadius: 20,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              // Compact avatar
+              Hero(
+                tag: avatarTag,
+                child: Container(
+                  width: 68,
+                  height: 68,
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [_primaryColor, _accentColor],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: [
+                      BoxShadow(
+                        color: _primaryColor.withOpacity(0.3),
+                        blurRadius: 16,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: Center(
+                    child: Text(
+                      (widget.groupName.isNotEmpty ? widget.groupName[0] : 'G')
+                          .toUpperCase(),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 30,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: -1,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 18),
+              // Group info and stats
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      widget.groupName,
+                      style: TextStyle(
+                        color: _textPrimary,
+                        fontSize: 19,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: -0.5,
+                        height: 1.2,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 14),
+                    Row(
+                      children: [
+                        _buildCompactStat(
+                          icon: Icons.people_rounded,
+                          value: '${_members.length}',
+                          color: _primaryColor,
+                        ),
+                        const SizedBox(width: 14),
+                        _buildCompactStat(
+                          icon: Icons.folder_rounded,
+                          value: '${_filesByUser.length}',
+                          color: _accentColor,
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCompactStat({
+    required IconData icon,
+    required String value,
+    required Color color,
+  }) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.2),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.white.withOpacity(0.3), width: 1),
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withOpacity(0.2), width: 1.5),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 16, color: Colors.white),
+          Icon(icon, color: color, size: 18),
           const SizedBox(width: 6),
           Text(
-            label,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
+            value,
+            style: TextStyle(
+              color: _textPrimary,
+              fontSize: 16,
+              fontWeight: FontWeight.w800,
+              letterSpacing: -0.3,
             ),
           ),
         ],
@@ -418,82 +534,148 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen>
 
   Widget _buildTabBar() {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: Material(
-        elevation: 2,
-        borderRadius: BorderRadius.circular(14),
-        shadowColor: Colors.black.withOpacity(0.1),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-          decoration: BoxDecoration(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: Container(
+        padding: const EdgeInsets.all(6),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(18),
+          color: _card,
+          border: Border.all(color: _primaryColor.withOpacity(0.1), width: 1.5),
+          boxShadow: [
+            BoxShadow(
+              color: _primaryColor.withOpacity(0.06),
+              blurRadius: 16,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: TabBar(
+          controller: _tabController,
+          labelColor: Colors.white,
+          unselectedLabelColor: _textSecondary,
+          indicator: BoxDecoration(
+            gradient: LinearGradient(colors: [_primaryColor, _accentColor]),
             borderRadius: BorderRadius.circular(14),
-            color: Colors.white,
-            border: Border.all(color: Colors.grey.withOpacity(0.1), width: 1),
-          ),
-          child: TabBar(
-            controller: _tabController,
-            labelColor: _primaryColor,
-            unselectedLabelColor: _textSecondary,
-            indicatorColor: _primaryColor,
-            indicatorWeight: 3,
-            indicatorSize: TabBarIndicatorSize.tab,
-            labelStyle: const TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w700,
-            ),
-            unselectedLabelStyle: const TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-            ),
-            tabs: [
-              Tab(text: 'FILES (${_filteredFilesByUser.length})'),
-              Tab(text: 'MEMBERS (${_filteredMembers.length})'),
+            boxShadow: [
+              BoxShadow(
+                color: _primaryColor.withOpacity(0.4),
+                blurRadius: 12,
+                offset: const Offset(0, 4),
+              ),
             ],
           ),
+          indicatorSize: TabBarIndicatorSize.tab,
+          dividerColor: Colors.transparent,
+          labelStyle: const TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w800,
+            letterSpacing: 0.5,
+          ),
+          unselectedLabelStyle: const TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+          ),
+          tabs: [
+            Tab(
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.folder_rounded, size: 16),
+                  const SizedBox(width: 6),
+                  Text('FILES (${_filteredFilesByUser.length})'),
+                ],
+              ),
+            ),
+            Tab(
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.people_rounded, size: 16),
+                  const SizedBox(width: 6),
+                  Text('MEMBERS (${_filteredMembers.length})'),
+                ],
+              ),
+            ),
+          ],
         ),
       ),
     );
   }
 
-  void _toggleSearch() {
-    setState(() => _isSearchVisible = !_isSearchVisible);
-    if (!_isSearchVisible) {
-      _searchController.clear();
-      _searchQuery = '';
-    }
-  }
-
   Widget _buildSearchField() {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      child: TextField(
-        controller: _searchController,
-        onChanged: (v) => setState(() => _searchQuery = v),
-        decoration: InputDecoration(
-          hintText:
-              _tabController.index == 0
-                  ? 'Search folders or users...'
-                  : 'Search members by email...',
-          prefixIcon: Icon(Icons.search, color: _primaryColor),
-          suffixIcon:
-              _searchQuery.isNotEmpty
-                  ? IconButton(
-                    icon: Icon(Icons.clear, color: _primaryColor),
-                    onPressed: () {
-                      _searchController.clear();
-                      setState(() => _searchQuery = '');
-                    },
-                  )
-                  : null,
-          filled: true,
-          fillColor: Colors.white,
-          contentPadding: const EdgeInsets.symmetric(
-            horizontal: 16,
-            vertical: 12,
+      padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+      child: Container(
+        decoration: BoxDecoration(
+          color: _card,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: _primaryColor.withOpacity(0.2), width: 2),
+          boxShadow: [
+            BoxShadow(
+              color: _primaryColor.withOpacity(0.08),
+              blurRadius: 20,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: TextField(
+          controller: _searchController,
+          onChanged: (v) => setState(() => _searchQuery = v),
+          style: TextStyle(
+            color: _textPrimary,
+            fontWeight: FontWeight.w600,
+            fontSize: 15,
           ),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide.none,
+          decoration: InputDecoration(
+            hintText: 'Search',
+            // hintText
+            hintStyle: TextStyle(
+              color: _textSecondary.withOpacity(0.5),
+              fontWeight: FontWeight.w500,
+            ),
+            prefixIcon: Container(
+              padding: const EdgeInsets.all(12),
+              child: Icon(Icons.search_rounded, color: _primaryColor, size: 24),
+            ),
+            suffixIcon:
+                _searchQuery.isNotEmpty
+                    ? IconButton(
+                      icon: Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color: _primaryColor.withOpacity(0.1),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          Icons.close_rounded,
+                          color: _primaryColor,
+                          size: 18,
+                        ),
+                      ),
+                      onPressed: () {
+                        _searchController.clear();
+                        setState(() => _searchQuery = '');
+                      },
+                    )
+                    : null,
+            filled: true,
+            fillColor: _card,
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 20,
+              vertical: 18,
+            ),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(20),
+              borderSide: BorderSide.none,
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(20),
+              borderSide: BorderSide.none,
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(20),
+              borderSide: BorderSide.none,
+            ),
           ),
         ),
       ),
@@ -505,39 +687,48 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen>
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          CircularProgressIndicator(color: _primaryColor),
-          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  _primaryColor.withOpacity(0.1),
+                  _accentColor.withOpacity(0.1),
+                ],
+              ),
+              shape: BoxShape.circle,
+            ),
+            child: CircularProgressIndicator(
+              color: _primaryColor,
+              strokeWidth: 3.5,
+            ),
+          ),
+          const SizedBox(height: 24),
           Text(
             'Loading group data...',
-            style: TextStyle(color: _textSecondary),
+            style: TextStyle(
+              color: _textSecondary,
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+            ),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildTabView() {
-    return Padding(
-      padding: const EdgeInsets.only(left: 12, right: 12, top: 12),
-      child: TabBarView(
-        controller: _tabController,
-        children: [_buildFilesGrid(), _buildMembersList()],
-      ),
-    );
-  }
-
-  Widget _buildFilesGrid() {
+  Widget _buildFilesContent() {
     final display = _filteredFilesByUser;
     if (display.isEmpty) {
       return _buildEmptyState(
-        icon: Icons.folder_off,
-        title: 'No Files',
-        subtitle: 'Members haven\'t shared files yet',
+        icon: Icons.folder_off_rounded,
+        title: 'No Shared Files',
+        subtitle: 'Members haven\'t shared any files yet',
       );
     }
 
     return ListView.builder(
-      padding: const EdgeInsets.only(bottom: 24),
+      padding: const EdgeInsets.fromLTRB(20, 0, 20, 100),
       itemCount: display.keys.length,
       itemBuilder: (context, index) {
         final userKey = display.keys.elementAt(index);
@@ -549,14 +740,14 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen>
         return AnimatedBuilder(
           animation: _staggerController,
           builder: (context, child) {
-            final t = (_staggerController.value - (index * 0.05)).clamp(
+            final progress = (_staggerController.value - (index * 0.08)).clamp(
               0.0,
               1.0,
             );
             return Opacity(
-              opacity: t,
+              opacity: progress,
               child: Transform.translate(
-                offset: Offset(0, (1 - t) * 12),
+                offset: Offset(0, 30 * (1 - progress)),
                 child: child,
               ),
             );
@@ -567,23 +758,38 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen>
     );
   }
 
-  Widget _buildMembersList() {
+  Widget _buildMembersContent() {
     final display = _filteredMembers;
     if (display.isEmpty) {
       return _buildEmptyState(
-        icon: Icons.people_outline,
-        title: 'No Members',
-        subtitle: 'Invite members to get started',
+        icon: Icons.people_outline_rounded,
+        title: 'No Members Found',
+        subtitle: 'Try adjusting your search',
       );
     }
 
-    return ListView.separated(
-      padding: const EdgeInsets.only(bottom: 24),
+    return ListView.builder(
+      padding: const EdgeInsets.fromLTRB(20, 0, 20, 100),
       itemCount: display.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 8),
       itemBuilder: (context, index) {
         final member = display[index];
-        return _buildMemberCard(member);
+        return AnimatedBuilder(
+          animation: _staggerController,
+          builder: (context, child) {
+            final progress = (_staggerController.value - (index * 0.06)).clamp(
+              0.0,
+              1.0,
+            );
+            return Opacity(
+              opacity: progress,
+              child: Transform.translate(
+                offset: Offset(0, 30 * (1 - progress)),
+                child: child,
+              ),
+            );
+          },
+          child: _buildMemberCard(member),
+        );
       },
     );
   }
@@ -591,6 +797,7 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen>
   Widget _buildMemberCard(Map<String, dynamic> member) {
     final user = member['User'];
     if (user == null) return const SizedBox.shrink();
+
     final email = user['email'] ?? 'Unknown';
     final person = user['Person'];
     final firstName = person?['first_name'] ?? '';
@@ -607,138 +814,226 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen>
     final isCurrentUser = member['user_id'] == _currentUserId;
     final canRemove = _isGroupOwner && !isOwner && !isCurrentUser;
 
-    return Material(
-      color: _card,
-      borderRadius: BorderRadius.circular(16),
-      elevation: 0,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(16),
-        onTap: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder:
-                  (_) => ViewProfileScreen(
-                    userId: member['user_id'],
-                    userName: member['first_name'] ?? '',
-                    userEmail: email,
-                  ),
+    return Container(
+      margin: const EdgeInsets.only(bottom: 14),
+      child: Material(
+        color: _card,
+        borderRadius: BorderRadius.circular(22),
+        elevation: 0,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(22),
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder:
+                    (_) => ViewProfileScreen(
+                      userId: member['user_id'],
+                      userName: member['first_name'] ?? '',
+                      userEmail: email,
+                    ),
+              ),
+            );
+          },
+          child: Container(
+            padding: const EdgeInsets.all(18),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(22),
+              border: Border.all(
+                color:
+                    isOwner
+                        ? _primaryColor.withOpacity(0.3)
+                        : _primaryColor.withOpacity(0.08),
+                width: 1.5,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color:
+                      isOwner
+                          ? _primaryColor.withOpacity(0.12)
+                          : Colors.black.withOpacity(0.03),
+                  blurRadius: 16,
+                  offset: const Offset(0, 4),
+                ),
+              ],
             ),
-          );
-        },
-        child: Container(
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color: _card,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: Colors.grey.withOpacity(0.1), width: 1),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.03),
-                blurRadius: 8,
-                offset: const Offset(0, 2),
-              ),
-            ],
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: 48,
-                height: 48,
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [_primaryColor, _accentColor],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  shape: BoxShape.circle,
-                  boxShadow: [
-                    BoxShadow(
-                      color: _primaryColor.withOpacity(0.3),
-                      blurRadius: 8,
-                      offset: const Offset(0, 2),
+            child: Row(
+              children: [
+                Container(
+                  width: 56,
+                  height: 56,
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors:
+                          isOwner
+                              ? [_primaryColor, _accentColor]
+                              : [
+                                _accentColor.withOpacity(0.8),
+                                _primaryColor.withOpacity(0.8),
+                              ],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
                     ),
-                  ],
-                ),
-                child: Center(
-                  child: Text(
-                    initial,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      displayName.isNotEmpty ? displayName : email,
-                      style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w700,
-                        color: _textPrimary,
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: _primaryColor.withOpacity(0.3),
+                        blurRadius: 12,
+                        offset: const Offset(0, 4),
                       ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      email,
-                      style: TextStyle(color: _textSecondary, fontSize: 13),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
-                ),
-              ),
-              if (isOwner) _badge('Owner', Icons.star, _primaryColor),
-              if (isCurrentUser && !isOwner)
-                _badge('You', Icons.check, _accentColor),
-              if (canRemove)
-                IconButton(
-                  onPressed: () => _showRemoveMemberDialog(member),
-                  icon: const Icon(
-                    Icons.delete_outline,
-                    color: Colors.red,
-                    size: 22,
+                    ],
                   ),
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(),
+                  child: Center(
+                    child: Text(
+                      initial,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 22,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: -0.5,
+                      ),
+                    ),
+                  ),
                 ),
-            ],
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Flexible(
+                            child: Text(
+                              displayName.isNotEmpty ? displayName : email,
+                              style: TextStyle(
+                                fontSize: 17,
+                                fontWeight: FontWeight.w800,
+                                color: _textPrimary,
+                                letterSpacing: -0.3,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          if (isOwner) ...[
+                            const SizedBox(width: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 4,
+                              ),
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  colors: [_primaryColor, _accentColor],
+                                ),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: const Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    Icons.star_rounded,
+                                    size: 12,
+                                    color: Colors.white,
+                                  ),
+                                  SizedBox(width: 4),
+                                  Text(
+                                    'OWNER',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w900,
+                                      letterSpacing: 0.5,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                          if (isCurrentUser && !isOwner) ...[
+                            const SizedBox(width: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 4,
+                              ),
+                              decoration: BoxDecoration(
+                                color: _accentColor.withOpacity(0.15),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    Icons.check_circle_rounded,
+                                    size: 12,
+                                    color: _accentColor,
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    'YOU',
+                                    style: TextStyle(
+                                      color: _accentColor,
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w900,
+                                      letterSpacing: 0.5,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.email_rounded,
+                            size: 14,
+                            color: _textSecondary,
+                          ),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              email,
+                              style: TextStyle(
+                                color: _textSecondary,
+                                fontSize: 14,
+                                fontWeight: FontWeight.w500,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                if (canRemove) ...[
+                  const SizedBox(width: 12),
+                  Material(
+                    color: Colors.red.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
+                    child: InkWell(
+                      onTap: () => _showRemoveMemberDialog(member),
+                      borderRadius: BorderRadius.circular(12),
+                      child: Container(
+                        padding: const EdgeInsets.all(10),
+                        child: const Icon(
+                          Icons.person_remove_rounded,
+                          color: Colors.red,
+                          size: 20,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
           ),
         ),
-      ),
-    );
-  }
-
-  Widget _badge(String label, IconData icon, Color color) {
-    return Container(
-      margin: const EdgeInsets.only(right: 8),
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.12),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 14, color: color),
-          const SizedBox(width: 4),
-          Text(
-            label,
-            style: TextStyle(
-              color: color,
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ],
       ),
     );
   }
@@ -753,137 +1048,182 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen>
       (s, f) => s + ((f['file']?['file_size'] ?? 0) as int),
     );
 
-    return Material(
-      color: _card,
-      borderRadius: BorderRadius.circular(16),
-      elevation: 0,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(16),
-        onTap: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder:
-                  (_) => UserFilesScreen(
-                    groupId: widget.groupId,
-                    memberId: userId,
-                    memberName: firstName,
-                    memberFiles: userFiles,
-                  ),
-            ),
-          );
-        },
-        child: Container(
-          margin: const EdgeInsets.only(bottom: 12),
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color: _card,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: Colors.grey.withOpacity(0.1), width: 1),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.03),
-                blurRadius: 8,
-                offset: const Offset(0, 2),
+    return Container(
+      margin: const EdgeInsets.only(bottom: 14),
+      child: Material(
+        color: _card,
+        borderRadius: BorderRadius.circular(22),
+        elevation: 0,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(22),
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder:
+                    (_) => UserFilesScreen(
+                      groupId: widget.groupId,
+                      memberId: userId,
+                      memberName: firstName,
+                      memberFiles: userFiles,
+                    ),
               ),
-            ],
-          ),
-          child: Row(
-            children: [
-              Hero(
-                tag: 'user_avatar_$userId',
-                child: Container(
-                  width: 50,
-                  height: 50,
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [_accentColor, _primaryColor],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                    shape: BoxShape.circle,
-                    boxShadow: [
-                      BoxShadow(
-                        color: _accentColor.withOpacity(0.3),
-                        blurRadius: 8,
-                        offset: const Offset(0, 2),
-                      ),
-                    ],
-                  ),
-                  child: Center(
-                    child: Text(
-                      firstName.isNotEmpty ? firstName[0].toUpperCase() : 'U',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
+            );
+          },
+          child: Container(
+            padding: const EdgeInsets.all(18),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(22),
+              border: Border.all(
+                color: _primaryColor.withOpacity(0.08),
+                width: 1.5,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: _accentColor.withOpacity(0.06),
+                  blurRadius: 16,
+                  offset: const Offset(0, 4),
                 ),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      "$firstName's Files",
-                      style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w700,
-                        color: _textPrimary,
+              ],
+            ),
+            child: Row(
+              children: [
+                Hero(
+                  tag: 'user_avatar_$userId',
+                  child: Container(
+                    width: 64,
+                    height: 64,
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [_accentColor, _primaryColor],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
                       ),
-                    ),
-                    const SizedBox(height: 6),
-                    Wrap(
-                      spacing: 12,
-                      children: [
-                        Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              Icons.description,
-                              size: 14,
-                              color: _textSecondary,
-                            ),
-                            const SizedBox(width: 4),
-                            Text(
-                              '${userFiles.length} ${userFiles.length == 1 ? 'file' : 'files'}',
-                              style: TextStyle(
-                                color: _textSecondary,
-                                fontSize: 13,
-                              ),
-                            ),
-                          ],
-                        ),
-                        Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              Icons.storage,
-                              size: 14,
-                              color: _textSecondary,
-                            ),
-                            const SizedBox(width: 4),
-                            Text(
-                              GroupFunctions.formatFileSize(totalSize),
-                              style: TextStyle(
-                                color: _textSecondary,
-                                fontSize: 13,
-                              ),
-                            ),
-                          ],
+                      borderRadius: BorderRadius.circular(18),
+                      boxShadow: [
+                        BoxShadow(
+                          color: _accentColor.withOpacity(0.3),
+                          blurRadius: 12,
+                          offset: const Offset(0, 4),
                         ),
                       ],
                     ),
-                  ],
+                    child: Stack(
+                      children: [
+                        Center(
+                          child: Text(
+                            firstName.isNotEmpty
+                                ? firstName[0].toUpperCase()
+                                : 'U',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 26,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: -0.5,
+                            ),
+                          ),
+                        ),
+                        Positioned(
+                          bottom: 4,
+                          right: 4,
+                          child: Container(
+                            padding: const EdgeInsets.all(6),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              shape: BoxShape.circle,
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.1),
+                                  blurRadius: 4,
+                                ),
+                              ],
+                            ),
+                            child: Icon(
+                              Icons.folder_rounded,
+                              size: 14,
+                              color: _primaryColor,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
-              ),
-              Icon(Icons.arrow_forward_ios, size: 16, color: _textSecondary),
-            ],
+                const SizedBox(width: 18),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        "$firstName's Files",
+                        style: TextStyle(
+                          fontSize: 17,
+                          fontWeight: FontWeight.w800,
+                          color: _textPrimary,
+                          letterSpacing: -0.3,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      Row(
+                        children: [
+                          _buildFileInfoChip(
+                            Icons.description_rounded,
+                            '${userFiles.length}',
+                            userFiles.length == 1 ? 'file' : 'files',
+                          ),
+                          const SizedBox(width: 12),
+                          _buildFileInfoChip(
+                            Icons.data_usage_rounded,
+                            GroupFunctions.formatFileSize(totalSize),
+                            '',
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: _primaryColor.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(
+                    Icons.arrow_forward_ios_rounded,
+                    size: 16,
+                    color: _primaryColor,
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildFileInfoChip(IconData icon, String value, String label) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: _primaryColor.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: _primaryColor.withOpacity(0.15), width: 1),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: _primaryColor),
+          const SizedBox(width: 6),
+          Text(
+            label.isEmpty ? value : '$value $label',
+            style: TextStyle(
+              color: _textPrimary,
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -894,55 +1234,84 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen>
     required String subtitle,
   }) {
     return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Container(
-            width: 100,
-            height: 100,
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  _primaryColor.withOpacity(0.1),
-                  _accentColor.withOpacity(0.1),
-                ],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              width: 120,
+              height: 120,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    _primaryColor.withOpacity(0.15),
+                    _accentColor.withOpacity(0.1),
+                  ],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                shape: BoxShape.circle,
               ),
-              shape: BoxShape.circle,
+              child: Icon(icon, size: 56, color: _primaryColor),
             ),
-            child: Icon(icon, size: 48, color: _primaryColor),
-          ),
-          const SizedBox(height: 20),
-          Text(
-            title,
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-              color: _textPrimary,
+            const SizedBox(height: 28),
+            Text(
+              title,
+              style: TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.w900,
+                color: _textPrimary,
+                letterSpacing: -0.5,
+              ),
+              textAlign: TextAlign.center,
             ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            subtitle,
-            style: TextStyle(color: _textSecondary, fontSize: 14),
-            textAlign: TextAlign.center,
-          ),
-        ],
+            const SizedBox(height: 12),
+            Text(
+              subtitle,
+              style: TextStyle(
+                color: _textSecondary,
+                fontSize: 16,
+                fontWeight: FontWeight.w500,
+                height: 1.5,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
       ),
     );
   }
 
   Widget _buildFAB() {
-    return FloatingActionButton.extended(
-      onPressed: _showAddMemberDialog,
-      backgroundColor: _primaryColor,
-      label: const Text(
-        'Add Member',
-        style: TextStyle(fontWeight: FontWeight.w600),
+    return ScaleTransition(
+      scale: _fabAnimation,
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: _primaryColor.withOpacity(0.4),
+              blurRadius: 24,
+              offset: const Offset(0, 8),
+            ),
+          ],
+        ),
+        child: FloatingActionButton.extended(
+          onPressed: _showAddMemberDialog,
+          backgroundColor: _primaryColor,
+          elevation: 0,
+          icon: const Icon(Icons.person_add_rounded, size: 22),
+          label: const Text(
+            'Add Member',
+            style: TextStyle(
+              fontWeight: FontWeight.w800,
+              fontSize: 16,
+              letterSpacing: -0.2,
+            ),
+          ),
+        ),
       ),
-      icon: const Icon(Icons.person_add),
-      elevation: 4,
     );
   }
 
@@ -951,44 +1320,165 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen>
     showDialog(
       context: context,
       builder:
-          (context) => AlertDialog(
+          (context) => Dialog(
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(28),
             ),
-            title: const Text('Add Member'),
-            content: TextField(
-              controller: emailController,
-              keyboardType: TextInputType.emailAddress,
-              decoration: InputDecoration(
-                hintText: 'Email address',
-                prefixIcon: const Icon(Icons.email_outlined),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('Cancel'),
-              ),
-              ElevatedButton(
-                onPressed: () async {
-                  if (emailController.text.isNotEmpty) {
-                    Navigator.pop(context);
-                    await _addMember(emailController.text);
-                  }
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: _primaryColor,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+            backgroundColor: _card,
+            child: Padding(
+              padding: const EdgeInsets.all(28),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [
+                          _primaryColor.withOpacity(0.15),
+                          _accentColor.withOpacity(0.1),
+                        ],
+                      ),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Icon(
+                      Icons.person_add_rounded,
+                      color: _primaryColor,
+                      size: 32,
+                    ),
                   ),
-                ),
-                child: const Text('Add'),
+                  const SizedBox(height: 20),
+                  Text(
+                    'Add Member',
+                    style: TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.w900,
+                      color: _textPrimary,
+                      letterSpacing: -0.5,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Enter the email address of the member you want to add',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: _textSecondary,
+                      fontWeight: FontWeight.w500,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 24),
+                  Container(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: _primaryColor.withOpacity(0.2),
+                        width: 1.5,
+                      ),
+                    ),
+                    child: TextField(
+                      controller: emailController,
+                      keyboardType: TextInputType.emailAddress,
+                      style: TextStyle(
+                        color: _textPrimary,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      decoration: InputDecoration(
+                        hintText: 'member@example.com',
+                        hintStyle: TextStyle(
+                          color: _textSecondary.withOpacity(0.5),
+                        ),
+                        prefixIcon: Icon(
+                          Icons.email_rounded,
+                          color: _primaryColor,
+                        ),
+                        filled: true,
+                        fillColor: _bg,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(16),
+                          borderSide: BorderSide.none,
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 20,
+                          vertical: 18,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () => Navigator.pop(context),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: _textSecondary,
+                            side: BorderSide(
+                              color: _textSecondary.withOpacity(0.3),
+                              width: 1.5,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                          ),
+                          child: const Text(
+                            'Cancel',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w700,
+                              fontSize: 15,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        flex: 2,
+                        child: Container(
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [_primaryColor, _accentColor],
+                            ),
+                            borderRadius: BorderRadius.circular(14),
+                            boxShadow: [
+                              BoxShadow(
+                                color: _primaryColor.withOpacity(0.4),
+                                blurRadius: 12,
+                                offset: const Offset(0, 4),
+                              ),
+                            ],
+                          ),
+                          child: ElevatedButton(
+                            onPressed: () async {
+                              if (emailController.text.isNotEmpty) {
+                                Navigator.pop(context);
+                                await _addMember(emailController.text);
+                              }
+                            },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.transparent,
+                              foregroundColor: Colors.white,
+                              shadowColor: Colors.transparent,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                              padding: const EdgeInsets.symmetric(vertical: 16),
+                            ),
+                            child: const Text(
+                              'Add Member',
+                              style: TextStyle(
+                                fontWeight: FontWeight.w800,
+                                fontSize: 15,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
     );
   }
@@ -1013,34 +1503,105 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen>
     showDialog(
       context: context,
       builder:
-          (context) => AlertDialog(
+          (context) => Dialog(
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(28),
             ),
-            title: const Text('Remove Member'),
-            content: Text(
-              'Are you sure you want to remove $email from this group?',
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('Cancel'),
-              ),
-              ElevatedButton(
-                onPressed: () {
-                  Navigator.pop(context);
-                  _removeMember(member);
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.red,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+            backgroundColor: _card,
+            child: Padding(
+              padding: const EdgeInsets.all(28),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.red.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: const Icon(
+                      Icons.person_remove_rounded,
+                      color: Colors.red,
+                      size: 32,
+                    ),
                   ),
-                ),
-                child: const Text('Remove'),
+                  const SizedBox(height: 20),
+                  const Text(
+                    'Remove Member',
+                    style: TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.w900,
+                      color: Colors.red,
+                      letterSpacing: -0.5,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    'Are you sure you want to remove $email from this group?',
+                    style: TextStyle(
+                      fontSize: 15,
+                      color: _textSecondary,
+                      fontWeight: FontWeight.w500,
+                      height: 1.5,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 24),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () => Navigator.pop(context),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: _textSecondary,
+                            side: BorderSide(
+                              color: _textSecondary.withOpacity(0.3),
+                              width: 1.5,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                          ),
+                          child: const Text(
+                            'Cancel',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w700,
+                              fontSize: 15,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: ElevatedButton(
+                          onPressed: () {
+                            Navigator.pop(context);
+                            _removeMember(member);
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.red,
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            elevation: 0,
+                          ),
+                          child: const Text(
+                            'Remove',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w800,
+                              fontSize: 15,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
     );
   }
@@ -1066,34 +1627,105 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen>
     showDialog(
       context: context,
       builder:
-          (context) => AlertDialog(
+          (context) => Dialog(
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(28),
             ),
-            title: const Text('Leave Group'),
-            content: Text(
-              'Are you sure you want to leave "${widget.groupName}"?',
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('Cancel'),
-              ),
-              ElevatedButton(
-                onPressed: () async {
-                  Navigator.pop(context);
-                  await _leaveGroup();
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.red,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+            backgroundColor: _card,
+            child: Padding(
+              padding: const EdgeInsets.all(28),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.red.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: const Icon(
+                      Icons.exit_to_app_rounded,
+                      color: Colors.red,
+                      size: 32,
+                    ),
                   ),
-                ),
-                child: const Text('Leave'),
+                  const SizedBox(height: 20),
+                  const Text(
+                    'Leave Group',
+                    style: TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.w900,
+                      color: Colors.red,
+                      letterSpacing: -0.5,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    'Are you sure you want to leave "${widget.groupName}"? You won\'t be able to rejoin unless invited again.',
+                    style: TextStyle(
+                      fontSize: 15,
+                      color: _textSecondary,
+                      fontWeight: FontWeight.w500,
+                      height: 1.5,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 24),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () => Navigator.pop(context),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: _textSecondary,
+                            side: BorderSide(
+                              color: _textSecondary.withOpacity(0.3),
+                              width: 1.5,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                          ),
+                          child: const Text(
+                            'Cancel',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w700,
+                              fontSize: 15,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: ElevatedButton(
+                          onPressed: () async {
+                            Navigator.pop(context);
+                            await _leaveGroup();
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.red,
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            elevation: 0,
+                          ),
+                          child: const Text(
+                            'Leave',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w800,
+                              fontSize: 15,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
     );
   }
@@ -1117,11 +1749,38 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen>
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(message),
+        content: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.2),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.error_rounded,
+                color: Colors.white,
+                size: 20,
+              ),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Text(
+                message,
+                style: const TextStyle(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 15,
+                ),
+              ),
+            ),
+          ],
+        ),
         backgroundColor: Colors.red,
         behavior: SnackBarBehavior.floating,
         margin: const EdgeInsets.all(16),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        padding: const EdgeInsets.all(16),
+        duration: const Duration(seconds: 4),
       ),
     );
   }
@@ -1130,11 +1789,38 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen>
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(message),
+        content: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.2),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.check_circle_rounded,
+                color: Colors.white,
+                size: 20,
+              ),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Text(
+                message,
+                style: const TextStyle(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 15,
+                ),
+              ),
+            ),
+          ],
+        ),
         backgroundColor: _primaryColor,
         behavior: SnackBarBehavior.floating,
         margin: const EdgeInsets.all(16),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        padding: const EdgeInsets.all(16),
+        duration: const Duration(seconds: 3),
       ),
     );
   }

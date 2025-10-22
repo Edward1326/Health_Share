@@ -251,21 +251,22 @@ class GroupFunctions {
   }
 
   /// Format date to human readable string
+  /// Format date to human-readable string with time in 12-hour format
   static String formatDate(String dateString) {
     try {
       final date = DateTime.parse(dateString);
-      final now = DateTime.now();
-      final difference = now.difference(date);
+      final day = date.day.toString().padLeft(2, '0');
+      final month = date.month.toString().padLeft(2, '0');
+      final year = date.year;
+      int hour = date.hour;
+      final minute = date.minute.toString().padLeft(2, '0');
+      final period = hour >= 12 ? 'PM' : 'AM';
 
-      if (difference.inDays == 0) {
-        return 'Today ${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
-      } else if (difference.inDays == 1) {
-        return 'Yesterday';
-      } else if (difference.inDays < 7) {
-        return '${difference.inDays} days ago';
-      } else {
-        return '${date.day}/${date.month}/${date.year}';
-      }
+      // Convert 24-hour to 12-hour format
+      hour = hour % 12;
+      if (hour == 0) hour = 12;
+
+      return '$day/$month/$year $hour:$minute $period';
     } catch (e) {
       return 'Unknown date';
     }
