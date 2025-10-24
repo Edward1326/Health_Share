@@ -23,7 +23,7 @@ class GroupFileService {
               ipfs_cid,
               category
             ),
-            shared_by:User!shared_by_user_id(email, Person!inner(first_name))
+            shared_by:User!shared_by_user_id(email, Person!inner(first_name, last_name))
           ''')
           .eq('shared_with_group_id', groupId)
           .order('shared_at', ascending: false);
@@ -140,7 +140,7 @@ class GroupFileService {
           .select('''
             *,
             Group!shared_with_group_id(id, name),
-            shared_by:User!shared_by_user_id(email)
+            shared_by:User!shared_by_user_id(email, Person!inner(first_name, last_name))
           ''')
           .eq('file_id', fileId)
           .isFilter('revoked_at', null);

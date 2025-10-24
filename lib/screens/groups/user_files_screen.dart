@@ -267,11 +267,6 @@ class _UserFilesScreenState extends State<UserFilesScreen>
   }
 
   Widget _buildHeader() {
-    final totalSize = _files.fold<int>(
-      0,
-      (sum, file) => sum + ((file['file']?['file_size'] ?? 0) as int),
-    );
-
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20),
       child: Container(
@@ -352,12 +347,6 @@ class _UserFilesScreenState extends State<UserFilesScreen>
                         icon: Icons.description_rounded,
                         value: '${_files.length}',
                         color: _primaryColor,
-                      ),
-                      const SizedBox(width: 14),
-                      _buildCompactStat(
-                        icon: Icons.data_usage_rounded,
-                        value: GroupFunctions.formatFileSize(totalSize),
-                        color: _accentColor,
                       ),
                     ],
                   ),
@@ -1185,52 +1174,55 @@ class _UserFilesScreenState extends State<UserFilesScreen>
                     ),
                   ),
                   const SizedBox(height: 24),
-                  SingleChildScrollView(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _buildDetailRow(
-                          'File Name',
-                          fileData['filename'] ?? 'Unknown',
-                        ),
-                        const SizedBox(height: 16),
-                        _buildDetailRow(
-                          'File Type',
-                          fileData['file_type'] ?? 'Unknown',
-                        ),
-                        const SizedBox(height: 16),
-                        _buildDetailRow(
-                          'File Size',
-                          GroupFunctions.formatFileSize(
-                            fileData['file_size'] ?? 0,
+                  Flexible(
+                    child: SingleChildScrollView(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _buildDetailRow(
+                            'File Name',
+                            fileData['filename'] ?? 'Unknown',
                           ),
-                        ),
-                        const SizedBox(height: 16),
-                        _buildDetailRow(
-                          'Category',
-                          fileData['category'] ?? 'General',
-                        ),
-                        const SizedBox(height: 16),
-                        _buildDetailRow(
-                          'Uploaded',
-                          GroupFunctions.formatDate(
-                            fileData['uploaded_at'] ?? '',
+                          const SizedBox(height: 16),
+                          _buildDetailRow(
+                            'File Type',
+                            fileData['file_type'] ?? 'Unknown',
                           ),
-                        ),
-                        const SizedBox(height: 16),
-                        _buildDetailRow(
-                          'Shared By',
-                          sharedByUser['email'] ?? 'Unknown',
-                        ),
-                        const SizedBox(height: 16),
-                        _buildDetailRow(
-                          'Shared On',
-                          GroupFunctions.formatDate(
-                            shareRecord['shared_at'] ?? '',
+                          const SizedBox(height: 16),
+                          _buildDetailRow(
+                            'File Size',
+                            GroupFunctions.formatFileSize(
+                              fileData['file_size'] ?? 0,
+                            ),
                           ),
-                        ),
-                      ],
+                          const SizedBox(height: 16),
+                          _buildDetailRow(
+                            'Uploaded',
+                            GroupFunctions.formatDate(
+                              fileData['uploaded_at'] ?? '',
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          _buildDetailRow(
+                            'Shared By',
+                            (sharedByUser['Person'] != null &&
+                                    sharedByUser['Person']['first_name'] !=
+                                        null)
+                                ? '${sharedByUser['Person']['first_name']} ${sharedByUser['Person']['last_name'] ?? ''}'
+                                    .trim()
+                                : sharedByUser['email']?.split('@')[0] ??
+                                    'Unknown',
+                          ),
+                          const SizedBox(height: 16),
+                          _buildDetailRow(
+                            'Shared On',
+                            GroupFunctions.formatDate(
+                              shareRecord['shared_at'] ?? '',
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                   const SizedBox(height: 24),

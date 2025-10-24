@@ -136,29 +136,70 @@ class OrgFilesService {
           for (final file in sharedFilesDetails) {
             final fileId = file['id'] as String;
             if (!allUniqueFiles.containsKey(fileId)) {
-              // Try to find sharing record - FIXED QUERY
-              final shareRecords = await _supabase
+              // Try to find sharing record with separate queries for better reliability
+              List<dynamic> shareRecords = [];
+
+              // Query 1: Patient to doctor shares
+              final patientToDoctorRecords = await _supabase
                   .from('File_Shares')
                   .select(
                     'shared_by_user_id, shared_with_user_id, shared_at, shared_with_doctor',
                   )
                   .eq('file_id', fileId)
-                  .isFilter('revoked_at', null)
-                  .or(
-                    'and(shared_by_user_id.eq.$userId,shared_with_user_id.eq.$doctorUserId),'
-                    'and(shared_by_user_id.eq.$doctorUserId,shared_with_user_id.eq.$userId),'
-                    'shared_with_doctor.eq.$doctorUserId',
-                  )
-                  .order('shared_at', ascending: true);
+                  .eq('shared_by_user_id', userId)
+                  .eq('shared_with_user_id', doctorUserId)
+                  .isFilter('revoked_at', null);
+
+              shareRecords.addAll(patientToDoctorRecords);
+
+              // Query 2: Doctor to patient shares
+              if (shareRecords.isEmpty) {
+                final doctorToPatientRecords = await _supabase
+                    .from('File_Shares')
+                    .select(
+                      'shared_by_user_id, shared_with_user_id, shared_at, shared_with_doctor',
+                    )
+                    .eq('file_id', fileId)
+                    .eq('shared_by_user_id', doctorUserId)
+                    .eq('shared_with_user_id', userId)
+                    .isFilter('revoked_at', null);
+
+                shareRecords.addAll(doctorToPatientRecords);
+              }
+
+              // Query 3: Direct doctor shares (using shared_with_doctor field)
+              if (shareRecords.isEmpty) {
+                final directDoctorRecords = await _supabase
+                    .from('File_Shares')
+                    .select(
+                      'shared_by_user_id, shared_with_user_id, shared_at, shared_with_doctor',
+                    )
+                    .eq('file_id', fileId)
+                    .eq('shared_with_doctor', doctorUserId)
+                    .isFilter('revoked_at', null);
+
+                shareRecords.addAll(directDoctorRecords);
+              }
 
               String sharedBy = 'Unknown';
               String sharedWith = 'Unknown';
               String? sharedAt;
+              String? sharedByUserId;
 
               // Use the first (earliest) share record found
               if (shareRecords.isNotEmpty) {
+                // Sort by shared_at to get the earliest
+                shareRecords.sort((a, b) {
+                  final dateA =
+                      DateTime.tryParse(a['shared_at'] ?? '') ?? DateTime.now();
+                  final dateB =
+                      DateTime.tryParse(b['shared_at'] ?? '') ?? DateTime.now();
+                  return dateA.compareTo(dateB);
+                });
+
                 final shareRecord = shareRecords.first;
                 sharedAt = shareRecord['shared_at'];
+                sharedByUserId = shareRecord['shared_by_user_id'];
 
                 if (shareRecord['shared_with_doctor'] == doctorUserId) {
                   sharedBy = 'You';
@@ -179,6 +220,7 @@ class OrgFilesService {
                   'shared_at': sharedAt,
                   'shared_by': sharedBy,
                   'shared_with': sharedWith,
+                  'shared_by_user_id': sharedByUserId,
                 };
               } else {
                 // If no share record found, use uploaded_at as fallback
@@ -191,6 +233,7 @@ class OrgFilesService {
                       file['uploaded_at'] ?? DateTime.now().toIso8601String(),
                   'shared_by': sharedBy,
                   'shared_with': sharedWith,
+                  'shared_by_user_id': file['uploaded_by'],
                 };
               }
             }
@@ -248,9 +291,10 @@ class OrgFilesService {
         allUniqueFiles[fileId] = {
           ...file,
           'share_id': share['id'],
-          'shared_at': share['shared_at'], // This is from File_Shares.shared_at
+          'shared_at': share['shared_at'],
           'shared_by': sharedBy,
           'shared_with': sharedWith,
+          'shared_by_user_id': share['shared_by_user_id'],
         };
       }
     }

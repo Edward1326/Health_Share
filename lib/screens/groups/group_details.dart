@@ -1043,11 +1043,6 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen>
     String firstName,
     List<Map<String, dynamic>> userFiles,
   ) {
-    final totalSize = userFiles.fold<int>(
-      0,
-      (s, f) => s + ((f['file']?['file_size'] ?? 0) as int),
-    );
-
     return Container(
       margin: const EdgeInsets.only(bottom: 14),
       child: Material(
@@ -1164,20 +1159,10 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen>
                         ),
                       ),
                       const SizedBox(height: 10),
-                      Row(
-                        children: [
-                          _buildFileInfoChip(
-                            Icons.description_rounded,
-                            '${userFiles.length}',
-                            userFiles.length == 1 ? 'file' : 'files',
-                          ),
-                          const SizedBox(width: 12),
-                          _buildFileInfoChip(
-                            Icons.data_usage_rounded,
-                            GroupFunctions.formatFileSize(totalSize),
-                            '',
-                          ),
-                        ],
+                      _buildFileInfoChip(
+                        Icons.description_rounded,
+                        '${userFiles.length}',
+                        userFiles.length == 1 ? 'file' : 'files',
                       ),
                     ],
                   ),

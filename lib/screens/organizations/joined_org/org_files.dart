@@ -157,6 +157,8 @@ class _OrgDoctorsFilesScreenState extends State<OrgDoctorsFilesScreen>
     });
   }
 
+  // In your _OrgDoctorsFilesScreenState class, update the _filteredFiles getter:
+
   List<Map<String, dynamic>> get _filteredFiles {
     var filtered =
         _sharedFiles.where((file) {
@@ -167,12 +169,21 @@ class _OrgDoctorsFilesScreenState extends State<OrgDoctorsFilesScreen>
           return name.contains(query) || type.contains(query);
         }).toList();
 
-    // Filter by who shared
+    // Filter by who shared the file
     if (_sortOrder == 'patient') {
-      filtered = filtered.where((file) => file['shared_by'] == 'You').toList();
-    } else if (_sortOrder == 'doctor') {
+      // Show files shared by the patient (current user)
       filtered =
-          filtered.where((file) => file['shared_by'] == 'Doctor').toList();
+          filtered.where((file) {
+            final sharedBy = file['shared_by_user_id'];
+            return sharedBy == _currentUserId;
+          }).toList();
+    } else if (_sortOrder == 'doctor') {
+      // Show files shared by the doctor
+      filtered =
+          filtered.where((file) {
+            final sharedBy = file['shared_by_user_id'];
+            return sharedBy == _doctorUserId;
+          }).toList();
     }
     // 'all' shows everything, no additional filtering needed
 
@@ -419,6 +430,16 @@ class _OrgDoctorsFilesScreenState extends State<OrgDoctorsFilesScreen>
   }
 
   void _showFileInfo(Map<String, dynamic> file) {
+    // Determine who shared the file based on shared_by_user_id
+    String sharedByDisplay = 'Unknown';
+    final sharedByUserId = file['shared_by_user_id'];
+
+    if (sharedByUserId == _currentUserId) {
+      sharedByDisplay = 'You';
+    } else if (sharedByUserId == _doctorUserId) {
+      sharedByDisplay = '${widget.doctorName}';
+    }
+
     showDialog(
       context: context,
       builder:
@@ -427,98 +448,83 @@ class _OrgDoctorsFilesScreenState extends State<OrgDoctorsFilesScreen>
               borderRadius: BorderRadius.circular(28),
             ),
             backgroundColor: _card,
-            child: Padding(
-              padding: const EdgeInsets.all(28),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [
-                          _primaryColor.withOpacity(0.15),
-                          _accentColor.withOpacity(0.1),
-                        ],
+            child: SingleChildScrollView(
+              child: Padding(
+                padding: const EdgeInsets.all(28),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [
+                            _primaryColor.withOpacity(0.15),
+                            _accentColor.withOpacity(0.1),
+                          ],
+                        ),
+                        borderRadius: BorderRadius.circular(16),
                       ),
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: Icon(
-                      Icons.info_outline_rounded,
-                      color: _primaryColor,
-                      size: 32,
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  Text(
-                    'File Details',
-                    style: TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.w900,
-                      color: _textPrimary,
-                      letterSpacing: -0.5,
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-                  SingleChildScrollView(
-                    child: Column(
-                      children: [
-                        _buildDetailRow(
-                          'File Name',
-                          file['filename'] ?? 'Unknown',
-                        ),
-                        const SizedBox(height: 16),
-                        _buildDetailRow(
-                          'File Type',
-                          file['file_type'] ?? 'Unknown',
-                        ),
-                        const SizedBox(height: 16),
-                        _buildDetailRow(
-                          'File Size',
-                          _formatFileSize(file['file_size'] ?? 0),
-                        ),
-                        const SizedBox(height: 16),
-                        _buildDetailRow(
-                          'Category',
-                          file['category'] ?? 'General',
-                        ),
-                        const SizedBox(height: 16),
-                        _buildDetailRow(
-                          'Shared By',
-                          file['shared_by'] ?? 'Unknown',
-                        ),
-                        const SizedBox(height: 16),
-                        _buildDetailRow(
-                          'Shared On',
-                          _formatSharedDate(file['shared_at']),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: () => Navigator.pop(context),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: _primaryColor,
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        elevation: 0,
+                      child: Icon(
+                        Icons.info_outline_rounded,
+                        color: _primaryColor,
+                        size: 32,
                       ),
-                      child: const Text(
-                        'Close',
-                        style: TextStyle(
-                          fontWeight: FontWeight.w800,
-                          fontSize: 15,
+                    ),
+                    const SizedBox(height: 20),
+                    Text(
+                      'File Details',
+                      style: TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.w900,
+                        color: _textPrimary,
+                        letterSpacing: -0.5,
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    _buildDetailRow('File Name', file['filename'] ?? 'Unknown'),
+                    const SizedBox(height: 16),
+                    _buildDetailRow(
+                      'File Type',
+                      file['file_type'] ?? 'Unknown',
+                    ),
+                    const SizedBox(height: 16),
+                    _buildDetailRow(
+                      'File Size',
+                      _formatFileSize(file['file_size'] ?? 0),
+                    ),
+                    const SizedBox(height: 16),
+                    _buildDetailRow('Shared By', sharedByDisplay),
+                    const SizedBox(height: 16),
+                    _buildDetailRow(
+                      'Shared On',
+                      _formatSharedDate(file['shared_at']),
+                    ),
+                    const SizedBox(height: 24),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: () => Navigator.pop(context),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: _primaryColor,
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          elevation: 0,
+                        ),
+                        child: const Text(
+                          'Close',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w800,
+                            fontSize: 15,
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),
@@ -620,8 +626,6 @@ class _OrgDoctorsFilesScreenState extends State<OrgDoctorsFilesScreen>
     if (dateString == null) return 'Unknown date';
     try {
       final date = DateTime.parse(dateString);
-      final now = DateTime.now();
-      final difference = now.difference(date);
 
       int hour = date.hour;
       final minute = date.minute.toString().padLeft(2, '0');
@@ -632,18 +636,10 @@ class _OrgDoctorsFilesScreenState extends State<OrgDoctorsFilesScreen>
 
       final timeStr = '$hour:$minute $period';
 
-      if (difference.inDays == 0) {
-        return 'Today $timeStr';
-      } else if (difference.inDays == 1) {
-        return 'Yesterday $timeStr';
-      } else if (difference.inDays < 7) {
-        return '${difference.inDays}d ago $timeStr';
-      } else {
-        final day = date.day.toString().padLeft(2, '0');
-        final month = date.month.toString().padLeft(2, '0');
-        final year = date.year;
-        return '$day/$month/$year $timeStr';
-      }
+      final day = date.day.toString().padLeft(2, '0');
+      final month = date.month.toString().padLeft(2, '0');
+      final year = date.year;
+      return '$day/$month/$year $timeStr';
     } catch (e) {
       return 'Unknown date';
     }

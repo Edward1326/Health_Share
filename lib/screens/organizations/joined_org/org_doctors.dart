@@ -377,7 +377,7 @@ class _DoctorsScreenState extends State<DoctorsScreen>
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Your Doctors',
+                      'My Doctors',
                       style: TextStyle(
                         color: _textPrimary,
                         fontSize: 19,
