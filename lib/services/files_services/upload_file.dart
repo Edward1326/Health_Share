@@ -35,14 +35,16 @@ class UploadFileService {
       final fileType = fileName.split('.').last.toUpperCase();
 
       // 2. Calculate SHA-256 hash of original file
-      final fileHash = await _calculateSHA256(fileBytes);
-      print('File SHA-256 hash: $fileHash');
-
+      // (Note: We will hash the encrypted data later for Hive logging)
+      // final originalFileHash = await _calculateSHA256(fileBytes);
       // 3. Generate AES key and encrypt file
       final aesKey = await _aesGcm.newSecretKey();
       final encryptionResult = await _encryptFileData(fileBytes, aesKey);
       final encryptedBytes = encryptionResult['encryptedData'] as Uint8List;
       final nonce = encryptionResult['nonce'] as List<int>;
+
+      // Hash the encrypted AES output instead of the plaintext
+      final fileHash = await _calculateSHA256(encryptedBytes);
 
       // 4. Get current user
       final supabase = Supabase.instance.client;
