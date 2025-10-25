@@ -6,6 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:health_share/services/org_services/org_service.dart';
 import 'package:health_share/services/org_services/org_membership_service.dart';
 import 'package:health_share/services/org_services/org_doctor_service.dart';
+import 'package:health_share/screens/organizations/all_orgs/doctor_profile.dart';
 
 class OrgDetailsScreen extends StatefulWidget {
   final String orgId;
@@ -42,13 +43,14 @@ class _OrgDetailsScreenState extends State<OrgDetailsScreen>
   final TextEditingController _searchController = TextEditingController();
   bool _isSearchVisible = false;
 
-  // Design tokens
-  late Color _primaryColor;
-  late Color _accentColor;
-  late Color _bg;
-  late Color _card;
-  late Color _textPrimary;
-  late Color _textSecondary;
+  // Design tokens - Updated to match FilesScreen
+  static const Color _primaryColor = Color(0xFF416240);
+  static const Color _accentColor = Color(0xFFA3B18A);
+  static const Color _bg = Color(0xFFF8FAF8);
+  static const Color _card = Colors.white;
+  static const Color _textPrimary = Color(0xFF1A1A2E);
+  static const Color _textSecondary = Color(0xFF6B7280);
+  static const Color _borderColor = Color(0xFFE5E7EB);
 
   @override
   void initState() {
@@ -84,17 +86,7 @@ class _OrgDetailsScreenState extends State<OrgDetailsScreen>
       CurvedAnimation(parent: _headerController, curve: Curves.easeOutBack),
     );
 
-    _initializeColors();
     _initializeScreen();
-  }
-
-  void _initializeColors() {
-    _primaryColor = const Color(0xFF03989E);
-    _accentColor = const Color(0xFF04B1B8);
-    _bg = const Color(0xFFF7F9FC);
-    _card = Colors.white;
-    _textPrimary = const Color(0xFF1A1A2E);
-    _textSecondary = const Color(0xFF6B7280);
   }
 
   Future<void> _initializeScreen() async {
@@ -437,7 +429,6 @@ class _OrgDetailsScreenState extends State<OrgDetailsScreen>
           ),
           child: Stack(
             children: [
-              // Subtle gradient overlay
               Positioned.fill(
                 child: Container(
                   decoration: BoxDecoration(
@@ -455,13 +446,10 @@ class _OrgDetailsScreenState extends State<OrgDetailsScreen>
                   ),
                 ),
               ),
-
-              // Content
               Padding(
                 padding: const EdgeInsets.all(20),
                 child: Row(
                   children: [
-                    // Organization Avatar with refined styling
                     Hero(
                       tag: avatarTag,
                       child: Container(
@@ -497,10 +485,7 @@ class _OrgDetailsScreenState extends State<OrgDetailsScreen>
                         ),
                       ),
                     ),
-
                     const SizedBox(width: 16),
-
-                    // Organization Info with refined typography
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -508,7 +493,7 @@ class _OrgDetailsScreenState extends State<OrgDetailsScreen>
                         children: [
                           Text(
                             _organizationData?['name'] ?? widget.orgName,
-                            style: TextStyle(
+                            style: const TextStyle(
                               color: _textPrimary,
                               fontSize: 20,
                               fontWeight: FontWeight.w700,
@@ -518,14 +503,13 @@ class _OrgDetailsScreenState extends State<OrgDetailsScreen>
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
                           ),
-
                           if (_organizationData?['description'] != null) ...[
                             const SizedBox(height: 8),
                             Container(
                               padding: const EdgeInsets.only(right: 8),
                               child: Text(
                                 _organizationData!['description'],
-                                style: TextStyle(
+                                style: const TextStyle(
                                   color: _textSecondary,
                                   fontSize: 13,
                                   height: 1.5,
@@ -537,8 +521,6 @@ class _OrgDetailsScreenState extends State<OrgDetailsScreen>
                               ),
                             ),
                           ],
-
-                          // Optional: Add a subtle status indicator
                           if (_hasJoined) ...[
                             const SizedBox(height: 10),
                             Row(
@@ -589,7 +571,6 @@ class _OrgDetailsScreenState extends State<OrgDetailsScreen>
     );
   }
 
-  // 🧩 Fallback icon when no image
   Widget _buildFallbackLogo() {
     return Container(
       decoration: BoxDecoration(
@@ -707,7 +688,7 @@ class _OrgDetailsScreenState extends State<OrgDetailsScreen>
         child: TextField(
           controller: _searchController,
           onChanged: (v) => setState(() => _searchQuery = v),
-          style: TextStyle(
+          style: const TextStyle(
             color: _textPrimary,
             fontWeight: FontWeight.w600,
             fontSize: 15,
@@ -783,13 +764,13 @@ class _OrgDetailsScreenState extends State<OrgDetailsScreen>
               ),
               shape: BoxShape.circle,
             ),
-            child: CircularProgressIndicator(
+            child: const CircularProgressIndicator(
               color: _primaryColor,
               strokeWidth: 3.5,
             ),
           ),
           const SizedBox(height: 24),
-          Text(
+          const Text(
             'Loading organization data...',
             style: TextStyle(
               color: _textSecondary,
@@ -862,7 +843,7 @@ class _OrgDetailsScreenState extends State<OrgDetailsScreen>
               const SizedBox(width: 12),
               Text(
                 title,
-                style: TextStyle(
+                style: const TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.w800,
                   color: _primaryColor,
@@ -874,7 +855,7 @@ class _OrgDetailsScreenState extends State<OrgDetailsScreen>
           const SizedBox(height: 16),
           Text(
             content,
-            style: TextStyle(
+            style: const TextStyle(
               fontSize: 15,
               height: 1.6,
               color: _textSecondary,
@@ -954,14 +935,14 @@ class _OrgDetailsScreenState extends State<OrgDetailsScreen>
                   color: _primaryColor.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: Icon(
+                child: const Icon(
                   Icons.business_outlined,
                   size: 22,
                   color: _primaryColor,
                 ),
               ),
               const SizedBox(width: 12),
-              Text(
+              const Text(
                 'Organization Info',
                 style: TextStyle(
                   fontSize: 18,
@@ -1019,7 +1000,7 @@ class _OrgDetailsScreenState extends State<OrgDetailsScreen>
             children: [
               Text(
                 label,
-                style: TextStyle(
+                style: const TextStyle(
                   fontSize: 12,
                   color: _textSecondary,
                   fontWeight: FontWeight.w600,
@@ -1030,7 +1011,7 @@ class _OrgDetailsScreenState extends State<OrgDetailsScreen>
               const SizedBox(height: 4),
               Text(
                 value,
-                style: TextStyle(
+                style: const TextStyle(
                   fontSize: 15,
                   color: _textPrimary,
                   fontWeight: FontWeight.w700,
@@ -1188,7 +1169,7 @@ class _OrgDetailsScreenState extends State<OrgDetailsScreen>
               _selectedDepartment == 'All'
                   ? 'No Doctors Yet'
                   : 'No Doctors in $_selectedDepartment',
-              style: TextStyle(
+              style: const TextStyle(
                 fontSize: 24,
                 fontWeight: FontWeight.w900,
                 color: _textPrimary,
@@ -1201,7 +1182,7 @@ class _OrgDetailsScreenState extends State<OrgDetailsScreen>
               _selectedDepartment == 'All'
                   ? 'This organization hasn\'t added any doctors yet'
                   : 'Try selecting a different department',
-              style: TextStyle(
+              style: const TextStyle(
                 color: _textSecondary,
                 fontSize: 16,
                 fontWeight: FontWeight.w500,
@@ -1231,7 +1212,16 @@ class _OrgDetailsScreenState extends State<OrgDetailsScreen>
         child: InkWell(
           borderRadius: BorderRadius.circular(20),
           onTap: () {
-            // Handle doctor tap - navigate to doctor profile if needed
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder:
+                    (context) => DoctorProfileScreen(
+                      doctorData: doctor,
+                      organizationName: widget.orgName,
+                    ),
+              ),
+            );
           },
           child: Container(
             padding: const EdgeInsets.all(16),
@@ -1288,7 +1278,7 @@ class _OrgDetailsScreenState extends State<OrgDetailsScreen>
                     children: [
                       Text(
                         'Dr. $fullName',
-                        style: TextStyle(
+                        style: const TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.w800,
                           color: _textPrimary,
@@ -1348,7 +1338,7 @@ class _OrgDetailsScreenState extends State<OrgDetailsScreen>
                             Expanded(
                               child: Text(
                                 email,
-                                style: TextStyle(
+                                style: const TextStyle(
                                   fontSize: 11,
                                   color: _textSecondary,
                                   fontWeight: FontWeight.w500,
