@@ -26,10 +26,11 @@ class _OrgsScreenState extends State<OrgsScreen> with TickerProviderStateMixin {
   bool _isLoading = false;
   bool _isList = true;
 
-  static const primaryColor = const Color(0xFF416240);
-  static const accentColor = const Color(0xFFA3B18A);
+  static const primaryColor = Color(0xFF416240);
+  static const accentColor = Color(0xFFA3B18A);
   static const lightBg = Color(0xFFF8FAF8);
   static const borderColor = Color(0xFFE5E7EB);
+  static const textPrimary = Color(0xFF1A1A2E);
 
   @override
   void initState() {
@@ -75,7 +76,7 @@ class _OrgsScreenState extends State<OrgsScreen> with TickerProviderStateMixin {
     if (_searchQuery.isEmpty) return _allOrganizations;
     return _allOrganizations
         .where(
-          (org) => (org['name'] ?? '').toLowerCase().contains(
+          (org) => (org['name'] ?? '').toString().toLowerCase().contains(
             _searchQuery.toLowerCase(),
           ),
         )
@@ -98,121 +99,34 @@ class _OrgsScreenState extends State<OrgsScreen> with TickerProviderStateMixin {
 
   @override
   Widget build(BuildContext context) {
-    final screenWidth = MediaQuery.of(context).size.width;
-    final isDesktop = screenWidth > 600;
-    final isTablet = screenWidth > 600 && screenWidth <= 900;
-    final isLargeScreen = screenWidth > 900;
-
-    final titleFontSize = isLargeScreen ? 24.0 : (isTablet ? 22.0 : 20.0);
-    final toolbarHeight = isDesktop ? 84.0 : 140.0;
-
     return Scaffold(
-      backgroundColor: lightBg,
-      appBar: PreferredSize(
-        preferredSize: Size.fromHeight(toolbarHeight),
-        child: SafeArea(
-          child: Padding(
-            padding: EdgeInsets.symmetric(
-              horizontal: isDesktop ? 20 : 12,
-              vertical: 8,
+      backgroundColor: Colors.transparent,
+      extendBodyBehindAppBar: true,
+      body: Stack(
+        children: [
+          // Background gradient
+          Container(
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  Color(0xFFE8F0E3), // soft light green top
+                  Colors.white, // white bottom
+                ],
+              ),
             ),
+          ),
+          SafeArea(
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Search bar (top)
-                Material(
-                  elevation: 0,
-                  color: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    child: Row(
-                      children: [
-                        const Icon(
-                          Icons.search_rounded,
-                          color: primaryColor,
-                          size: 20,
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: TextField(
-                            controller: _searchController,
-                            onChanged: (v) => setState(() => _searchQuery = v),
-                            decoration: const InputDecoration(
-                              hintText: 'Search organizations',
-                              border: InputBorder.none,
-                              isDense: true,
-                              contentPadding: EdgeInsets.symmetric(
-                                vertical: 12,
-                              ),
-                            ),
-                          ),
-                        ),
-                        if (_searchQuery.isNotEmpty)
-                          IconButton(
-                            icon: const Icon(Icons.close_rounded, size: 18),
-                            onPressed: () {
-                              setState(() {
-                                _searchController.clear();
-                                _searchQuery = '';
-                              });
-                            },
-                          ),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                // My Organizations title + layout toggle (bottom)
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        'Organizations',
-                        style: TextStyle(
-                          color: primaryColor,
-                          fontWeight: FontWeight.bold,
-                          fontSize: titleFontSize,
-                        ),
-                      ),
-                    ),
-                    IconButton(
-                      icon: Icon(
-                        _isList
-                            ? Icons.grid_view_rounded
-                            : Icons.view_list_rounded,
-                        color: primaryColor,
-                      ),
-                      onPressed: _toggleLayout,
-                      iconSize: 20,
-                    ),
-                  ],
-                ),
+                _buildAppBar(context),
+                _buildSearchBar(),
+                Expanded(child: _buildBody()),
               ],
             ),
           ),
-        ),
-      ),
-      body: FadeTransition(
-        opacity: _fadeAnimation,
-        child: SlideTransition(
-          position: _slideAnimation,
-          child:
-              _isLoading
-                  ? const Center(
-                    child: CircularProgressIndicator(
-                      color: primaryColor,
-                      strokeWidth: 2.5,
-                    ),
-                  )
-                  : _filteredOrganizations.isEmpty
-                  ? _buildEmptyState()
-                  : _isList
-                  ? _buildOrgList()
-                  : _buildOrgGrid(),
-        ),
+        ],
       ),
       bottomNavigationBar: MainNavBar(
         selectedIndex: _selectedIndex,
@@ -221,19 +135,196 @@ class _OrgsScreenState extends State<OrgsScreen> with TickerProviderStateMixin {
     );
   }
 
-  // --- FIXED & IMPROVED LAYOUTS ---
+  Widget _buildAppBar(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
+      child: Row(
+        children: [
+          const Expanded(
+            child: Text(
+              'All Organizations',
+              style: TextStyle(
+                color: primaryColor,
+                fontSize: 28,
+                fontWeight: FontWeight.w900,
+                letterSpacing: -0.5,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSearchBar() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+      child: Row(
+        children: [
+          Expanded(
+            child: Container(
+              height: 48,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: primaryColor.withOpacity(0.1),
+                  width: 1.5,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: primaryColor.withOpacity(0.04),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Row(
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.only(left: 12, right: 8),
+                    child: Icon(
+                      Icons.search_rounded,
+                      color: primaryColor.withOpacity(0.5),
+                      size: 22,
+                    ),
+                  ),
+                  Expanded(
+                    child: TextField(
+                      controller: _searchController,
+                      onChanged: (v) => setState(() => _searchQuery = v),
+                      decoration: InputDecoration(
+                        hintText: 'Search organizations...',
+                        border: InputBorder.none,
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 0,
+                          vertical: 0,
+                        ),
+                        hintStyle: TextStyle(
+                          color: primaryColor.withOpacity(0.5),
+                          fontSize: 15,
+                          fontWeight: FontWeight.w500,
+                        ),
+                        isDense: true,
+                      ),
+                      style: const TextStyle(
+                        fontSize: 15,
+                        color: textPrimary,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                  if (_searchQuery.isNotEmpty)
+                    IconButton(
+                      icon: Icon(
+                        Icons.clear_rounded,
+                        color: primaryColor.withOpacity(0.5),
+                        size: 20,
+                      ),
+                      onPressed: () {
+                        _searchController.clear();
+                        setState(() => _searchQuery = '');
+                      },
+                      padding: const EdgeInsets.all(8),
+                      constraints: const BoxConstraints(),
+                    ),
+                  const SizedBox(width: 8),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          // Grid/List toggle button
+          Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: primaryColor.withOpacity(0.1),
+                width: 1.5,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: primaryColor.withOpacity(0.04),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: _toggleLayout,
+                borderRadius: BorderRadius.circular(12),
+                child: Icon(
+                  _isList ? Icons.grid_view_rounded : Icons.view_list_rounded,
+                  color: primaryColor,
+                  size: 22,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBody() {
+    if (_isLoading) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    primaryColor.withOpacity(0.1),
+                    accentColor.withOpacity(0.1),
+                  ],
+                ),
+                shape: BoxShape.circle,
+              ),
+              child: const CircularProgressIndicator(
+                color: primaryColor,
+                strokeWidth: 3.5,
+              ),
+            ),
+            const SizedBox(height: 24),
+            const Text(
+              'Loading organizations...',
+              style: TextStyle(
+                color: Color(0xFF6B7280),
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return FadeTransition(
+      opacity: _fadeAnimation,
+      child: SlideTransition(
+        position: _slideAnimation,
+        child:
+            _filteredOrganizations.isEmpty
+                ? _buildEmptyState()
+                : _isList
+                ? _buildOrgList()
+                : _buildOrgGrid(),
+      ),
+    );
+  }
 
   Widget _buildOrgList() {
     final orgs = _filteredOrganizations;
-    final screenWidth = MediaQuery.of(context).size.width;
-    final horizontalPadding =
-        screenWidth > 900 ? 60.0 : (screenWidth > 600 ? 40.0 : 16.0);
-
     return ListView.builder(
-      padding: EdgeInsets.symmetric(
-        horizontal: horizontalPadding,
-        vertical: 20,
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
       itemCount: orgs.length,
       itemBuilder: (context, i) {
         final org = orgs[i];
@@ -252,90 +343,105 @@ class _OrgsScreenState extends State<OrgsScreen> with TickerProviderStateMixin {
           },
           child: Padding(
             padding: const EdgeInsets.only(bottom: 14),
-            child: InkWell(
-              borderRadius: BorderRadius.circular(14),
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder:
-                        (_) => OrgDetailsScreen(
-                          orgId: org['id'],
-                          orgName: org['name'],
-                        ),
+            child: Material(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              elevation: 0,
+              child: InkWell(
+                borderRadius: BorderRadius.circular(16),
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder:
+                          (_) => OrgDetailsScreen(
+                            orgId: org['id'],
+                            orgName: org['name'],
+                          ),
+                    ),
+                  );
+                },
+                child: Container(
+                  decoration: BoxDecoration(
+                    border: Border.all(
+                      color: primaryColor.withOpacity(0.08),
+                      width: 1.5,
+                    ),
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: primaryColor.withOpacity(0.06),
+                        blurRadius: 16,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
                   ),
-                );
-              },
-              child: Container(
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: borderColor),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.05),
-                      blurRadius: 8,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
-                ),
-                child: Row(
-                  children: [
-                    // Left image
-                    ClipRRect(
-                      borderRadius: const BorderRadius.only(
-                        topLeft: Radius.circular(14),
-                        bottomLeft: Radius.circular(14),
-                      ),
-                      child: Image.network(
-                        org['image'] ?? '',
-                        width: 100,
-                        height: 100,
-                        fit: BoxFit.cover,
-                        errorBuilder:
-                            (_, __, ___) => Container(
-                              width: 100,
-                              height: 100,
-                              color: primaryColor.withOpacity(0.08),
-                              child: Icon(
-                                Icons.business_rounded,
-                                color: primaryColor.withOpacity(0.4),
-                                size: 40,
+                  child: Row(
+                    children: [
+                      ClipRRect(
+                        borderRadius: const BorderRadius.only(
+                          topLeft: Radius.circular(16),
+                          bottomLeft: Radius.circular(16),
+                        ),
+                        child: Image.network(
+                          org['image'] ?? '',
+                          width: 100,
+                          height: 100,
+                          fit: BoxFit.cover,
+                          errorBuilder:
+                              (_, __, ___) => Container(
+                                width: 100,
+                                height: 100,
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                    colors: [
+                                      primaryColor.withOpacity(0.1),
+                                      accentColor.withOpacity(0.1),
+                                    ],
+                                  ),
+                                ),
+                                child: Icon(
+                                  Icons.business_rounded,
+                                  color: primaryColor.withOpacity(0.4),
+                                  size: 40,
+                                ),
                               ),
-                            ),
-                      ),
-                    ),
-
-                    // Right content
-                    Expanded(
-                      child: Padding(
-                        padding: const EdgeInsets.all(14),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              org['name'] ?? 'Unnamed Organization',
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w700,
-                                fontSize: 16,
-                                color: primaryColor,
-                              ),
-                            ),
-                            const SizedBox(height: 6),
-                            Text(
-                              org['description'] ?? 'No description available',
-                              style: TextStyle(
-                                fontSize: 13,
-                                color: primaryColor.withOpacity(0.7),
-                              ),
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ],
                         ),
                       ),
-                    ),
-                  ],
+                      Expanded(
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                org['name'] ?? 'Unnamed Organization',
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w800,
+                                  fontSize: 16,
+                                  color: textPrimary,
+                                  letterSpacing: -0.3,
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              Text(
+                                org['description'] ??
+                                    'No description available',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: textPrimary.withOpacity(0.6),
+                                  fontWeight: FontWeight.w500,
+                                  height: 1.4,
+                                ),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -348,22 +454,18 @@ class _OrgsScreenState extends State<OrgsScreen> with TickerProviderStateMixin {
   Widget _buildOrgGrid() {
     final orgs = _filteredOrganizations;
     final screenWidth = MediaQuery.of(context).size.width;
-    final horizontalPadding =
-        screenWidth > 900 ? 60.0 : (screenWidth > 600 ? 40.0 : 16.0);
 
     int crossAxisCount = 2;
-    if (screenWidth > 1200)
+    if (screenWidth > 1200) {
       crossAxisCount = 4;
-    else if (screenWidth > 900)
+    } else if (screenWidth > 900) {
       crossAxisCount = 3;
-    else if (screenWidth < 600)
+    } else if (screenWidth < 600) {
       crossAxisCount = 2;
+    }
 
     return GridView.builder(
-      padding: EdgeInsets.symmetric(
-        horizontal: horizontalPadding,
-        vertical: 20,
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
       gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: crossAxisCount,
         crossAxisSpacing: 16,
@@ -383,438 +485,111 @@ class _OrgsScreenState extends State<OrgsScreen> with TickerProviderStateMixin {
               child: Transform.scale(scale: 0.9 + (value * 0.1), child: child),
             );
           },
-          child: InkWell(
-            borderRadius: BorderRadius.circular(14),
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder:
-                      (_) => OrgDetailsScreen(
-                        orgId: org['id'],
-                        orgName: org['name'],
-                      ),
+          child: Material(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            elevation: 0,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(16),
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder:
+                        (_) => OrgDetailsScreen(
+                          orgId: org['id'],
+                          orgName: org['name'],
+                        ),
+                  ),
+                );
+              },
+              child: Container(
+                decoration: BoxDecoration(
+                  border: Border.all(
+                    color: primaryColor.withOpacity(0.08),
+                    width: 1.5,
+                  ),
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: primaryColor.withOpacity(0.06),
+                      blurRadius: 16,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
                 ),
-              );
-            },
-            child: Container(
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: borderColor),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.05),
-                    blurRadius: 8,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Top image
-                  ClipRRect(
-                    borderRadius: const BorderRadius.only(
-                      topLeft: Radius.circular(14),
-                      topRight: Radius.circular(14),
-                    ),
-                    child: AspectRatio(
-                      aspectRatio: 16 / 9,
-                      child: Image.network(
-                        org['image'] ?? '',
-                        fit: BoxFit.cover,
-                        errorBuilder:
-                            (_, __, ___) => Container(
-                              color: primaryColor.withOpacity(0.08),
-                              child: Icon(
-                                Icons.business_rounded,
-                                color: primaryColor.withOpacity(0.4),
-                                size: 50,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    ClipRRect(
+                      borderRadius: const BorderRadius.only(
+                        topLeft: Radius.circular(16),
+                        topRight: Radius.circular(16),
+                      ),
+                      child: AspectRatio(
+                        aspectRatio: 16 / 9,
+                        child: Image.network(
+                          org['image'] ?? '',
+                          fit: BoxFit.cover,
+                          errorBuilder:
+                              (_, __, ___) => Container(
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                    colors: [
+                                      primaryColor.withOpacity(0.1),
+                                      accentColor.withOpacity(0.1),
+                                    ],
+                                  ),
+                                ),
+                                child: Icon(
+                                  Icons.business_rounded,
+                                  color: primaryColor.withOpacity(0.4),
+                                  size: 50,
+                                ),
                               ),
-                            ),
+                        ),
                       ),
                     ),
-                  ),
-
-                  // Bottom details
-                  Expanded(
-                    child: Padding(
-                      padding: const EdgeInsets.all(12),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            org['name'] ?? 'Unnamed Organization',
-                            style: const TextStyle(
-                              fontWeight: FontWeight.w700,
-                              fontSize: 15,
-                              color: primaryColor,
+                    Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              org['name'] ?? 'Unnamed Organization',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w800,
+                                fontSize: 15,
+                                color: textPrimary,
+                                letterSpacing: -0.3,
+                              ),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
                             ),
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          const SizedBox(height: 6),
-                          Text(
-                            org['description'] ?? 'No description available',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: primaryColor.withOpacity(0.7),
+                            const SizedBox(height: 6),
+                            Text(
+                              org['description'] ?? 'No description available',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: textPrimary.withOpacity(0.6),
+                                fontWeight: FontWeight.w500,
+                                height: 1.4,
+                              ),
+                              maxLines: 3,
+                              overflow: TextOverflow.ellipsis,
                             ),
-                            maxLines: 3,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),
         );
       },
-    );
-  }
-
-  Widget _buildOrgCard(Map<String, dynamic> org) {
-    final screenWidth = MediaQuery.of(context).size.width;
-    final isMobile = screenWidth < 600;
-    final isTablet = screenWidth >= 600 && screenWidth <= 900;
-
-    final cardMaxWidth = screenWidth > 1200 ? 1100.0 : 900.0;
-    final cardHeight = isMobile ? 160.0 : (isTablet ? 180.0 : 200.0);
-    final imageWidth = isMobile ? 120.0 : (isTablet ? 220.0 : 280.0);
-    final cardPadding = isMobile ? 16.0 : (isTablet ? 18.0 : 20.0);
-
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(18),
-        onTap: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder:
-                  (c) =>
-                      OrgDetailsScreen(orgId: org['id'], orgName: org['name']),
-            ),
-          );
-        },
-        child: Container(
-          constraints: BoxConstraints(maxWidth: cardMaxWidth),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: borderColor, width: 1),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.06),
-                blurRadius: 16,
-                offset: const Offset(0, 4),
-              ),
-            ],
-          ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(18),
-            child:
-                isMobile
-                    ? _buildMobileCardLayout(
-                      org,
-                      cardHeight,
-                      imageWidth,
-                      cardPadding,
-                    )
-                    : _buildDesktopCardLayout(
-                      org,
-                      imageWidth,
-                      cardPadding,
-                      isTablet,
-                    ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildOrgGridCard(Map<String, dynamic> org) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(18),
-        onTap: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder:
-                  (c) =>
-                      OrgDetailsScreen(orgId: org['id'], orgName: org['name']),
-            ),
-          );
-        },
-        child: Container(
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: borderColor, width: 1),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.06),
-                blurRadius: 16,
-                offset: const Offset(0, 4),
-              ),
-            ],
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // Image at top
-              Expanded(flex: 2, child: _buildOrgImage(org, isMobile: true)),
-              // Details at bottom
-              Expanded(
-                flex: 3,
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: _buildOrgGridDetails(org),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildMobileCardLayout(
-    Map<String, dynamic> org,
-    double height,
-    double imageWidth,
-    double padding,
-  ) {
-    return SizedBox(
-      height: height,
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          _buildOrgImage(org, width: imageWidth, isMobile: true),
-          Expanded(
-            child: Padding(
-              padding: EdgeInsets.all(padding),
-              child: _buildOrgDetails(org, isMobile: true),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildDesktopCardLayout(
-    Map<String, dynamic> org,
-    double imageWidth,
-    double padding,
-    bool isTablet,
-  ) {
-    return IntrinsicHeight(
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          _buildOrgImage(org, width: imageWidth, isMobile: false),
-          Expanded(
-            child: Padding(
-              padding: EdgeInsets.all(padding),
-              child: _buildOrgDetails(org, isMobile: false, isTablet: isTablet),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildOrgImage(
-    Map<String, dynamic> org, {
-    double? height,
-    double? width,
-    required bool isMobile,
-  }) {
-    final imageUrl = org['image'] as String?;
-
-    return Container(
-      height: height,
-      width: width,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: const BorderRadius.only(
-          topLeft: Radius.circular(18),
-          bottomLeft: Radius.circular(18),
-        ),
-      ),
-      padding: const EdgeInsets.only(left: 5),
-      child:
-          imageUrl != null && imageUrl.isNotEmpty
-              ? ClipRRect(
-                borderRadius: const BorderRadius.only(
-                  topLeft: Radius.circular(18),
-                  bottomLeft: Radius.circular(18),
-                ),
-                child: Image.network(
-                  imageUrl,
-                  fit: BoxFit.contain,
-                  alignment: Alignment.center,
-                  errorBuilder: (context, error, stackTrace) {
-                    return _buildImagePlaceholder();
-                  },
-                  loadingBuilder: (context, child, loadingProgress) {
-                    if (loadingProgress == null) return child;
-                    return Center(
-                      child: CircularProgressIndicator(
-                        color: primaryColor,
-                        strokeWidth: 2,
-                        value:
-                            loadingProgress.expectedTotalBytes != null
-                                ? loadingProgress.cumulativeBytesLoaded /
-                                    loadingProgress.expectedTotalBytes!
-                                : null,
-                      ),
-                    );
-                  },
-                ),
-              )
-              : _buildImagePlaceholder(),
-    );
-  }
-
-  Widget _buildImagePlaceholder() {
-    return Center(
-      child: Icon(
-        Icons.business_rounded,
-        color: primaryColor.withOpacity(0.3),
-        size: 64,
-      ),
-    );
-  }
-
-  Widget _buildOrgDetails(
-    Map<String, dynamic> org, {
-    required bool isMobile,
-    bool isTablet = false,
-  }) {
-    final titleFontSize = isMobile ? 16.0 : (isTablet ? 18.0 : 20.0);
-    final descriptionFontSize = isMobile ? 13.0 : (isTablet ? 14.0 : 15.0);
-    final maxLines = isMobile ? 2 : (isTablet ? 2 : 3);
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                org['name'] ?? 'Unnamed Organization',
-                style: TextStyle(
-                  fontWeight: FontWeight.w700,
-                  fontSize: titleFontSize,
-                  color: primaryColor,
-                  height: 1.3,
-                ),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-              ),
-              const SizedBox(height: 8),
-              Flexible(
-                child: Text(
-                  org['description'] ?? 'No description available',
-                  style: TextStyle(
-                    fontSize: descriptionFontSize,
-                    color: primaryColor.withOpacity(0.65),
-                    height: 1.5,
-                  ),
-                  maxLines: maxLines,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            ],
-          ),
-        ),
-        if (!isMobile) ...[
-          const SizedBox(height: 12),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: [
-              Container(
-                padding: EdgeInsets.symmetric(
-                  horizontal: isTablet ? 14 : 16,
-                  vertical: isTablet ? 8 : 10,
-                ),
-                decoration: BoxDecoration(
-                  color: primaryColor,
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      'View Details',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w600,
-                        fontSize: isTablet ? 13 : 14,
-                      ),
-                    ),
-                    const SizedBox(width: 6),
-                    Icon(
-                      Icons.arrow_forward_rounded,
-                      color: Colors.white,
-                      size: isTablet ? 16 : 18,
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ],
-      ],
-    );
-  }
-
-  Widget _buildOrgGridDetails(Map<String, dynamic> org) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                org['name'] ?? 'Unnamed Organization',
-                style: const TextStyle(
-                  fontWeight: FontWeight.w700,
-                  fontSize: 16,
-                  color: primaryColor,
-                  height: 1.3,
-                ),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-              ),
-              const SizedBox(height: 8),
-              Flexible(
-                child: Text(
-                  org['description'] ?? 'No description available',
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: primaryColor.withOpacity(0.65),
-                    height: 1.5,
-                  ),
-                  maxLines: 3,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
     );
   }
 
@@ -829,12 +604,17 @@ class _OrgsScreenState extends State<OrgsScreen> with TickerProviderStateMixin {
               width: 120,
               height: 120,
               decoration: BoxDecoration(
-                color: primaryColor.withOpacity(0.08),
+                gradient: LinearGradient(
+                  colors: [
+                    primaryColor.withOpacity(0.15),
+                    accentColor.withOpacity(0.1),
+                  ],
+                ),
                 shape: BoxShape.circle,
               ),
               child: Icon(
                 Icons.business_rounded,
-                color: primaryColor.withOpacity(0.3),
+                color: primaryColor.withOpacity(0.4),
                 size: 56,
               ),
             ),
@@ -843,17 +623,23 @@ class _OrgsScreenState extends State<OrgsScreen> with TickerProviderStateMixin {
               'No organizations found',
               style: TextStyle(
                 fontSize: 22,
-                fontWeight: FontWeight.w700,
-                color: primaryColor,
+                fontWeight: FontWeight.w900,
+                color: textPrimary,
+                letterSpacing: -0.5,
               ),
             ),
             const SizedBox(height: 10),
             Text(
-              'Try adjusting your search criteria',
+              _searchQuery.isEmpty
+                  ? 'No organizations are currently available'
+                  : 'Try a different search term',
               style: TextStyle(
                 fontSize: 15,
-                color: primaryColor.withOpacity(0.6),
+                color: textPrimary.withOpacity(0.6),
+                fontWeight: FontWeight.w500,
+                height: 1.5,
               ),
+              textAlign: TextAlign.center,
             ),
           ],
         ),

@@ -56,7 +56,14 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen>
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
-
+    _tabController.addListener(() {
+      if (_searchQuery.isNotEmpty) {
+        setState(() {
+          _searchQuery = '';
+          _searchController.clear();
+        });
+      }
+    });
     _staggerController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1000),
@@ -157,13 +164,23 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen>
 
   List<Map<String, dynamic>> get _filteredMembers {
     if (_searchQuery.isEmpty) return _members;
-    return _members
-        .where(
-          (m) => (m['User']?['email'] ?? '').toString().toLowerCase().contains(
-            _searchQuery.toLowerCase(),
-          ),
-        )
-        .toList();
+
+    return _members.where((m) {
+      final user = m['User'];
+      if (user == null) return false;
+
+      final person = user['Person'];
+      final firstName = (person?['first_name'] ?? '').toString().toLowerCase();
+      final lastName = (person?['last_name'] ?? '').toString().toLowerCase();
+      final fullName = '$firstName $lastName'.trim();
+
+      final query = _searchQuery.toLowerCase();
+
+      // Search in first name, last name, or full name
+      return firstName.contains(query) ||
+          lastName.contains(query) ||
+          fullName.contains(query);
+    }).toList();
   }
 
   @override
@@ -179,21 +196,19 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: _bg,
+      backgroundColor: Colors.transparent,
       extendBodyBehindAppBar: true,
       body: Stack(
         children: [
-          // Gradient background
+          // Background gradient
           Container(
-            height: 300,
-            decoration: BoxDecoration(
+            decoration: const BoxDecoration(
               gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
                 colors: [
-                  _primaryColor.withOpacity(0.08),
-                  _accentColor.withOpacity(0.05),
-                  _bg,
+                  Color(0xFFE8F0E3), // soft light green top
+                  Colors.white, // white bottom
                 ],
               ),
             ),
@@ -582,7 +597,8 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen>
                 children: [
                   const Icon(Icons.folder_rounded, size: 16),
                   const SizedBox(width: 6),
-                  Text('FILES (${_filteredFilesByUser.length})'),
+                  // Use actual counts, not filtered counts
+                  Text('FILES (${_filesByUser.length})'),
                 ],
               ),
             ),
@@ -592,7 +608,8 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen>
                 children: [
                   const Icon(Icons.people_rounded, size: 16),
                   const SizedBox(width: 6),
-                  Text('MEMBERS (${_filteredMembers.length})'),
+                  // Use actual counts, not filtered counts
+                  Text('MEMBERS (${_members.length})'),
                 ],
               ),
             ),
@@ -620,6 +637,7 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen>
         ),
         child: TextField(
           controller: _searchController,
+          autofocus: true,
           onChanged: (v) => setState(() => _searchQuery = v),
           style: TextStyle(
             color: _textPrimary,
@@ -627,8 +645,10 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen>
             fontSize: 15,
           ),
           decoration: InputDecoration(
-            hintText: 'Search',
-            // hintText
+            hintText:
+                _tabController.index == 0
+                    ? 'Search files...'
+                    : 'Search members...',
             hintStyle: TextStyle(
               color: _textSecondary.withOpacity(0.5),
               fontWeight: FontWeight.w500,

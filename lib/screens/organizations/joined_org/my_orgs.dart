@@ -5,14 +5,14 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:health_share/services/org_services/org_membership_service.dart';
 import 'package:health_share/services/org_services/org_invitation_service.dart';
 
-class YourOrgsScreen extends StatefulWidget {
-  const YourOrgsScreen({super.key});
+class MyOrgScreen extends StatefulWidget {
+  const MyOrgScreen({super.key});
 
   @override
-  State<YourOrgsScreen> createState() => _YourOrgsScreenState();
+  State<MyOrgScreen> createState() => _MyOrgScreenState();
 }
 
-class _YourOrgsScreenState extends State<YourOrgsScreen>
+class _MyOrgScreenState extends State<MyOrgScreen>
     with TickerProviderStateMixin {
   late AnimationController _fadeController;
   late Animation<double> _fadeAnimation;
@@ -35,6 +35,7 @@ class _YourOrgsScreenState extends State<YourOrgsScreen>
   static const accentColor = Color(0xFFA3B18A);
   static const lightBg = Color(0xFFF8FAF8);
   static const borderColor = Color(0xFFE5E7EB);
+  static const textPrimary = Color(0xFF1A1A2E);
 
   @override
   void initState() {
@@ -138,190 +139,36 @@ class _YourOrgsScreenState extends State<YourOrgsScreen>
 
   @override
   Widget build(BuildContext context) {
-    final screenWidth = MediaQuery.of(context).size.width;
-    final isDesktop = screenWidth > 600;
-    final isTablet = screenWidth > 600 && screenWidth <= 900;
-    final isLargeScreen = screenWidth > 900;
-
-    final titleFontSize = isLargeScreen ? 24.0 : (isTablet ? 22.0 : 20.0);
-    final toolbarHeight = isDesktop ? 84.0 : 140.0;
-
     return Scaffold(
-      backgroundColor: lightBg,
-      appBar: PreferredSize(
-        preferredSize: Size.fromHeight(toolbarHeight),
-        child: SafeArea(
-          child: Padding(
-            padding: EdgeInsets.symmetric(
-              horizontal: isDesktop ? 20 : 12,
-              vertical: 8,
+      backgroundColor: Colors.transparent,
+      extendBodyBehindAppBar: true,
+      body: Stack(
+        children: [
+          // Background gradient
+          Container(
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  Color(0xFFE8F0E3), // soft light green top
+                  Colors.white, // white bottom
+                ],
+              ),
             ),
+          ),
+          SafeArea(
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Search bar with invitation button
-                Row(
-                  children: [
-                    Expanded(
-                      child: Material(
-                        elevation: 0,
-                        color: Colors.white,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 12),
-                          child: Row(
-                            children: [
-                              const Icon(
-                                Icons.search_rounded,
-                                color: primaryColor,
-                                size: 20,
-                              ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: TextField(
-                                  controller: _searchController,
-                                  onChanged:
-                                      (v) => setState(() => _searchQuery = v),
-                                  decoration: const InputDecoration(
-                                    hintText: 'Search organizations',
-                                    border: InputBorder.none,
-                                    isDense: true,
-                                    contentPadding: EdgeInsets.symmetric(
-                                      vertical: 12,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                              if (_searchQuery.isNotEmpty)
-                                IconButton(
-                                  icon: const Icon(
-                                    Icons.close_rounded,
-                                    size: 18,
-                                  ),
-                                  onPressed: () {
-                                    setState(() {
-                                      _searchController.clear();
-                                      _searchQuery = '';
-                                    });
-                                  },
-                                ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    // Invitation icon with badge
-                    Stack(
-                      children: [
-                        Material(
-                          elevation: 0,
-                          color: Colors.white,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: InkWell(
-                            borderRadius: BorderRadius.circular(12),
-                            onTap: _showInvitationsDialog,
-                            child: Container(
-                              padding: const EdgeInsets.all(12),
-                              child: Icon(
-                                Icons.mail_outline_rounded,
-                                color:
-                                    _invitationCount > 0
-                                        ? primaryColor
-                                        : primaryColor.withOpacity(0.5),
-                                size: 20,
-                              ),
-                            ),
-                          ),
-                        ),
-                        if (_invitationCount > 0)
-                          Positioned(
-                            right: 4,
-                            top: 4,
-                            child: Container(
-                              padding: const EdgeInsets.all(4),
-                              decoration: BoxDecoration(
-                                color: Colors.red,
-                                shape: BoxShape.circle,
-                                border: Border.all(
-                                  color: Colors.white,
-                                  width: 1.5,
-                                ),
-                              ),
-                              constraints: const BoxConstraints(
-                                minWidth: 16,
-                                minHeight: 16,
-                              ),
-                              child: Center(
-                                child: Text(
-                                  '$_invitationCount',
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 9,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                      ],
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                // Title + layout toggle
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        'My Organizations',
-                        style: TextStyle(
-                          color: primaryColor,
-                          fontWeight: FontWeight.bold,
-                          fontSize: titleFontSize,
-                        ),
-                      ),
-                    ),
-                    IconButton(
-                      icon: Icon(
-                        _isList
-                            ? Icons.grid_view_rounded
-                            : Icons.view_list_rounded,
-                        color: primaryColor,
-                      ),
-                      onPressed: _toggleLayout,
-                      iconSize: 20,
-                    ),
-                  ],
-                ),
+                _buildAppBar(context),
+                _buildSearchBar(),
+                Expanded(child: _buildBody()),
               ],
             ),
           ),
-        ),
+        ],
       ),
-      body: FadeTransition(
-        opacity: _fadeAnimation,
-        child: SlideTransition(
-          position: _slideAnimation,
-          child:
-              _isLoading
-                  ? const Center(
-                    child: CircularProgressIndicator(
-                      color: primaryColor,
-                      strokeWidth: 2.5,
-                    ),
-                  )
-                  : _filteredOrganizations.isEmpty
-                  ? _buildEmptyState()
-                  : _isList
-                  ? _buildOrgList()
-                  : _buildOrgGrid(),
-        ),
-      ),
+      floatingActionButton: _buildInvitationFAB(),
       bottomNavigationBar: MainNavBar(
         selectedIndex: _selectedIndex,
         onItemTapped: (i) => setState(() => _selectedIndex = i),
@@ -329,17 +176,241 @@ class _YourOrgsScreenState extends State<YourOrgsScreen>
     );
   }
 
+  Widget _buildAppBar(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
+      child: Row(
+        children: [
+          const Expanded(
+            child: Text(
+              'My Organizations',
+              style: TextStyle(
+                color: primaryColor,
+                fontSize: 28,
+                fontWeight: FontWeight.w900,
+                letterSpacing: -0.5,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSearchBar() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+      child: Row(
+        children: [
+          Expanded(
+            child: Container(
+              height: 48,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: primaryColor.withOpacity(0.1),
+                  width: 1.5,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: primaryColor.withOpacity(0.04),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Row(
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.only(left: 12, right: 8),
+                    child: Icon(
+                      Icons.search_rounded,
+                      color: primaryColor.withOpacity(0.5),
+                      size: 22,
+                    ),
+                  ),
+                  Expanded(
+                    child: TextField(
+                      controller: _searchController,
+                      onChanged: (v) => setState(() => _searchQuery = v),
+                      decoration: InputDecoration(
+                        hintText: 'Search organizations...',
+                        border: InputBorder.none,
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 0,
+                          vertical: 0,
+                        ),
+                        hintStyle: TextStyle(
+                          color: primaryColor.withOpacity(0.5),
+                          fontSize: 15,
+                          fontWeight: FontWeight.w500,
+                        ),
+                        isDense: true,
+                      ),
+                      style: const TextStyle(
+                        fontSize: 15,
+                        color: textPrimary,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                  if (_searchQuery.isNotEmpty)
+                    IconButton(
+                      icon: Icon(
+                        Icons.clear_rounded,
+                        color: primaryColor.withOpacity(0.5),
+                        size: 20,
+                      ),
+                      onPressed: () {
+                        _searchController.clear();
+                        setState(() => _searchQuery = '');
+                      },
+                      padding: const EdgeInsets.all(8),
+                      constraints: const BoxConstraints(),
+                    ),
+                  const SizedBox(width: 8),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          // Grid/List toggle button
+          Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: primaryColor.withOpacity(0.1),
+                width: 1.5,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: primaryColor.withOpacity(0.04),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: _toggleLayout,
+                borderRadius: BorderRadius.circular(12),
+                child: Icon(
+                  _isList ? Icons.grid_view_rounded : Icons.view_list_rounded,
+                  color: primaryColor,
+                  size: 22,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInvitationFAB() {
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        FloatingActionButton(
+          onPressed: _showInvitationsDialog,
+          backgroundColor: primaryColor,
+          elevation: 4,
+          child: const Icon(Icons.mail_outline_rounded, color: Colors.white),
+        ),
+        if (_invitationCount > 0)
+          Positioned(
+            right: -4,
+            top: -4,
+            child: Container(
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                color: Colors.red,
+                shape: BoxShape.circle,
+                border: Border.all(color: Colors.white, width: 2),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.red.withOpacity(0.3),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              constraints: const BoxConstraints(minWidth: 20, minHeight: 20),
+              child: Center(
+                child: Text(
+                  _invitationCount > 9 ? '9+' : '$_invitationCount',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildBody() {
+    if (_isLoading) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    primaryColor.withOpacity(0.1),
+                    accentColor.withOpacity(0.1),
+                  ],
+                ),
+                shape: BoxShape.circle,
+              ),
+              child: const CircularProgressIndicator(
+                color: primaryColor,
+                strokeWidth: 3.5,
+              ),
+            ),
+            const SizedBox(height: 24),
+            const Text(
+              'Loading organizations...',
+              style: TextStyle(
+                color: Color(0xFF6B7280),
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return FadeTransition(
+      opacity: _fadeAnimation,
+      child: SlideTransition(
+        position: _slideAnimation,
+        child:
+            _filteredOrganizations.isEmpty
+                ? _buildEmptyState()
+                : _isList
+                ? _buildOrgList()
+                : _buildOrgGrid(),
+      ),
+    );
+  }
+
   Widget _buildOrgList() {
     final orgs = _filteredOrganizations;
-    final screenWidth = MediaQuery.of(context).size.width;
-    final horizontalPadding =
-        screenWidth > 900 ? 60.0 : (screenWidth > 600 ? 40.0 : 16.0);
-
     return ListView.builder(
-      padding: EdgeInsets.symmetric(
-        horizontal: horizontalPadding,
-        vertical: 20,
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
       itemCount: orgs.length,
       itemBuilder: (context, i) {
         final org = orgs[i];
@@ -358,90 +429,105 @@ class _YourOrgsScreenState extends State<YourOrgsScreen>
           },
           child: Padding(
             padding: const EdgeInsets.only(bottom: 14),
-            child: InkWell(
-              borderRadius: BorderRadius.circular(14),
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder:
-                        (_) => DoctorsScreen(
-                          orgId: org['id'],
-                          orgName: org['name'],
-                        ),
+            child: Material(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              elevation: 0,
+              child: InkWell(
+                borderRadius: BorderRadius.circular(16),
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder:
+                          (_) => DoctorsScreen(
+                            orgId: org['id'],
+                            orgName: org['name'],
+                          ),
+                    ),
+                  );
+                },
+                child: Container(
+                  decoration: BoxDecoration(
+                    border: Border.all(
+                      color: primaryColor.withOpacity(0.08),
+                      width: 1.5,
+                    ),
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: primaryColor.withOpacity(0.06),
+                        blurRadius: 16,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
                   ),
-                );
-              },
-              child: Container(
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: borderColor),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.05),
-                      blurRadius: 8,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
-                ),
-                child: Row(
-                  children: [
-                    // Left image
-                    ClipRRect(
-                      borderRadius: const BorderRadius.only(
-                        topLeft: Radius.circular(14),
-                        bottomLeft: Radius.circular(14),
-                      ),
-                      child: Image.network(
-                        org['image'] ?? '',
-                        width: 100,
-                        height: 100,
-                        fit: BoxFit.cover,
-                        errorBuilder:
-                            (_, __, ___) => Container(
-                              width: 100,
-                              height: 100,
-                              color: primaryColor.withOpacity(0.08),
-                              child: Icon(
-                                Icons.business_rounded,
-                                color: primaryColor.withOpacity(0.4),
-                                size: 40,
+                  child: Row(
+                    children: [
+                      ClipRRect(
+                        borderRadius: const BorderRadius.only(
+                          topLeft: Radius.circular(16),
+                          bottomLeft: Radius.circular(16),
+                        ),
+                        child: Image.network(
+                          org['image'] ?? '',
+                          width: 100,
+                          height: 100,
+                          fit: BoxFit.cover,
+                          errorBuilder:
+                              (_, __, ___) => Container(
+                                width: 100,
+                                height: 100,
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                    colors: [
+                                      primaryColor.withOpacity(0.1),
+                                      accentColor.withOpacity(0.1),
+                                    ],
+                                  ),
+                                ),
+                                child: Icon(
+                                  Icons.business_rounded,
+                                  color: primaryColor.withOpacity(0.4),
+                                  size: 40,
+                                ),
                               ),
-                            ),
-                      ),
-                    ),
-
-                    // Right content
-                    Expanded(
-                      child: Padding(
-                        padding: const EdgeInsets.all(14),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              org['name'] ?? 'Unnamed Organization',
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w700,
-                                fontSize: 16,
-                                color: primaryColor,
-                              ),
-                            ),
-                            const SizedBox(height: 6),
-                            Text(
-                              org['description'] ?? 'No description available',
-                              style: TextStyle(
-                                fontSize: 13,
-                                color: primaryColor.withOpacity(0.7),
-                              ),
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ],
                         ),
                       ),
-                    ),
-                  ],
+                      Expanded(
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                org['name'] ?? 'Unnamed Organization',
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w800,
+                                  fontSize: 16,
+                                  color: textPrimary,
+                                  letterSpacing: -0.3,
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              Text(
+                                org['description'] ??
+                                    'No description available',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: textPrimary.withOpacity(0.6),
+                                  fontWeight: FontWeight.w500,
+                                  height: 1.4,
+                                ),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -454,8 +540,6 @@ class _YourOrgsScreenState extends State<YourOrgsScreen>
   Widget _buildOrgGrid() {
     final orgs = _filteredOrganizations;
     final screenWidth = MediaQuery.of(context).size.width;
-    final horizontalPadding =
-        screenWidth > 900 ? 60.0 : (screenWidth > 600 ? 40.0 : 16.0);
 
     int crossAxisCount = 2;
     if (screenWidth > 1200)
@@ -466,10 +550,7 @@ class _YourOrgsScreenState extends State<YourOrgsScreen>
       crossAxisCount = 2;
 
     return GridView.builder(
-      padding: EdgeInsets.symmetric(
-        horizontal: horizontalPadding,
-        vertical: 20,
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
       gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: crossAxisCount,
         crossAxisSpacing: 16,
@@ -489,90 +570,106 @@ class _YourOrgsScreenState extends State<YourOrgsScreen>
               child: Transform.scale(scale: 0.9 + (value * 0.1), child: child),
             );
           },
-          child: InkWell(
-            borderRadius: BorderRadius.circular(14),
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder:
-                      (_) =>
-                          DoctorsScreen(orgId: org['id'], orgName: org['name']),
+          child: Material(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            elevation: 0,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(16),
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder:
+                        (_) => DoctorsScreen(
+                          orgId: org['id'],
+                          orgName: org['name'],
+                        ),
+                  ),
+                );
+              },
+              child: Container(
+                decoration: BoxDecoration(
+                  border: Border.all(
+                    color: primaryColor.withOpacity(0.08),
+                    width: 1.5,
+                  ),
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: primaryColor.withOpacity(0.06),
+                      blurRadius: 16,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
                 ),
-              );
-            },
-            child: Container(
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: borderColor),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.05),
-                    blurRadius: 8,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Top image
-                  ClipRRect(
-                    borderRadius: const BorderRadius.only(
-                      topLeft: Radius.circular(14),
-                      topRight: Radius.circular(14),
-                    ),
-                    child: AspectRatio(
-                      aspectRatio: 16 / 9,
-                      child: Image.network(
-                        org['image'] ?? '',
-                        fit: BoxFit.cover,
-                        errorBuilder:
-                            (_, __, ___) => Container(
-                              color: primaryColor.withOpacity(0.08),
-                              child: Icon(
-                                Icons.business_rounded,
-                                color: primaryColor.withOpacity(0.4),
-                                size: 50,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    ClipRRect(
+                      borderRadius: const BorderRadius.only(
+                        topLeft: Radius.circular(16),
+                        topRight: Radius.circular(16),
+                      ),
+                      child: AspectRatio(
+                        aspectRatio: 16 / 9,
+                        child: Image.network(
+                          org['image'] ?? '',
+                          fit: BoxFit.cover,
+                          errorBuilder:
+                              (_, __, ___) => Container(
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                    colors: [
+                                      primaryColor.withOpacity(0.1),
+                                      accentColor.withOpacity(0.1),
+                                    ],
+                                  ),
+                                ),
+                                child: Icon(
+                                  Icons.business_rounded,
+                                  color: primaryColor.withOpacity(0.4),
+                                  size: 50,
+                                ),
                               ),
-                            ),
+                        ),
                       ),
                     ),
-                  ),
-
-                  // Bottom details
-                  Expanded(
-                    child: Padding(
-                      padding: const EdgeInsets.all(12),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            org['name'] ?? 'Unnamed Organization',
-                            style: const TextStyle(
-                              fontWeight: FontWeight.w700,
-                              fontSize: 15,
-                              color: primaryColor,
+                    Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              org['name'] ?? 'Unnamed Organization',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w800,
+                                fontSize: 15,
+                                color: textPrimary,
+                                letterSpacing: -0.3,
+                              ),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
                             ),
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          const SizedBox(height: 6),
-                          Text(
-                            org['description'] ?? 'No description available',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: primaryColor.withOpacity(0.7),
+                            const SizedBox(height: 6),
+                            Text(
+                              org['description'] ?? 'No description available',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: textPrimary.withOpacity(0.6),
+                                fontWeight: FontWeight.w500,
+                                height: 1.4,
+                              ),
+                              maxLines: 3,
+                              overflow: TextOverflow.ellipsis,
                             ),
-                            maxLines: 3,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),
@@ -592,30 +689,40 @@ class _YourOrgsScreenState extends State<YourOrgsScreen>
               width: 120,
               height: 120,
               decoration: BoxDecoration(
-                color: primaryColor.withOpacity(0.08),
+                gradient: LinearGradient(
+                  colors: [
+                    primaryColor.withOpacity(0.15),
+                    accentColor.withOpacity(0.1),
+                  ],
+                ),
                 shape: BoxShape.circle,
               ),
               child: Icon(
                 Icons.groups_rounded,
-                color: primaryColor.withOpacity(0.3),
+                color: primaryColor.withOpacity(0.4),
                 size: 56,
               ),
             ),
             const SizedBox(height: 28),
             const Text(
-              'No organizations joined yet',
+              'No organizations found',
               style: TextStyle(
                 fontSize: 22,
-                fontWeight: FontWeight.w700,
-                color: primaryColor,
+                fontWeight: FontWeight.w900,
+                color: textPrimary,
+                letterSpacing: -0.5,
               ),
             ),
             const SizedBox(height: 10),
             Text(
-              'Accept an invitation or browse all organizations to join',
+              _searchQuery.isEmpty
+                  ? 'Accept an invitation or browse all organizations to join'
+                  : 'Try a different search term',
               style: TextStyle(
                 fontSize: 15,
-                color: primaryColor.withOpacity(0.6),
+                color: textPrimary.withOpacity(0.6),
+                fontWeight: FontWeight.w500,
+                height: 1.5,
               ),
               textAlign: TextAlign.center,
             ),
@@ -632,15 +739,15 @@ class _YourOrgsScreenState extends State<YourOrgsScreen>
         return AlertDialog(
           backgroundColor: Colors.white,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
+            borderRadius: BorderRadius.circular(24),
           ),
           title: Row(
             children: [
               Container(
-                padding: const EdgeInsets.all(8),
+                padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
                   color: primaryColor.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: BorderRadius.circular(12),
                 ),
                 child: const Icon(
                   Icons.mail_outline_rounded,
@@ -654,8 +761,9 @@ class _YourOrgsScreenState extends State<YourOrgsScreen>
                   'Invitations',
                   style: TextStyle(
                     fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                    color: primaryColor,
+                    fontWeight: FontWeight.w900,
+                    color: textPrimary,
+                    letterSpacing: -0.3,
                   ),
                 ),
               ),
@@ -680,8 +788,8 @@ class _YourOrgsScreenState extends State<YourOrgsScreen>
                             'No pending invitations',
                             style: TextStyle(
                               fontSize: 16,
-                              color: primaryColor.withOpacity(0.6),
-                              fontWeight: FontWeight.w500,
+                              color: textPrimary.withOpacity(0.6),
+                              fontWeight: FontWeight.w600,
                             ),
                           ),
                         ],
@@ -699,10 +807,13 @@ class _YourOrgsScreenState extends State<YourOrgsScreen>
                         return Container(
                           decoration: BoxDecoration(
                             color: lightBg,
-                            borderRadius: BorderRadius.circular(14),
-                            border: Border.all(color: borderColor),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                              color: primaryColor.withOpacity(0.08),
+                              width: 1.5,
+                            ),
                           ),
-                          padding: const EdgeInsets.all(14),
+                          padding: const EdgeInsets.all(16),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
@@ -725,9 +836,10 @@ class _YourOrgsScreenState extends State<YourOrgsScreen>
                                     child: Text(
                                       name,
                                       style: const TextStyle(
-                                        color: primaryColor,
-                                        fontWeight: FontWeight.w700,
+                                        color: textPrimary,
+                                        fontWeight: FontWeight.w800,
                                         fontSize: 15,
+                                        letterSpacing: -0.3,
                                       ),
                                     ),
                                   ),
@@ -749,11 +861,11 @@ class _YourOrgsScreenState extends State<YourOrgsScreen>
                                         backgroundColor: primaryColor,
                                         foregroundColor: Colors.white,
                                         padding: const EdgeInsets.symmetric(
-                                          vertical: 12,
+                                          vertical: 14,
                                         ),
                                         shape: RoundedRectangleBorder(
                                           borderRadius: BorderRadius.circular(
-                                            10,
+                                            12,
                                           ),
                                         ),
                                         elevation: 0,
@@ -761,7 +873,8 @@ class _YourOrgsScreenState extends State<YourOrgsScreen>
                                       child: const Text(
                                         'Accept',
                                         style: TextStyle(
-                                          fontWeight: FontWeight.w600,
+                                          fontWeight: FontWeight.w700,
+                                          fontSize: 14,
                                         ),
                                       ),
                                     ),
@@ -779,7 +892,7 @@ class _YourOrgsScreenState extends State<YourOrgsScreen>
                                       style: OutlinedButton.styleFrom(
                                         foregroundColor: Colors.red,
                                         padding: const EdgeInsets.symmetric(
-                                          vertical: 12,
+                                          vertical: 14,
                                         ),
                                         side: const BorderSide(
                                           color: Colors.red,
@@ -787,14 +900,15 @@ class _YourOrgsScreenState extends State<YourOrgsScreen>
                                         ),
                                         shape: RoundedRectangleBorder(
                                           borderRadius: BorderRadius.circular(
-                                            10,
+                                            12,
                                           ),
                                         ),
                                       ),
                                       child: const Text(
                                         'Decline',
                                         style: TextStyle(
-                                          fontWeight: FontWeight.w600,
+                                          fontWeight: FontWeight.w700,
+                                          fontSize: 14,
                                         ),
                                       ),
                                     ),
@@ -810,13 +924,19 @@ class _YourOrgsScreenState extends State<YourOrgsScreen>
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
+              style: TextButton.styleFrom(
+                foregroundColor: primaryColor,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24,
+                  vertical: 12,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
               child: const Text(
                 'Close',
-                style: TextStyle(
-                  color: primaryColor,
-                  fontWeight: FontWeight.w600,
-                  fontSize: 15,
-                ),
+                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
               ),
             ),
           ],

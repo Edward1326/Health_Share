@@ -16,5 +16,5 @@ final Map<String, WidgetBuilder> appRoutes = {
   '/files': (context) => const FilesScreen(),
   '/groups': (context) => const GroupsScreen(),
   '/organizations': (context) => const OrgsScreen(),
-  '/your-organizations': (context) => const YourOrgsScreen(),
+  '/my-organizations': (context) => const MyOrgScreen(),
 };

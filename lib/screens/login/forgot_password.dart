@@ -21,31 +21,47 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
 
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
+  late Animation<double> _scaleAnimation;
   late Animation<Offset> _slideAnimation;
 
-  static const Color primaryGreen = Color(0xFF4A7C59);
-  static const Color lightGreen = Color(0xFF6B9B7A);
-  static const Color paleGreen = Color(0xFFE8F5E9);
-  static const Color accentGreen = Color(0xFF2E5C3F);
-  static const Color darkGreen = Color(0xFF1B4332);
+  // Consistent color scheme
+  static const Color _primaryColor = Color(0xFF416240);
+  static const Color _accentColor = Color(0xFFA3B18A);
+  static const Color _bg = Color(0xFFF8FAF8);
+  static const Color _card = Colors.white;
+  static const Color _textPrimary = Color(0xFF1A1A2E);
+  static const Color _textSecondary = Color(0xFF6B7280);
 
   @override
   void initState() {
     super.initState();
     _animationController = AnimationController(
-      duration: const Duration(milliseconds: 800),
+      duration: const Duration(milliseconds: 1200),
       vsync: this,
     );
 
     _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(parent: _animationController, curve: Curves.easeOut),
+      CurvedAnimation(
+        parent: _animationController,
+        curve: const Interval(0.0, 0.6, curve: Curves.easeOut),
+      ),
+    );
+
+    _scaleAnimation = Tween<double>(begin: 0.85, end: 1.0).animate(
+      CurvedAnimation(
+        parent: _animationController,
+        curve: const Interval(0.2, 0.8, curve: Curves.easeOutBack),
+      ),
     );
 
     _slideAnimation = Tween<Offset>(
-      begin: const Offset(0, 0.3),
+      begin: const Offset(0, 0.15),
       end: Offset.zero,
     ).animate(
-      CurvedAnimation(parent: _animationController, curve: Curves.easeOut),
+      CurvedAnimation(
+        parent: _animationController,
+        curve: const Interval(0.3, 1.0, curve: Curves.easeOutCubic),
+      ),
     );
 
     _animationController.forward();
@@ -56,6 +72,33 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
     _animationController.dispose();
     _emailController.dispose();
     super.dispose();
+  }
+
+  void _showSnackBar(String message, IconData icon, Color color) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            Icon(icon, color: Colors.white, size: 20),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                message,
+                style: const TextStyle(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 14,
+                ),
+              ),
+            ),
+          ],
+        ),
+        backgroundColor: color,
+        behavior: SnackBarBehavior.floating,
+        margin: const EdgeInsets.all(16),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        padding: const EdgeInsets.all(16),
+      ),
+    );
   }
 
   Future<void> _sendResetOTP() async {
@@ -73,21 +116,10 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
       if (mounted) {
         setState(() => _isLoading = false);
 
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Row(
-              children: [
-                Icon(Icons.check_circle, color: Colors.white),
-                SizedBox(width: 12),
-                Text('OTP sent to your email'),
-              ],
-            ),
-            backgroundColor: primaryGreen,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-          ),
+        _showSnackBar(
+          'OTP sent to your email',
+          Icons.check_circle_rounded,
+          _primaryColor,
         );
 
         await Future.delayed(const Duration(milliseconds: 500));
@@ -104,21 +136,10 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
       if (mounted) {
         setState(() => _isLoading = false);
 
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Row(
-              children: [
-                const Icon(Icons.error_outline, color: Colors.white),
-                const SizedBox(width: 12),
-                Expanded(child: Text('Error: $e')),
-              ],
-            ),
-            backgroundColor: Colors.red[700],
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-          ),
+        _showSnackBar(
+          'Failed to send OTP. Please try again.',
+          Icons.error_outline_rounded,
+          Colors.red[700]!,
         );
       }
     }
@@ -127,170 +148,236 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [primaryGreen, lightGreen, accentGreen],
+      backgroundColor: _bg,
+      body: Stack(
+        children: [
+          // Subtle background gradient
+          Positioned.fill(
+            child: Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    _primaryColor.withOpacity(0.04),
+                    _accentColor.withOpacity(0.02),
+                    _bg,
+                  ],
+                  stops: const [0.0, 0.4, 1.0],
+                ),
+              ),
+            ),
           ),
-        ),
-        child: SafeArea(
-          child: Column(
-            children: [
-              _buildHeader(),
-              Expanded(
-                child: FadeTransition(
-                  opacity: _fadeAnimation,
-                  child: SlideTransition(
-                    position: _slideAnimation,
-                    child: _buildForm(),
+          SafeArea(
+            child: FadeTransition(
+              opacity: _fadeAnimation,
+              child: SingleChildScrollView(
+                physics: const BouncingScrollPhysics(),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  child: Column(
+                    children: [
+                      const SizedBox(height: 20),
+                      _buildBackButton(),
+                      const SizedBox(height: 40),
+                      ScaleTransition(
+                        scale: _scaleAnimation,
+                        child: _buildHeader(),
+                      ),
+                      const SizedBox(height: 50),
+                      SlideTransition(
+                        position: _slideAnimation,
+                        child: _buildFormCard(),
+                      ),
+                      const SizedBox(height: 32),
+                    ],
                   ),
                 ),
               ),
-            ],
+            ),
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBackButton() {
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Container(
+        decoration: BoxDecoration(
+          color: _card,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: _primaryColor.withOpacity(0.12),
+            width: 1.5,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.04),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: IconButton(
+          onPressed: () => Navigator.pop(context),
+          icon: Icon(
+            Icons.arrow_back_ios_new_rounded,
+            color: _primaryColor,
+            size: 20,
+          ),
+          padding: const EdgeInsets.all(12),
         ),
       ),
     );
   }
 
   Widget _buildHeader() {
-    return Padding(
-      padding: const EdgeInsets.all(24.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          IconButton(
-            onPressed: () => Navigator.pop(context),
-            icon: const Icon(
-              Icons.arrow_back_ios_rounded,
-              color: Colors.white,
-              size: 24,
+    return Column(
+      children: [
+        Container(
+          width: 90,
+          height: 90,
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [_primaryColor, _accentColor],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
             ),
-            padding: EdgeInsets.zero,
-            alignment: Alignment.centerLeft,
-          ),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.2),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(
-                    color: Colors.white.withOpacity(0.3),
-                    width: 2,
-                  ),
-                ),
-                child: const Icon(
-                  Icons.lock_reset_rounded,
-                  color: Colors.white,
-                  size: 32,
-                ),
-              ),
-              const SizedBox(width: 16),
-              const Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Forgot Password?',
-                    style: TextStyle(
-                      fontSize: 28,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                      letterSpacing: 0.5,
-                    ),
-                  ),
-                  SizedBox(height: 4),
-                  Text(
-                    'Don\'t worry, we\'ll help you reset it',
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Colors.white70,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ],
+            shape: BoxShape.circle,
+            boxShadow: [
+              BoxShadow(
+                color: _primaryColor.withOpacity(0.25),
+                blurRadius: 24,
+                offset: const Offset(0, 8),
               ),
             ],
           ),
-        ],
-      ),
+          child: const Icon(
+            Icons.lock_reset_rounded,
+            color: Colors.white,
+            size: 42,
+          ),
+        ),
+        const SizedBox(height: 24),
+        const Text(
+          'Forgot Password?',
+          style: TextStyle(
+            fontSize: 32,
+            fontWeight: FontWeight.w900,
+            color: _textPrimary,
+            letterSpacing: -0.8,
+            height: 1.2,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'No worries, we\'ll help you reset it',
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w500,
+            color: _textSecondary,
+            letterSpacing: 0.2,
+          ),
+          textAlign: TextAlign.center,
+        ),
+      ],
     );
   }
 
-  Widget _buildForm() {
+  Widget _buildFormCard() {
     return Container(
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Colors.white, paleGreen.withOpacity(0.3)],
-        ),
-        borderRadius: const BorderRadius.only(
-          topLeft: Radius.circular(40),
-          topRight: Radius.circular(40),
-        ),
+        color: _card,
+        borderRadius: BorderRadius.circular(28),
+        border: Border.all(color: _primaryColor.withOpacity(0.08), width: 1.5),
         boxShadow: [
           BoxShadow(
-            color: darkGreen.withOpacity(0.2),
-            blurRadius: 30,
-            offset: const Offset(0, -10),
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 24,
+            offset: const Offset(0, 8),
+          ),
+          BoxShadow(
+            color: _primaryColor.withOpacity(0.04),
+            blurRadius: 48,
+            offset: const Offset(0, 16),
           ),
         ],
       ),
-      child: SingleChildScrollView(
-        physics: const BouncingScrollPhysics(),
-        padding: const EdgeInsets.all(28.0),
-        child: Form(
-          key: _formKey,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const SizedBox(height: 30),
-              _buildInfoCard(),
-              const SizedBox(height: 32),
-              _buildEmailField(),
-              const SizedBox(height: 32),
-              _buildSendButton(),
-              const SizedBox(height: 24),
-              _buildBackToLogin(),
-            ],
+      child: Stack(
+        children: [
+          Positioned.fill(
+            child: Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(28),
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    _primaryColor.withOpacity(0.015),
+                    Colors.transparent,
+                    _accentColor.withOpacity(0.01),
+                  ],
+                ),
+              ),
+            ),
           ),
-        ),
+          Padding(
+            padding: const EdgeInsets.all(28),
+            child: Form(
+              key: _formKey,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildInfoCard(),
+                  const SizedBox(height: 28),
+                  _buildEmailField(),
+                  const SizedBox(height: 32),
+                  _buildSendButton(),
+                  const SizedBox(height: 24),
+                  _buildBackToLogin(),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
 
   Widget _buildInfoCard() {
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: paleGreen.withOpacity(0.5),
+        color: _primaryColor.withOpacity(0.04),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: paleGreen, width: 2),
+        border: Border.all(color: _primaryColor.withOpacity(0.1), width: 1.5),
       ),
       child: Row(
         children: [
           Container(
-            padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: primaryGreen.withOpacity(0.1),
+              color: _primaryColor.withOpacity(0.12),
               shape: BoxShape.circle,
             ),
-            child: Icon(Icons.info_outline, color: primaryGreen, size: 24),
+            child: Icon(
+              Icons.info_outline_rounded,
+              color: _primaryColor,
+              size: 20,
+            ),
           ),
-          const SizedBox(width: 16),
+          const SizedBox(width: 14),
           Expanded(
             child: Text(
               'Enter your email address and we\'ll send you a verification code to reset your password.',
               style: TextStyle(
-                fontSize: 14,
-                color: Colors.grey[700],
-                fontWeight: FontWeight.w500,
-                height: 1.4,
+                fontSize: 13,
+                color: _textSecondary,
+                fontWeight: FontWeight.w600,
+                height: 1.5,
+                letterSpacing: 0.1,
               ),
             ),
           ),
@@ -304,36 +391,33 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
-          padding: const EdgeInsets.only(left: 4, bottom: 8),
+          padding: const EdgeInsets.only(left: 4, bottom: 10),
           child: Text(
             'Email Address',
-            style: TextStyle(
+            style: const TextStyle(
               fontSize: 14,
-              fontWeight: FontWeight.w600,
-              color: Colors.grey[700],
+              fontWeight: FontWeight.w700,
+              color: _textPrimary,
+              letterSpacing: 0.2,
             ),
           ),
         ),
         Container(
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: _bg,
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: paleGreen, width: 2),
-            boxShadow: [
-              BoxShadow(
-                color: primaryGreen.withOpacity(0.08),
-                blurRadius: 15,
-                offset: const Offset(0, 6),
-              ),
-            ],
+            border: Border.all(
+              color: _primaryColor.withOpacity(0.12),
+              width: 1.5,
+            ),
           ),
           child: TextFormField(
             controller: _emailController,
             keyboardType: TextInputType.emailAddress,
-            style: TextStyle(
+            style: const TextStyle(
               fontSize: 15,
-              color: Colors.grey[800],
-              fontWeight: FontWeight.w500,
+              color: _textPrimary,
+              fontWeight: FontWeight.w600,
             ),
             validator: (value) {
               if (value == null || value.isEmpty) {
@@ -345,16 +429,29 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
               return null;
             },
             decoration: InputDecoration(
-              prefixIcon: Icon(
-                Icons.email_outlined,
-                color: primaryGreen.withOpacity(0.7),
-                size: 22,
+              prefixIcon: Container(
+                margin: const EdgeInsets.only(right: 12),
+                padding: const EdgeInsets.all(12),
+                child: Icon(
+                  Icons.email_outlined,
+                  color: _primaryColor,
+                  size: 20,
+                ),
               ),
-              hintText: 'Enter your email',
-              hintStyle: TextStyle(color: Colors.grey[400], fontSize: 15),
+              hintText: 'your.email@example.com',
+              hintStyle: TextStyle(
+                color: _textSecondary.withOpacity(0.5),
+                fontSize: 15,
+                fontWeight: FontWeight.w500,
+              ),
               border: InputBorder.none,
               errorBorder: InputBorder.none,
               focusedErrorBorder: InputBorder.none,
+              errorStyle: TextStyle(
+                color: Colors.red[700],
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
               contentPadding: const EdgeInsets.symmetric(
                 horizontal: 20,
                 vertical: 18,
@@ -367,42 +464,56 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
   }
 
   Widget _buildSendButton() {
-    return SizedBox(
+    return Container(
       width: double.infinity,
+      height: 56,
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [_primaryColor, _accentColor],
+          begin: Alignment.centerLeft,
+          end: Alignment.centerRight,
+        ),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: _primaryColor.withOpacity(0.3),
+            blurRadius: 16,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
       child: ElevatedButton(
         onPressed: _isLoading ? null : _sendResetOTP,
         style: ElevatedButton.styleFrom(
-          backgroundColor: primaryGreen,
+          backgroundColor: Colors.transparent,
           foregroundColor: Colors.white,
-          padding: const EdgeInsets.symmetric(vertical: 18),
+          shadowColor: Colors.transparent,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
           ),
-          elevation: 0,
-          shadowColor: primaryGreen.withOpacity(0.4),
-          disabledBackgroundColor: Colors.grey[300],
+          padding: EdgeInsets.zero,
         ),
         child:
             _isLoading
                 ? const SizedBox(
-                  height: 22,
-                  width: 22,
+                  height: 24,
+                  width: 24,
                   child: CircularProgressIndicator(
                     strokeWidth: 2.5,
                     color: Colors.white,
                   ),
                 )
-                : Row(
+                : const Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Icon(Icons.send_outlined, size: 20),
-                    const SizedBox(width: 8),
-                    const Text(
+                    Icon(Icons.send_rounded, size: 20),
+                    SizedBox(width: 10),
+                    Text(
                       'Send Verification Code',
                       style: TextStyle(
-                        fontSize: 17,
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: 0.5,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 0.3,
                       ),
                     ),
                   ],
@@ -418,16 +529,21 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
         children: [
           Text(
             'Remember your password? ',
-            style: TextStyle(color: Colors.grey[600], fontSize: 15),
+            style: TextStyle(
+              color: _textSecondary,
+              fontSize: 14,
+              fontWeight: FontWeight.w500,
+            ),
           ),
           GestureDetector(
             onTap: () => Navigator.pop(context),
             child: Text(
               'Login',
               style: TextStyle(
-                color: primaryGreen,
-                fontSize: 15,
-                fontWeight: FontWeight.bold,
+                color: _primaryColor,
+                fontSize: 14,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 0.2,
               ),
             ),
           ),

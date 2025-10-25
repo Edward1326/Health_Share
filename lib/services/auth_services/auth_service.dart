@@ -310,11 +310,51 @@ class AuthService {
   // Sign out (also signs out from Google)
   Future<void> signOut() async {
     try {
+      print('');
+      print('╔═══════════════════════════════════════════╗');
+      print('║          SIGN OUT PROCESS STARTED         ║');
+      print('╚═══════════════════════════════════════════╝');
+      print('');
+
+      // 1. Sign out from Google first
+      print('Step 1/3: Signing out from Google...');
+      try {
+        await _googleSignIn.signOut();
+        print('✅ Google sign out successful');
+      } catch (e) {
+        print('⚠️ Google sign out warning: $e');
+        // Continue even if Google sign out fails
+      }
+
+      // 2. Clear Supabase session
+      print('');
+      print('Step 2/3: Signing out from Supabase...');
       await _supabase.auth.signOut();
-      await _googleSignIn.signOut();
-      print('✅ Signed out successfully');
+      print('✅ Supabase sign out successful');
+
+      // 3. Additional cleanup - disconnect Google Sign-In
+      print('');
+      print('Step 3/3: Disconnecting Google account...');
+      try {
+        await _googleSignIn.disconnect();
+        print('✅ Google disconnect successful');
+      } catch (e) {
+        print('⚠️ Google disconnect warning: $e');
+        // This is optional, so we don't throw
+      }
+
+      print('');
+      print('╔═══════════════════════════════════════════╗');
+      print('║       SIGN OUT COMPLETED SUCCESSFULLY     ║');
+      print('╚═══════════════════════════════════════════╝');
+      print('');
     } catch (e) {
-      print('❌ Sign out error: $e');
+      print('');
+      print('╔═══════════════════════════════════════════╗');
+      print('║            SIGN OUT FAILED!               ║');
+      print('╚═══════════════════════════════════════════╝');
+      print('');
+      print('Error: $e');
       throw Exception('Failed to sign out: $e');
     }
   }
@@ -442,10 +482,55 @@ class AuthService {
     String email,
     String password,
   ) async {
-    return await _supabase.auth.signInWithPassword(
-      email: email,
-      password: password,
-    );
+    try {
+      print('');
+      print('╔═══════════════════════════════════════════╗');
+      print('║     EMAIL/PASSWORD SIGN-IN STARTED        ║');
+      print('╚═══════════════════════════════════════════╝');
+      print('');
+      print('Email: $email');
+      print('');
+
+      // Ensure we're signed out first
+      print('Step 1/2: Ensuring clean state...');
+      try {
+        await _supabase.auth.signOut();
+        print('✅ Previous session cleared');
+      } catch (e) {
+        print('ℹ️ No previous session to clear');
+      }
+
+      // Sign in
+      print('');
+      print('Step 2/2: Signing in with credentials...');
+      final response = await _supabase.auth.signInWithPassword(
+        email: email,
+        password: password,
+      );
+
+      if (response.session == null) {
+        throw Exception('Sign in failed - no session created');
+      }
+
+      print('✅ Sign in successful');
+      print('   User ID: ${response.user?.id}');
+      print('   Email: ${response.user?.email}');
+      print('');
+      print('╔═══════════════════════════════════════════╗');
+      print('║   EMAIL/PASSWORD SIGN-IN COMPLETED        ║');
+      print('╚═══════════════════════════════════════════╝');
+      print('');
+
+      return response;
+    } catch (e) {
+      print('');
+      print('╔═══════════════════════════════════════════╗');
+      print('║      EMAIL/PASSWORD SIGN-IN FAILED        ║');
+      print('╚═══════════════════════════════════════════╝');
+      print('');
+      print('Error: $e');
+      throw Exception('Failed to sign in: $e');
+    }
   }
 
   // ============ PASSWORD MANAGEMENT ============
@@ -652,6 +737,34 @@ class AuthService {
     } catch (e) {
       print('❌ Failed to update password: $e');
       throw Exception('Error changing password: $e');
+    }
+  }
+
+  // Check if user is currently authenticated
+  bool isAuthenticated() {
+    final session = _supabase.auth.currentSession;
+    return session != null;
+  }
+
+  // Get current user
+  User? getCurrentUser() {
+    return _supabase.auth.currentUser;
+  }
+
+  // Get current session
+  Session? getCurrentSession() {
+    return _supabase.auth.currentSession;
+  }
+
+  // Force refresh session
+  Future<void> refreshSession() async {
+    try {
+      print('Refreshing session...');
+      await _supabase.auth.refreshSession();
+      print('✅ Session refreshed successfully');
+    } catch (e) {
+      print('❌ Failed to refresh session: $e');
+      throw Exception('Failed to refresh session: $e');
     }
   }
 }

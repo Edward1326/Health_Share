@@ -18,7 +18,7 @@ class MainNavBar extends StatelessWidget {
         0: '/files',
         1: '/groups',
         2: '/organizations',
-        3: '/your-organizations',
+        3: '/my-organizations',
         4: '/profile',
       };
 

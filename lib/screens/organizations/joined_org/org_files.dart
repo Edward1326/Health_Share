@@ -693,20 +693,19 @@ class _OrgDoctorsFilesScreenState extends State<OrgDoctorsFilesScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: _bg,
+      backgroundColor: Colors.transparent,
       extendBodyBehindAppBar: true,
       body: Stack(
         children: [
+          // Background gradient
           Container(
-            height: 300,
-            decoration: BoxDecoration(
+            decoration: const BoxDecoration(
               gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
                 colors: [
-                  _primaryColor.withOpacity(0.08),
-                  _accentColor.withOpacity(0.05),
-                  _bg,
+                  Color(0xFFE8F0E3), // soft light green top
+                  Colors.white, // white bottom
                 ],
               ),
             ),

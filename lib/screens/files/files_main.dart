@@ -28,33 +28,53 @@ class _FilesScreenState extends State<FilesScreen>
   String _searchQuery = '';
   String _selectedFilter = 'All';
 
-  bool _isGrid = false;
-  bool _isSearchActive = false;
-  String _sortOrder = 'latest'; // 'latest', 'oldest'
+  bool _isList = true;
 
   List<FileItem> items = [];
 
-  static const primaryColor = const Color(0xFF416240);
-  static const accentColor = const Color(0xFFA3B18A);
-
+  static const primaryColor = Color(0xFF416240);
+  static const accentColor = Color(0xFFA3B18A);
   static const lightBg = Color(0xFFF8FAF8);
   static const borderColor = Color(0xFFE5E7EB);
+  static const textPrimary = Color(0xFF1A1A2E);
 
-  late final AnimationController _fadeController;
+  late AnimationController _fadeController;
+  late Animation<double> _fadeAnimation;
+  late AnimationController _slideController;
+  late Animation<Offset> _slideAnimation;
 
   @override
   void initState() {
     super.initState();
     _fadeController = AnimationController(
+      duration: const Duration(milliseconds: 800),
       vsync: this,
-      duration: const Duration(milliseconds: 250),
     );
+    _fadeAnimation = CurvedAnimation(
+      parent: _fadeController,
+      curve: Curves.easeOut,
+    );
+
+    _slideController = AnimationController(
+      duration: const Duration(milliseconds: 600),
+      vsync: this,
+    );
+    _slideAnimation = Tween<Offset>(
+      begin: const Offset(0, 0.3),
+      end: Offset.zero,
+    ).animate(
+      CurvedAnimation(parent: _slideController, curve: Curves.easeOutCubic),
+    );
+
+    _fadeController.forward();
+    _slideController.forward();
     _loadFiles();
   }
 
   @override
   void dispose() {
     _fadeController.dispose();
+    _slideController.dispose();
     _searchController.dispose();
     super.dispose();
   }
@@ -79,7 +99,6 @@ class _FilesScreenState extends State<FilesScreen>
               id: file['id'] as String,
               name: file['filename'] ?? 'Unknown file',
               type: file['file_type'] ?? 'UNKNOWN',
-              size: _formatFileSize(file['file_size'] ?? 0),
               icon: _getFileIcon(file['file_type'] ?? 'UNKNOWN'),
               color: _getFileColor(file['file_type'] ?? 'UNKNOWN'),
               dateAdded:
@@ -97,20 +116,9 @@ class _FilesScreenState extends State<FilesScreen>
     } catch (e) {
       setState(() => _isLoading = false);
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Error loading files: $e')));
+        _showError('Error loading files: $e');
       }
     }
-  }
-
-  String _formatFileSize(int bytes) {
-    if (bytes < 1024) return '$bytes B';
-    if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
-    if (bytes < 1024 * 1024 * 1024) {
-      return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
-    }
-    return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(1)} GB';
   }
 
   bool _isDocumentType(String fileType) {
@@ -344,620 +352,964 @@ class _FilesScreenState extends State<FilesScreen>
 
   void _toggleLayout() {
     setState(() {
-      _isGrid = !_isGrid;
-    });
-  }
-
-  void _toggleSortOrder() {
-    setState(() {
-      _sortOrder = _sortOrder == 'latest' ? 'oldest' : 'latest';
+      _isList = !_isList;
     });
   }
 
   @override
   Widget build(BuildContext context) {
-    final screenWidth = MediaQuery.of(context).size.width;
-    final isDesktop = screenWidth > 600;
-    final isTablet = screenWidth > 600 && screenWidth <= 900;
-    final isLargeScreen = screenWidth > 900;
-
-    final titleFontSize = isLargeScreen ? 24.0 : (isTablet ? 22.0 : 20.0);
-    final toolbarHeight = isDesktop ? 84.0 : 220.0;
-
     return Scaffold(
-      backgroundColor: lightBg,
-      appBar: PreferredSize(
-        preferredSize: Size.fromHeight(toolbarHeight),
-        child: SafeArea(
-          child: Padding(
-            padding: EdgeInsets.symmetric(
-              horizontal: isDesktop ? 20 : 12,
-              vertical: 8,
-            ),
-            child:
-                isLargeScreen
-                    ? _buildDesktopAppBar(titleFontSize)
-                    : _buildMobileAppBar(titleFontSize),
-          ),
-        ),
-      ),
-
-      body:
-          _isLoading
-              ? _buildLoadingState()
-              : Column(
-                children: [
-                  AnimatedSize(
-                    duration: const Duration(milliseconds: 220),
-                    curve: Curves.easeInOut,
-                    child:
-                        _isSelectionMode
-                            ? Container(
-                              width: double.infinity,
-                              color: Colors.white,
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 16,
-                                vertical: 12,
-                              ),
-                              child: Row(
-                                children: [
-                                  Expanded(
-                                    child: Text(
-                                      '${_selectedFiles.length} selected',
-                                      style: const TextStyle(
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                  ),
-                                  TextButton.icon(
-                                    onPressed: _clearSelection,
-                                    icon: const Icon(Icons.close_rounded),
-                                    label: const Text('Cancel'),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  ElevatedButton.icon(
-                                    onPressed: _shareSelectedFiles,
-                                    icon: const Icon(Icons.share_rounded),
-                                    label: const Text('Share'),
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: primaryColor,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            )
-                            : const SizedBox.shrink(),
-                  ),
-
-                  Expanded(child: _buildContent()),
+      backgroundColor: Colors.transparent,
+      extendBodyBehindAppBar: true,
+      body: Stack(
+        children: [
+          // Background gradient
+          Container(
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  Color(0xFFE8F0E3), // soft light green top
+                  Colors.white, // white bottom
                 ],
               ),
-
-      floatingActionButton:
-          _isSelectionMode
-              ? null
-              : FloatingActionButton(
-                onPressed: _uploadFile,
-                backgroundColor: primaryColor,
-                child: const Icon(Icons.add_rounded, color: Colors.white),
-              ),
-
+            ),
+          ),
+          SafeArea(
+            child: Column(
+              children: [
+                _buildAppBar(context),
+                _buildSearchBar(),
+                AnimatedSize(
+                  duration: const Duration(milliseconds: 220),
+                  curve: Curves.easeInOut,
+                  child:
+                      _isSelectionMode
+                          ? _buildSelectionBar()
+                          : const SizedBox.shrink(),
+                ),
+                Expanded(child: _buildBody()),
+              ],
+            ),
+          ),
+        ],
+      ),
+      floatingActionButton: _isSelectionMode ? null : _buildUploadFAB(),
       bottomNavigationBar: MainNavBar(
         selectedIndex: _selectedIndex,
-        onItemTapped: (index) => setState(() => _selectedIndex = index),
+        onItemTapped: (i) => setState(() => _selectedIndex = i),
       ),
     );
   }
 
-  Widget _buildDesktopAppBar(double titleFontSize) {
-    return Row(
-      children: [
-        Expanded(
-          child: AnimatedSwitcher(
-            duration: const Duration(milliseconds: 280),
-            transitionBuilder: (child, animation) {
-              final offsetAnim = Tween<Offset>(
-                begin: const Offset(0.0, -0.1),
-                end: Offset.zero,
-              ).animate(
-                CurvedAnimation(parent: animation, curve: Curves.easeInOut),
-              );
-              return FadeTransition(
-                opacity: animation,
-                child: SlideTransition(position: offsetAnim, child: child),
-              );
-            },
-            child:
-                _isSearchActive
-                    ? _buildExpandedSearchField(
-                      key: const ValueKey('desktop_search'),
-                      width: 420,
-                    )
-                    : Column(
-                      key: const ValueKey('desktop_title'),
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'My Files',
-                          style: TextStyle(
-                            color: primaryColor,
-                            fontWeight: FontWeight.bold,
-                            fontSize: titleFontSize,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          'All your uploaded files — secure and private',
-                          style: TextStyle(
-                            color: Colors.grey[600],
-                            fontSize: 13,
-                          ),
-                        ),
-                      ],
-                    ),
-          ),
-        ),
-
-        const SizedBox(width: 12),
-
-        if (!_isSearchActive) ...[
-          IconButton(
-            icon: Icon(
-              _sortOrder == 'latest'
-                  ? Icons.arrow_downward_rounded
-                  : Icons.arrow_upward_rounded,
-              color: primaryColor,
+  Widget _buildAppBar(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
+      child: Row(
+        children: [
+          const Expanded(
+            child: Text(
+              'My Files',
+              style: TextStyle(
+                color: primaryColor,
+                fontSize: 28,
+                fontWeight: FontWeight.w900,
+                letterSpacing: -0.5,
+              ),
             ),
-            onPressed: _toggleSortOrder,
-            tooltip: _sortOrder == 'latest' ? 'Latest first' : 'Oldest first',
-          ),
-          IconButton(
-            icon: Icon(
-              Icons.filter_list_rounded,
-              color:
-                  _selectedFilter != 'All'
-                      ? primaryColor
-                      : primaryColor.withOpacity(0.6),
-            ),
-            onPressed: () => _showFilterSheet(context),
-          ),
-
-          IconButton(
-            icon: Icon(
-              _isGrid ? Icons.view_list_rounded : Icons.grid_view_rounded,
-              color: primaryColor,
-            ),
-            onPressed: _toggleLayout,
           ),
         ],
-
-        Container(
-          margin: const EdgeInsets.only(left: 8),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: IconButton(
-            icon: Icon(
-              _isSearchActive ? Icons.close_rounded : Icons.search_rounded,
-              color: primaryColor,
-            ),
-            onPressed: () {
-              setState(() {
-                if (_isSearchActive) {
-                  _searchController.clear();
-                  _searchQuery = '';
-                  _isSearchActive = false;
-                  FocusManager.instance.primaryFocus?.unfocus();
-                } else {
-                  _isSearchActive = true;
-                }
-              });
-            },
-            tooltip: _isSearchActive ? 'Close search' : 'Search',
-          ),
-        ),
-      ],
+      ),
     );
   }
 
-  Widget _buildMobileAppBar(double titleFontSize) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Expanded(
-              child: Material(
-                elevation: 0,
-                color: Colors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  child: Row(
-                    children: [
-                      const Icon(
-                        Icons.search_rounded,
-                        color: primaryColor,
-                        size: 20,
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: TextField(
-                          controller: _searchController,
-                          onChanged: (v) => setState(() => _searchQuery = v),
-                          decoration: const InputDecoration(
-                            hintText: 'Search for files',
-                            border: InputBorder.none,
-                            isDense: true,
-                            contentPadding: EdgeInsets.symmetric(vertical: 12),
-                          ),
-                        ),
-                      ),
-                      if (_searchQuery.isNotEmpty)
-                        IconButton(
-                          icon: const Icon(Icons.close_rounded, size: 18),
-                          onPressed: () {
-                            setState(() {
-                              _searchController.clear();
-                              _searchQuery = '';
-                            });
-                          },
-                        ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(width: 8),
-            Container(
+  Widget _buildSearchBar() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+      child: Row(
+        children: [
+          Expanded(
+            child: Container(
+              height: 48,
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(12),
-              ),
-              child: IconButton(
-                icon: Icon(
-                  Icons.filter_list_rounded,
-                  color:
-                      _selectedFilter != 'All'
-                          ? primaryColor
-                          : primaryColor.withOpacity(0.6),
+                border: Border.all(
+                  color: primaryColor.withOpacity(0.1),
+                  width: 1.5,
                 ),
-                onPressed: () => _showFilterSheet(context),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        Text(
-          'My Files',
-          style: TextStyle(
-            color: primaryColor,
-            fontWeight: FontWeight.bold,
-            fontSize: titleFontSize,
-          ),
-        ),
-        const SizedBox(height: 12),
-        Row(
-          children: [
-            Expanded(
-              child: Row(
-                children: [
-                  Icon(
-                    _sortOrder == 'latest'
-                        ? Icons.arrow_downward_rounded
-                        : Icons.arrow_upward_rounded,
-                    size: 16,
-                    color: primaryColor,
-                  ),
-                  const SizedBox(width: 6),
-                  Expanded(
-                    child: TextButton(
-                      onPressed: _toggleSortOrder,
-                      style: TextButton.styleFrom(
-                        foregroundColor: Colors.grey[700],
-                      ),
-                      child: Text(
-                        _sortOrder == 'latest'
-                            ? 'Last modified (newest)'
-                            : 'Last modified (oldest)',
-                      ),
-                    ),
+                boxShadow: [
+                  BoxShadow(
+                    color: primaryColor.withOpacity(0.04),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
                   ),
                 ],
               ),
-            ),
-            IconButton(
-              icon: Icon(
-                _isGrid ? Icons.view_list_rounded : Icons.grid_view_rounded,
-                color: primaryColor,
-              ),
-              onPressed: _toggleLayout,
-              iconSize: 20,
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-
-  Widget _buildExpandedSearchField({Key? key, double? width}) {
-    final searchField = Material(
-      key: key,
-      elevation: 0,
-      color: Colors.white,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 8.0),
-        child: Row(
-          children: [
-            IconButton(
-              icon: const Icon(Icons.arrow_back_rounded),
-              onPressed: () {
-                setState(() {
-                  _searchController.clear();
-                  _searchQuery = '';
-                  _isSearchActive = false;
-                  FocusManager.instance.primaryFocus?.unfocus();
-                });
-              },
-            ),
-            Expanded(
-              child: TextField(
-                autofocus: true,
-                controller: _searchController,
-                onChanged: (v) => setState(() => _searchQuery = v),
-                decoration: InputDecoration(
-                  hintText: 'Search files, type or name',
-                  border: InputBorder.none,
-                  isDense: true,
-                  suffixIcon:
-                      _searchQuery.isNotEmpty
-                          ? IconButton(
-                            icon: const Icon(Icons.close_rounded),
-                            onPressed: () {
-                              setState(() {
-                                _searchController.clear();
-                                _searchQuery = '';
-                              });
-                            },
-                          )
-                          : null,
-                ),
+              child: Row(
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.only(left: 12, right: 8),
+                    child: Icon(
+                      Icons.search_rounded,
+                      color: primaryColor.withOpacity(0.5),
+                      size: 22,
+                    ),
+                  ),
+                  Expanded(
+                    child: TextField(
+                      controller: _searchController,
+                      onChanged: (v) => setState(() => _searchQuery = v),
+                      decoration: InputDecoration(
+                        hintText: 'Search files...',
+                        border: InputBorder.none,
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 0,
+                          vertical: 0,
+                        ),
+                        hintStyle: TextStyle(
+                          color: primaryColor.withOpacity(0.5),
+                          fontSize: 15,
+                          fontWeight: FontWeight.w500,
+                        ),
+                        isDense: true,
+                      ),
+                      style: const TextStyle(
+                        fontSize: 15,
+                        color: textPrimary,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                  if (_searchQuery.isNotEmpty)
+                    IconButton(
+                      icon: Icon(
+                        Icons.clear_rounded,
+                        color: primaryColor.withOpacity(0.5),
+                        size: 20,
+                      ),
+                      onPressed: () {
+                        _searchController.clear();
+                        setState(() => _searchQuery = '');
+                      },
+                      padding: const EdgeInsets.all(8),
+                      constraints: const BoxConstraints(),
+                    ),
+                  const SizedBox(width: 8),
+                ],
               ),
             ),
-          ],
-        ),
-      ),
-    );
-
-    if (width != null) {
-      return SizedBox(width: width, child: searchField);
-    }
-    return searchField;
-  }
-
-  Widget _buildLoadingState() {
-    return const Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          CircularProgressIndicator(color: primaryColor, strokeWidth: 2.5),
-          SizedBox(height: 16),
-          Text('Loading files...', style: TextStyle(color: Colors.grey)),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildContent() {
-    final filteredItems = _filteredItems;
-
-    if (filteredItems.isEmpty) return _buildEmptyState();
-
-    if (_isGrid) {
-      return AnimatedSwitcher(
-        duration: const Duration(milliseconds: 300),
-        child: GridView.builder(
-          key: ValueKey(
-            'grid_${filteredItems.length}_${_selectedFilter}_${_searchQuery}_${_sortOrder}',
           ),
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount:
-                MediaQuery.of(context).size.width > 900
-                    ? 4
-                    : (MediaQuery.of(context).size.width > 600 ? 3 : 2),
-            childAspectRatio: 0.82,
-            crossAxisSpacing: 16,
-            mainAxisSpacing: 16,
-          ),
-          itemCount: filteredItems.length,
-          itemBuilder: (context, index) {
-            final item = filteredItems[index];
-            final isSelected = _selectedFiles.contains(index);
-            return _buildGridCard(item, index, isSelected);
-          },
-        ),
-      );
-    }
-
-    return AnimatedSwitcher(
-      duration: const Duration(milliseconds: 300),
-      child: ListView.builder(
-        key: ValueKey(
-          'list_${filteredItems.length}_${_selectedFilter}_${_searchQuery}_${_sortOrder}',
-        ),
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
-        itemCount: filteredItems.length,
-        itemBuilder: (context, index) {
-          final item = filteredItems[index];
-          final isSelected = _selectedFiles.contains(index);
-
-          return Container(
-            margin: const EdgeInsets.only(bottom: 12),
+          const SizedBox(width: 12),
+          // Filter dropdown button
+          _buildFilterButton(),
+          const SizedBox(width: 12),
+          // Grid/List toggle button
+          Container(
+            width: 48,
+            height: 48,
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(12),
               border: Border.all(
-                color: isSelected ? primaryColor : borderColor,
-                width: isSelected ? 2 : 1,
+                color: primaryColor.withOpacity(0.1),
+                width: 1.5,
               ),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.04),
-                  blurRadius: 12,
-                  offset: const Offset(0, 6),
+                  color: primaryColor.withOpacity(0.04),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
                 ),
               ],
             ),
             child: Material(
               color: Colors.transparent,
               child: InkWell(
-                onTap:
-                    () =>
-                        _isSelectionMode
-                            ? _toggleFileSelection(index)
-                            : _previewFile(item),
-                onLongPress: () => _enableSelectionMode(index),
+                onTap: _toggleLayout,
                 borderRadius: BorderRadius.circular(12),
-                child: Padding(
-                  padding: const EdgeInsets.all(14),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 56,
-                        height: 56,
-                        decoration: BoxDecoration(
-                          color: item.color.withOpacity(0.12),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Center(
-                          child: Icon(item.icon, color: item.color, size: 28),
-                        ),
-                      ),
-                      const SizedBox(width: 14),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              item.name,
-                              style: const TextStyle(
-                                fontSize: 15,
-                                fontWeight: FontWeight.w600,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            const SizedBox(height: 6),
-                            Text(
-                              '${item.size} • ${_formatDateTime(item.dateAdded)}',
-                              style: TextStyle(
-                                fontSize: 13,
-                                color: Colors.grey[600],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      if (_isSelectionMode)
-                        Icon(
-                          isSelected
-                              ? Icons.check_circle
-                              : Icons.circle_outlined,
-                          color: isSelected ? primaryColor : Colors.grey[400],
-                          size: 24,
-                        ),
-                      if (!_isSelectionMode)
-                        IconButton(
-                          icon: const Icon(Icons.more_vert_rounded),
-                          onPressed: () => _showFileActions(item),
-                        ),
-                    ],
-                  ),
+                child: Icon(
+                  _isList ? Icons.grid_view_rounded : Icons.view_list_rounded,
+                  color: primaryColor,
+                  size: 22,
                 ),
               ),
             ),
-          );
-        },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFilterButton() {
+    return PopupMenuButton<String>(
+      initialValue: _selectedFilter,
+      onSelected: (String newValue) {
+        setState(() => _selectedFilter = newValue);
+      },
+      color: Colors.white,
+      elevation: 8,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      offset: const Offset(0, 8),
+      child: Container(
+        width: 48,
+        height: 48,
+        decoration: BoxDecoration(
+          color:
+              _selectedFilter != 'All'
+                  ? primaryColor.withOpacity(0.1)
+                  : Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color:
+                _selectedFilter != 'All'
+                    ? primaryColor.withOpacity(0.3)
+                    : primaryColor.withOpacity(0.1),
+            width: 1.5,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: primaryColor.withOpacity(0.04),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Icon(
+          Icons.filter_list_rounded,
+          color:
+              _selectedFilter != 'All'
+                  ? primaryColor
+                  : primaryColor.withOpacity(0.7),
+          size: 22,
+        ),
+      ),
+      itemBuilder:
+          (BuildContext context) => [
+            _buildFilterMenuItem('All', Icons.folder_rounded, primaryColor),
+            _buildFilterMenuItem(
+              'DOCUMENT',
+              Icons.description_rounded,
+              const Color(0xFF4299E1),
+            ),
+            _buildFilterMenuItem(
+              'IMAGE',
+              Icons.image_rounded,
+              const Color(0xFF667EEA),
+            ),
+            _buildFilterMenuItem(
+              'AUDIO',
+              Icons.audio_file_rounded,
+              const Color(0xFF9F7AEA),
+            ),
+            _buildFilterMenuItem(
+              'VIDEO',
+              Icons.video_file_rounded,
+              const Color(0xFFED64A6),
+            ),
+            _buildFilterMenuItem(
+              'COMPRESSED',
+              Icons.folder_zip_rounded,
+              const Color(0xFFECC94B),
+            ),
+          ],
+    );
+  }
+
+  PopupMenuItem<String> _buildFilterMenuItem(
+    String value,
+    IconData icon,
+    Color color,
+  ) {
+    final labels = {
+      'All': 'All Files',
+      'DOCUMENT': 'Documents',
+      'IMAGE': 'Images',
+      'AUDIO': 'Audio',
+      'VIDEO': 'Videos',
+      'COMPRESSED': 'Compressed',
+    };
+
+    final isSelected = _selectedFilter == value;
+
+    return PopupMenuItem(
+      value: value,
+      child: Container(
+        decoration: BoxDecoration(
+          color: isSelected ? color.withOpacity(0.1) : null,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                color: color.withOpacity(0.15),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(icon, color: color, size: 18),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                labels[value] ?? value,
+                style: TextStyle(
+                  fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
+                  fontSize: 14,
+                ),
+              ),
+            ),
+            if (isSelected) Icon(Icons.check_rounded, color: color, size: 20),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSelectionBar() {
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: primaryColor.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: primaryColor.withOpacity(0.2), width: 1.5),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.check_circle_rounded, color: primaryColor, size: 20),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              '${_selectedFiles.length} selected',
+              style: const TextStyle(
+                fontWeight: FontWeight.w700,
+                color: primaryColor,
+                fontSize: 15,
+              ),
+            ),
+          ),
+          TextButton(
+            onPressed: _clearSelection,
+            style: TextButton.styleFrom(
+              foregroundColor: primaryColor,
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+            ),
+            child: const Text(
+              'Cancel',
+              style: TextStyle(fontWeight: FontWeight.w700),
+            ),
+          ),
+          const SizedBox(width: 8),
+          ElevatedButton.icon(
+            onPressed: _shareSelectedFiles,
+            icon: const Icon(Icons.share_rounded, size: 18),
+            label: const Text('Share'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: primaryColor,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildUploadFAB() {
+    return FloatingActionButton(
+      onPressed: _uploadFile,
+      backgroundColor: primaryColor,
+      elevation: 4,
+      child: const Icon(Icons.add_rounded, color: Colors.white),
+    );
+  }
+
+  Widget _buildBody() {
+    if (_isLoading) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    primaryColor.withOpacity(0.1),
+                    accentColor.withOpacity(0.1),
+                  ],
+                ),
+                shape: BoxShape.circle,
+              ),
+              child: const CircularProgressIndicator(
+                color: primaryColor,
+                strokeWidth: 3.5,
+              ),
+            ),
+            const SizedBox(height: 24),
+            const Text(
+              'Loading files...',
+              style: TextStyle(
+                color: Color(0xFF6B7280),
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return FadeTransition(
+      opacity: _fadeAnimation,
+      child: SlideTransition(
+        position: _slideAnimation,
+        child:
+            _filteredItems.isEmpty
+                ? _buildEmptyState()
+                : _isList
+                ? _buildFileList()
+                : _buildFileGrid(),
+      ),
+    );
+  }
+
+  Widget _buildFileList() {
+    final filteredItems = _filteredItems;
+    return ListView.builder(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+      itemCount: filteredItems.length,
+      itemBuilder: (context, index) {
+        final item = filteredItems[index];
+        final isSelected = _selectedFiles.contains(index);
+        return TweenAnimationBuilder<double>(
+          duration: Duration(milliseconds: 250 + (index * 40)),
+          tween: Tween(begin: 0.0, end: 1.0),
+          curve: Curves.easeOut,
+          builder: (context, value, child) {
+            return Opacity(
+              opacity: value,
+              child: Transform.translate(
+                offset: Offset(0, 20 * (1 - value)),
+                child: child,
+              ),
+            );
+          },
+          child: Padding(
+            padding: const EdgeInsets.only(bottom: 14),
+            child: _buildFileCard(item, index, isSelected),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildFileGrid() {
+    final filteredItems = _filteredItems;
+    final screenWidth = MediaQuery.of(context).size.width;
+
+    int crossAxisCount = 2;
+    if (screenWidth > 1200) {
+      crossAxisCount = 4;
+    } else if (screenWidth > 900) {
+      crossAxisCount = 3;
+    } else if (screenWidth < 600) {
+      crossAxisCount = 2;
+    }
+
+    return GridView.builder(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: crossAxisCount,
+        crossAxisSpacing: 16,
+        mainAxisSpacing: 16,
+        childAspectRatio: 0.85,
+      ),
+      itemCount: filteredItems.length,
+      itemBuilder: (context, index) {
+        final item = filteredItems[index];
+        final isSelected = _selectedFiles.contains(index);
+        return TweenAnimationBuilder<double>(
+          duration: Duration(milliseconds: 250 + (index * 40)),
+          tween: Tween(begin: 0.0, end: 1.0),
+          curve: Curves.easeOut,
+          builder: (context, value, child) {
+            return Opacity(
+              opacity: value,
+              child: Transform.scale(scale: 0.9 + (value * 0.1), child: child),
+            );
+          },
+          child: _buildGridCard(item, index, isSelected),
+        );
+      },
+    );
+  }
+
+  Widget _buildFileCard(FileItem item, int index, bool isSelected) {
+    final uploadedDate = _formatDateTime(item.dateAdded);
+
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(16),
+      elevation: 0,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap:
+            () =>
+                _isSelectionMode
+                    ? _toggleFileSelection(index)
+                    : _previewFile(item),
+        onLongPress: () => _enableSelectionMode(index),
+        child: Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: isSelected ? primaryColor : primaryColor.withOpacity(0.08),
+              width: isSelected ? 2 : 1.5,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: primaryColor.withOpacity(0.06),
+                blurRadius: 16,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: item.color.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: item.color.withOpacity(0.3),
+                    width: 1.5,
+                  ),
+                ),
+                child: Icon(item.icon, color: item.color, size: 24),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      item.name,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w800,
+                        color: textPrimary,
+                        letterSpacing: -0.2,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 6),
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 3,
+                          ),
+                          decoration: BoxDecoration(
+                            color: item.color.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(5),
+                            border: Border.all(
+                              color: item.color.withOpacity(0.3),
+                              width: 1,
+                            ),
+                          ),
+                          child: Text(
+                            item.type.toUpperCase(),
+                            style: TextStyle(
+                              fontSize: 9,
+                              fontWeight: FontWeight.w900,
+                              color: item.color,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Icon(
+                          Icons.access_time_rounded,
+                          size: 12,
+                          color: textPrimary.withOpacity(0.6),
+                        ),
+                        const SizedBox(width: 4),
+                        Expanded(
+                          child: Text(
+                            uploadedDate,
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: textPrimary.withOpacity(0.6),
+                              fontWeight: FontWeight.w600,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              if (_isSelectionMode)
+                Icon(
+                  isSelected ? Icons.check_circle : Icons.circle_outlined,
+                  color: isSelected ? primaryColor : Colors.grey[400],
+                  size: 24,
+                )
+              else
+                PopupMenuButton<String>(
+                  icon: Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: primaryColor.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Icon(
+                      Icons.more_vert_rounded,
+                      color: primaryColor,
+                      size: 16,
+                    ),
+                  ),
+                  color: Colors.white,
+                  elevation: 12,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  offset: const Offset(0, 8),
+                  onSelected: (value) {
+                    if (value == 'preview') {
+                      _previewFile(item);
+                    } else if (value == 'share') {
+                      _showShareSelectionDialog([item]);
+                    } else if (value == 'details') {
+                      _showDetails(item);
+                    }
+                  },
+                  itemBuilder:
+                      (context) => [
+                        PopupMenuItem(
+                          value: 'preview',
+                          height: 48,
+                          child: Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(6),
+                                decoration: BoxDecoration(
+                                  color: Colors.blue.withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Icon(
+                                  Icons.remove_red_eye_rounded,
+                                  size: 16,
+                                  color: Colors.blue[700],
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              const Text(
+                                'Preview',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 14,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const PopupMenuItem(
+                          value: 'share',
+                          height: 48,
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.share_rounded,
+                                size: 18,
+                                color: primaryColor,
+                              ),
+                              SizedBox(width: 12),
+                              Text(
+                                'Share',
+                                style: TextStyle(
+                                  color: primaryColor,
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 14,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        PopupMenuItem(
+                          value: 'details',
+                          height: 48,
+                          child: Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(6),
+                                decoration: BoxDecoration(
+                                  color: Colors.grey.withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Icon(
+                                  Icons.info_outline_rounded,
+                                  size: 16,
+                                  color: Colors.grey[700],
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              const Text(
+                                'Details',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 14,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                ),
+            ],
+          ),
+        ),
       ),
     );
   }
 
   Widget _buildGridCard(FileItem item, int index, bool isSelected) {
-    return GestureDetector(
-      onTap:
-          () =>
-              _isSelectionMode
-                  ? _toggleFileSelection(index)
-                  : _previewFile(item),
-      onLongPress: () => _enableSelectionMode(index),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
-        curve: Curves.easeOutQuad,
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: isSelected ? primaryColor : borderColor,
-            width: isSelected ? 2 : 1,
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(isSelected ? 0.06 : 0.04),
-              blurRadius: isSelected ? 18 : 12,
-              offset: const Offset(0, 8),
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(16),
+      elevation: 0,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap:
+            () =>
+                _isSelectionMode
+                    ? _toggleFileSelection(index)
+                    : _previewFile(item),
+        onLongPress: () => _enableSelectionMode(index),
+        child: Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: isSelected ? primaryColor : primaryColor.withOpacity(0.08),
+              width: isSelected ? 2 : 1.5,
             ),
-          ],
-        ),
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: Container(
-                width: double.infinity,
-                decoration: BoxDecoration(
-                  color: item.color.withOpacity(0.12),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Center(
-                  child: Icon(item.icon, color: item.color, size: 48),
+            boxShadow: [
+              BoxShadow(
+                color: primaryColor.withOpacity(0.06),
+                blurRadius: 16,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          padding: const EdgeInsets.all(14),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Container(
+                  width: double.infinity,
+                  decoration: BoxDecoration(
+                    color: item.color.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Center(
+                    child: Icon(item.icon, color: item.color, size: 48),
+                  ),
                 ),
               ),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              item.name,
-              style: const TextStyle(fontWeight: FontWeight.w600),
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-            ),
-            const SizedBox(height: 6),
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    '${item.size}',
-                    style: TextStyle(color: Colors.grey[600], fontSize: 12),
-                  ),
+              const SizedBox(height: 12),
+              Text(
+                item.name,
+                style: const TextStyle(
+                  fontWeight: FontWeight.w800,
+                  fontSize: 14,
+                  color: textPrimary,
+                  letterSpacing: -0.2,
                 ),
-                if (!_isSelectionMode)
-                  IconButton(
-                    icon: const Icon(Icons.more_vert_rounded, size: 18),
-                    onPressed: () => _showFileActions(item),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 6,
+                      vertical: 3,
+                    ),
+                    decoration: BoxDecoration(
+                      color: item.color.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(5),
+                      border: Border.all(
+                        color: item.color.withOpacity(0.3),
+                        width: 1,
+                      ),
+                    ),
+                    child: Text(
+                      item.type.toUpperCase(),
+                      style: TextStyle(
+                        fontSize: 9,
+                        fontWeight: FontWeight.w900,
+                        color: item.color,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
                   ),
-                if (_isSelectionMode)
+                  const Spacer(),
+                  if (!_isSelectionMode)
+                    PopupMenuButton<String>(
+                      icon: Icon(
+                        Icons.more_vert_rounded,
+                        size: 18,
+                        color: primaryColor,
+                      ),
+                      color: Colors.white,
+                      elevation: 12,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      padding: EdgeInsets.zero,
+                      onSelected: (value) {
+                        if (value == 'preview') {
+                          _previewFile(item);
+                        } else if (value == 'share') {
+                          _showShareSelectionDialog([item]);
+                        } else if (value == 'details') {
+                          _showDetails(item);
+                        }
+                      },
+                      itemBuilder:
+                          (context) => [
+                            PopupMenuItem(
+                              value: 'preview',
+                              height: 48,
+                              child: Row(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.all(6),
+                                    decoration: BoxDecoration(
+                                      color: Colors.blue.withOpacity(0.1),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Icon(
+                                      Icons.remove_red_eye_rounded,
+                                      size: 16,
+                                      color: Colors.blue[700],
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  const Text(
+                                    'Preview',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 14,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const PopupMenuItem(
+                              value: 'share',
+                              height: 48,
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    Icons.share_rounded,
+                                    size: 18,
+                                    color: primaryColor,
+                                  ),
+                                  SizedBox(width: 12),
+                                  Text(
+                                    'Share',
+                                    style: TextStyle(
+                                      color: primaryColor,
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 14,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            PopupMenuItem(
+                              value: 'details',
+                              height: 48,
+                              child: Row(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.all(6),
+                                    decoration: BoxDecoration(
+                                      color: Colors.grey.withOpacity(0.1),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Icon(
+                                      Icons.info_outline_rounded,
+                                      size: 16,
+                                      color: Colors.grey[700],
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  const Text(
+                                    'Details',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 14,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                    ),
+                  if (_isSelectionMode)
+                    Icon(
+                      isSelected ? Icons.check_circle : Icons.circle_outlined,
+                      color: isSelected ? primaryColor : Colors.grey[400],
+                      size: 20,
+                    ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
                   Icon(
-                    isSelected ? Icons.check_circle : Icons.circle_outlined,
-                    color: isSelected ? primaryColor : Colors.grey[400],
+                    Icons.access_time_rounded,
+                    size: 11,
+                    color: textPrimary.withOpacity(0.5),
                   ),
-              ],
-            ),
-          ],
+                  const SizedBox(width: 4),
+                  Expanded(
+                    child: Text(
+                      _formatDate(item.dateAdded),
+                      style: TextStyle(
+                        color: textPrimary.withOpacity(0.6),
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -965,46 +1317,73 @@ class _FilesScreenState extends State<FilesScreen>
 
   Widget _buildEmptyState() {
     return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Container(
-            width: 160,
-            height: 160,
-            decoration: BoxDecoration(
-              color: primaryColor.withOpacity(0.08),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(
-              Icons.folder_open_rounded,
-              size: 72,
-              color: primaryColor.withOpacity(0.35),
-            ),
-          ),
-          const SizedBox(height: 24),
-          const Text(
-            'No Files Yet',
-            style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Upload documents, images, or videos. Your files are encrypted and stored securely.',
-            textAlign: TextAlign.center,
-            style: TextStyle(color: Colors.grey[600]),
-          ),
-          const SizedBox(height: 20),
-          ElevatedButton.icon(
-            onPressed: _uploadFile,
-            icon: const Icon(Icons.upload_file_rounded),
-            label: const Text('Upload File'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: primaryColor,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
+      child: Padding(
+        padding: const EdgeInsets.all(40.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              width: 120,
+              height: 120,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    primaryColor.withOpacity(0.15),
+                    accentColor.withOpacity(0.1),
+                  ],
+                ),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons.folder_open_rounded,
+                color: primaryColor.withOpacity(0.4),
+                size: 56,
               ),
             ),
-          ),
-        ],
+            const SizedBox(height: 28),
+            const Text(
+              'No files found',
+              style: TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.w900,
+                color: textPrimary,
+                letterSpacing: -0.5,
+              ),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              _searchQuery.isEmpty
+                  ? 'Upload your first file to get started'
+                  : 'Try a different search term',
+              style: TextStyle(
+                fontSize: 15,
+                color: textPrimary.withOpacity(0.6),
+                fontWeight: FontWeight.w500,
+                height: 1.5,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 24),
+            if (_searchQuery.isEmpty)
+              ElevatedButton.icon(
+                onPressed: _uploadFile,
+                icon: const Icon(Icons.upload_file_rounded),
+                label: const Text('Upload File'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: primaryColor,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 24,
+                    vertical: 14,
+                  ),
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }
@@ -1123,7 +1502,6 @@ class _FilesScreenState extends State<FilesScreen>
     final minute = date.minute.toString().padLeft(2, '0');
     final period = hour >= 12 ? 'PM' : 'AM';
 
-    // Convert 24-hour to 12-hour format
     hour = hour % 12;
     if (hour == 0) hour = 12;
 
@@ -1165,13 +1543,6 @@ class _FilesScreenState extends State<FilesScreen>
           }).toList();
     }
 
-    // Sort by date
-    if (_sortOrder == 'latest') {
-      filtered.sort((a, b) => b.dateAdded.compareTo(a.dateAdded));
-    } else {
-      filtered.sort((a, b) => a.dateAdded.compareTo(b.dateAdded));
-    }
-
     return filtered;
   }
 
@@ -1179,13 +1550,7 @@ class _FilesScreenState extends State<FilesScreen>
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Row(
-            children: [
-              const Icon(Icons.error_outline_rounded, color: Colors.white),
-              const SizedBox(width: 12),
-              Expanded(child: Text(message)),
-            ],
-          ),
+          content: Text(message),
           backgroundColor: const Color(0xFFD32F2F),
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(
@@ -1201,16 +1566,7 @@ class _FilesScreenState extends State<FilesScreen>
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Row(
-            children: [
-              const Icon(
-                Icons.check_circle_outline_rounded,
-                color: Colors.white,
-              ),
-              const SizedBox(width: 12),
-              Expanded(child: Text(message)),
-            ],
-          ),
+          content: Text(message),
           backgroundColor: primaryColor,
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(
@@ -1222,147 +1578,111 @@ class _FilesScreenState extends State<FilesScreen>
     }
   }
 
-  void _showFilterSheet(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (context) {
-        return Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text(
-                    'Filter files',
-                    style: TextStyle(fontWeight: FontWeight.w600),
-                  ),
-                  TextButton(
-                    onPressed: () => setState(() => _selectedFilter = 'All'),
-                    child: const Text('Clear'),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              Wrap(
-                spacing: 8,
-                children: [
-                  ChoiceChip(
-                    label: const Text('All'),
-                    selected: _selectedFilter == 'All',
-                    onSelected: (_) => setState(() => _selectedFilter = 'All'),
-                  ),
-                  ChoiceChip(
-                    label: const Text('Documents'),
-                    selected: _selectedFilter == 'DOCUMENT',
-                    onSelected:
-                        (_) => setState(() => _selectedFilter = 'DOCUMENT'),
-                  ),
-                  ChoiceChip(
-                    label: const Text('Images'),
-                    selected: _selectedFilter == 'IMAGE',
-                    onSelected:
-                        (_) => setState(() => _selectedFilter = 'IMAGE'),
-                  ),
-                  ChoiceChip(
-                    label: const Text('Audio'),
-                    selected: _selectedFilter == 'AUDIO',
-                    onSelected:
-                        (_) => setState(() => _selectedFilter = 'AUDIO'),
-                  ),
-                  ChoiceChip(
-                    label: const Text('Videos'),
-                    selected: _selectedFilter == 'VIDEO',
-                    onSelected:
-                        (_) => setState(() => _selectedFilter = 'VIDEO'),
-                  ),
-                  ChoiceChip(
-                    label: const Text('Compressed'),
-                    selected: _selectedFilter == 'COMPRESSED',
-                    onSelected:
-                        (_) => setState(() => _selectedFilter = 'COMPRESSED'),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  void _showFileActions(FileItem item) {
-    showModalBottomSheet(
-      context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
-      ),
-      builder: (context) {
-        return SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ListTile(
-                leading: const Icon(Icons.remove_red_eye_rounded),
-                title: const Text('Preview'),
-                onTap: () {
-                  Navigator.pop(context);
-                  _previewFile(item);
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.share_rounded),
-                title: const Text('Share'),
-                onTap: () {
-                  Navigator.pop(context);
-                  _showShareSelectionDialog([item]);
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.info_outline_rounded),
-                title: const Text('Details'),
-                onTap: () {
-                  Navigator.pop(context);
-                  _showDetails(item);
-                },
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
   void _showDetails(FileItem item) {
     showDialog(
       context: context,
       builder:
           (context) => AlertDialog(
-            title: Text(item.name),
+            backgroundColor: Colors.white,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(24),
+            ),
+            title: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: primaryColor.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(
+                    Icons.info_outline_rounded,
+                    size: 22,
+                    color: primaryColor,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                const Expanded(
+                  child: Text(
+                    'File Details',
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w900,
+                      color: textPrimary,
+                      letterSpacing: -0.3,
+                    ),
+                  ),
+                ),
+              ],
+            ),
             content: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Type: ${item.type}'),
-                const SizedBox(height: 6),
-                Text('Size: ${item.size}'),
-                const SizedBox(height: 6),
-                Text('Uploaded: ${_formatDateTime(item.dateAdded)}'),
-                const SizedBox(height: 6),
-                Text('Category: ${item.category}'),
+                _buildDetailRow('Name', item.name),
+                const SizedBox(height: 12),
+                _buildDetailRow('Type', item.type.toUpperCase()),
+                const SizedBox(height: 12),
+                _buildDetailRow('Uploaded', _formatDateTime(item.dateAdded)),
+                const SizedBox(height: 12),
+                _buildDetailRow('Category', item.category),
               ],
             ),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(context),
-                child: const Text('Close'),
+                style: TextButton.styleFrom(
+                  foregroundColor: primaryColor,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 24,
+                    vertical: 12,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                child: const Text(
+                  'Close',
+                  style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
+                ),
               ),
             ],
           ),
+    );
+  }
+
+  Widget _buildDetailRow(String label, String value) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: lightBg,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: primaryColor.withOpacity(0.08), width: 1.5),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '$label:',
+            style: TextStyle(
+              fontWeight: FontWeight.w700,
+              color: textPrimary.withOpacity(0.7),
+              fontSize: 13,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              value,
+              style: const TextStyle(
+                fontWeight: FontWeight.w600,
+                color: textPrimary,
+                fontSize: 13,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -1371,7 +1691,6 @@ class FileItem {
   final String id;
   final String name;
   final String type;
-  final String size;
   final IconData icon;
   final Color color;
   final DateTime dateAdded;
@@ -1382,7 +1701,6 @@ class FileItem {
     required this.id,
     required this.name,
     required this.type,
-    required this.size,
     required this.icon,
     required this.color,
     required this.dateAdded,
@@ -1445,7 +1763,7 @@ class _ShareDialogState extends State<_ShareDialog>
   @override
   Widget build(BuildContext context) {
     return Dialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
       child: Container(
         constraints: const BoxConstraints(maxWidth: 500, maxHeight: 600),
         child: Column(
@@ -1455,11 +1773,22 @@ class _ShareDialogState extends State<_ShareDialog>
               padding: const EdgeInsets.all(20),
               decoration: const BoxDecoration(
                 color: Color(0xFF416240),
-                borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+                borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.share_rounded, color: Colors.white),
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(
+                      Icons.share_rounded,
+                      color: Colors.white,
+                      size: 20,
+                    ),
+                  ),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Column(
@@ -1470,14 +1799,16 @@ class _ShareDialogState extends State<_ShareDialog>
                           style: TextStyle(
                             color: Colors.white,
                             fontSize: 18,
-                            fontWeight: FontWeight.w600,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: -0.3,
                           ),
                         ),
                         Text(
-                          '${widget.filesToShare.length} file(s)',
+                          '${widget.filesToShare.length} file(s) selected',
                           style: const TextStyle(
                             color: Colors.white70,
                             fontSize: 13,
+                            fontWeight: FontWeight.w500,
                           ),
                         ),
                       ],
@@ -1491,6 +1822,7 @@ class _ShareDialogState extends State<_ShareDialog>
               labelColor: const Color(0xFF416240),
               unselectedLabelColor: Colors.grey,
               indicatorColor: const Color(0xFF416240),
+              labelStyle: const TextStyle(fontWeight: FontWeight.w700),
               tabs: [
                 Tab(text: 'Groups (${widget.groups.length})'),
                 Tab(text: 'Doctors (${widget.doctors.length})'),
@@ -1507,7 +1839,7 @@ class _ShareDialogState extends State<_ShareDialog>
               decoration: BoxDecoration(
                 color: Colors.grey[50],
                 borderRadius: const BorderRadius.vertical(
-                  bottom: Radius.circular(16),
+                  bottom: Radius.circular(24),
                 ),
               ),
               child: Row(
@@ -1515,7 +1847,17 @@ class _ShareDialogState extends State<_ShareDialog>
                   Expanded(
                     child: TextButton(
                       onPressed: () => Navigator.pop(context),
-                      child: const Text('Cancel'),
+                      style: TextButton.styleFrom(
+                        foregroundColor: const Color(0xFF416240),
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      child: const Text(
+                        'Cancel',
+                        style: TextStyle(fontWeight: FontWeight.w700),
+                      ),
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -1551,12 +1893,15 @@ class _ShareDialogState extends State<_ShareDialog>
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xFF416240),
                         foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        elevation: 0,
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
+                          borderRadius: BorderRadius.circular(12),
                         ),
                       ),
                       child: Text(
                         'Share (${_selectedGroupIds.length + _selectedDoctorIds.length})',
+                        style: const TextStyle(fontWeight: FontWeight.w700),
                       ),
                     ),
                   ),
@@ -1600,7 +1945,7 @@ class _ShareDialogState extends State<_ShareDialog>
             border: Border.all(
               color: isSelected ? const Color(0xFF416240) : Colors.grey[300]!,
             ),
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.circular(12),
           ),
           child: CheckboxListTile(
             value: isSelected,
@@ -1613,7 +1958,10 @@ class _ShareDialogState extends State<_ShareDialog>
                 }
               });
             },
-            title: Text(group['name'] as String),
+            title: Text(
+              group['name'] as String,
+              style: const TextStyle(fontWeight: FontWeight.w600),
+            ),
             secondary: const Icon(
               Icons.group_rounded,
               color: Color(0xFF416240),
@@ -1660,7 +2008,7 @@ class _ShareDialogState extends State<_ShareDialog>
             border: Border.all(
               color: isSelected ? const Color(0xFF416240) : Colors.grey[300]!,
             ),
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.circular(12),
           ),
           child: CheckboxListTile(
             value: isSelected,
@@ -1673,9 +2021,13 @@ class _ShareDialogState extends State<_ShareDialog>
                 }
               });
             },
-            title: Text('Dr. ${_formatFullName(doctor['user'])}'),
+            title: Text(
+              'Dr. ${_formatFullName(doctor['user'])}',
+              style: const TextStyle(fontWeight: FontWeight.w600),
+            ),
             subtitle: Text(
               doctor['organization_name'] ?? 'Unknown Organization',
+              style: const TextStyle(fontSize: 13),
             ),
             secondary: const Icon(
               Icons.medical_services_rounded,

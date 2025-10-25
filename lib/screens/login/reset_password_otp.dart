@@ -30,13 +30,16 @@ class _ResetPasswordOtpScreenState extends State<ResetPasswordOtpScreen>
 
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
+  late Animation<double> _scaleAnimation;
   late Animation<Offset> _slideAnimation;
 
-  static const Color primaryGreen = Color(0xFF4A7C59);
-  static const Color lightGreen = Color(0xFF6B9B7A);
-  static const Color paleGreen = Color(0xFFE8F5E9);
-  static const Color accentGreen = Color(0xFF2E5C3F);
-  static const Color darkGreen = Color(0xFF1B4332);
+  // Consistent color scheme
+  static const Color _primaryColor = Color(0xFF416240);
+  static const Color _accentColor = Color(0xFFA3B18A);
+  static const Color _bg = Color(0xFFF8FAF8);
+  static const Color _card = Colors.white;
+  static const Color _textPrimary = Color(0xFF1A1A2E);
+  static const Color _textSecondary = Color(0xFF6B7280);
 
   @override
   void initState() {
@@ -44,19 +47,32 @@ class _ResetPasswordOtpScreenState extends State<ResetPasswordOtpScreen>
     _startCountdown();
 
     _animationController = AnimationController(
-      duration: const Duration(milliseconds: 800),
+      duration: const Duration(milliseconds: 1200),
       vsync: this,
     );
 
     _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(parent: _animationController, curve: Curves.easeOut),
+      CurvedAnimation(
+        parent: _animationController,
+        curve: const Interval(0.0, 0.6, curve: Curves.easeOut),
+      ),
+    );
+
+    _scaleAnimation = Tween<double>(begin: 0.85, end: 1.0).animate(
+      CurvedAnimation(
+        parent: _animationController,
+        curve: const Interval(0.2, 0.8, curve: Curves.easeOutBack),
+      ),
     );
 
     _slideAnimation = Tween<Offset>(
-      begin: const Offset(0, 0.3),
+      begin: const Offset(0, 0.15),
       end: Offset.zero,
     ).animate(
-      CurvedAnimation(parent: _animationController, curve: Curves.easeOut),
+      CurvedAnimation(
+        parent: _animationController,
+        curve: const Interval(0.3, 1.0, curve: Curves.easeOutCubic),
+      ),
     );
 
     _animationController.forward();
@@ -87,6 +103,33 @@ class _ResetPasswordOtpScreenState extends State<ResetPasswordOtpScreen>
     });
   }
 
+  void _showSnackBar(String message, IconData icon, Color color) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            Icon(icon, color: Colors.white, size: 20),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                message,
+                style: const TextStyle(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 14,
+                ),
+              ),
+            ),
+          ],
+        ),
+        backgroundColor: color,
+        behavior: SnackBarBehavior.floating,
+        margin: const EdgeInsets.all(16),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        padding: const EdgeInsets.all(16),
+      ),
+    );
+  }
+
   Future<void> _resendOTP() async {
     if (_isResending || _resendCountdown > 0) return;
 
@@ -96,41 +139,19 @@ class _ResetPasswordOtpScreenState extends State<ResetPasswordOtpScreen>
       await _authService.sendPasswordResetOTP(widget.email);
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Row(
-              children: [
-                Icon(Icons.check_circle, color: Colors.white),
-                SizedBox(width: 12),
-                Text('OTP resent successfully'),
-              ],
-            ),
-            backgroundColor: primaryGreen,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-          ),
+        _showSnackBar(
+          'OTP resent successfully',
+          Icons.check_circle_rounded,
+          _primaryColor,
         );
         _startCountdown();
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Row(
-              children: [
-                const Icon(Icons.error_outline, color: Colors.white),
-                const SizedBox(width: 12),
-                Expanded(child: Text('Failed to resend OTP: $e')),
-              ],
-            ),
-            backgroundColor: Colors.red[700],
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-          ),
+        _showSnackBar(
+          'Failed to resend OTP',
+          Icons.error_outline_rounded,
+          Colors.red[700]!,
         );
       }
     } finally {
@@ -142,21 +163,10 @@ class _ResetPasswordOtpScreenState extends State<ResetPasswordOtpScreen>
     final otp = _otpControllers.map((c) => c.text).join();
 
     if (otp.length != 6) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Row(
-            children: [
-              Icon(Icons.warning_amber_rounded, color: Colors.white),
-              SizedBox(width: 12),
-              Text('Please enter the complete 6-digit code'),
-            ],
-          ),
-          backgroundColor: Colors.orange[700],
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-        ),
+      _showSnackBar(
+        'Please enter the complete 6-digit code',
+        Icons.warning_amber_rounded,
+        Colors.orange[700]!,
       );
       return;
     }
@@ -164,30 +174,17 @@ class _ResetPasswordOtpScreenState extends State<ResetPasswordOtpScreen>
     setState(() => _isLoading = true);
 
     try {
-      // Verify OTP only
       await _authService.verifyPasswordResetOTP(widget.email, otp);
 
       if (mounted) {
         setState(() => _isLoading = false);
 
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Row(
-              children: [
-                Icon(Icons.check_circle, color: Colors.white),
-                SizedBox(width: 12),
-                Text('Email verified successfully!'),
-              ],
-            ),
-            backgroundColor: primaryGreen,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-          ),
+        _showSnackBar(
+          'Email verified successfully!',
+          Icons.check_circle_rounded,
+          _primaryColor,
         );
 
-        // Navigate to new password screen
         await Future.delayed(const Duration(milliseconds: 500));
         if (mounted) {
           Navigator.pushReplacement(
@@ -202,21 +199,10 @@ class _ResetPasswordOtpScreenState extends State<ResetPasswordOtpScreen>
       if (mounted) {
         setState(() => _isLoading = false);
 
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Row(
-              children: [
-                const Icon(Icons.error_outline, color: Colors.white),
-                const SizedBox(width: 12),
-                Expanded(child: Text('Invalid or expired OTP')),
-              ],
-            ),
-            backgroundColor: Colors.red[700],
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-          ),
+        _showSnackBar(
+          'Invalid or expired OTP',
+          Icons.error_outline_rounded,
+          Colors.red[700]!,
         );
       }
     }
@@ -225,189 +211,238 @@ class _ResetPasswordOtpScreenState extends State<ResetPasswordOtpScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [primaryGreen, lightGreen, accentGreen],
+      backgroundColor: _bg,
+      body: Stack(
+        children: [
+          // Subtle background gradient
+          Positioned.fill(
+            child: Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    _primaryColor.withOpacity(0.04),
+                    _accentColor.withOpacity(0.02),
+                    _bg,
+                  ],
+                  stops: const [0.0, 0.4, 1.0],
+                ),
+              ),
+            ),
           ),
-        ),
-        child: SafeArea(
-          child: Column(
-            children: [
-              _buildHeader(),
-              Expanded(
-                child: FadeTransition(
-                  opacity: _fadeAnimation,
-                  child: SlideTransition(
-                    position: _slideAnimation,
-                    child: _buildContent(),
+          SafeArea(
+            child: FadeTransition(
+              opacity: _fadeAnimation,
+              child: SingleChildScrollView(
+                physics: const BouncingScrollPhysics(),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  child: Column(
+                    children: [
+                      const SizedBox(height: 20),
+                      _buildBackButton(),
+                      const SizedBox(height: 40),
+                      ScaleTransition(
+                        scale: _scaleAnimation,
+                        child: _buildHeader(),
+                      ),
+                      const SizedBox(height: 50),
+                      SlideTransition(
+                        position: _slideAnimation,
+                        child: _buildVerificationCard(),
+                      ),
+                      const SizedBox(height: 32),
+                    ],
                   ),
                 ),
               ),
-            ],
+            ),
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBackButton() {
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Container(
+        decoration: BoxDecoration(
+          color: _card,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: _primaryColor.withOpacity(0.12),
+            width: 1.5,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.04),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: IconButton(
+          onPressed: () => Navigator.pop(context),
+          icon: Icon(
+            Icons.arrow_back_ios_new_rounded,
+            color: _primaryColor,
+            size: 20,
+          ),
+          padding: const EdgeInsets.all(12),
         ),
       ),
     );
   }
 
   Widget _buildHeader() {
-    return Padding(
-      padding: const EdgeInsets.all(24.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          IconButton(
-            onPressed: () => Navigator.pop(context),
-            icon: const Icon(
-              Icons.arrow_back_ios_rounded,
-              color: Colors.white,
-              size: 24,
+    return Column(
+      children: [
+        Container(
+          width: 90,
+          height: 90,
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [_primaryColor, _accentColor],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
             ),
-            padding: EdgeInsets.zero,
-            alignment: Alignment.centerLeft,
-          ),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.2),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(
-                    color: Colors.white.withOpacity(0.3),
-                    width: 2,
-                  ),
-                ),
-                child: const Icon(
-                  Icons.mail_lock_rounded,
-                  color: Colors.white,
-                  size: 32,
-                ),
-              ),
-              const SizedBox(width: 16),
-              const Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Verify Email',
-                      style: TextStyle(
-                        fontSize: 28,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                        letterSpacing: 0.5,
-                      ),
-                    ),
-                    SizedBox(height: 4),
-                    Text(
-                      'Enter the code sent to your email',
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: Colors.white70,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ],
-                ),
+            shape: BoxShape.circle,
+            boxShadow: [
+              BoxShadow(
+                color: _primaryColor.withOpacity(0.25),
+                blurRadius: 24,
+                offset: const Offset(0, 8),
               ),
             ],
           ),
-        ],
-      ),
+          child: const Icon(
+            Icons.mail_lock_rounded,
+            color: Colors.white,
+            size: 42,
+          ),
+        ),
+        const SizedBox(height: 24),
+        const Text(
+          'Verify Email',
+          style: TextStyle(
+            fontSize: 32,
+            fontWeight: FontWeight.w900,
+            color: _textPrimary,
+            letterSpacing: -0.8,
+            height: 1.2,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'Enter the 6-digit code',
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w500,
+            color: _textSecondary,
+            letterSpacing: 0.2,
+          ),
+        ),
+      ],
     );
   }
 
-  Widget _buildContent() {
+  Widget _buildVerificationCard() {
     return Container(
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Colors.white, paleGreen.withOpacity(0.3)],
-        ),
-        borderRadius: const BorderRadius.only(
-          topLeft: Radius.circular(40),
-          topRight: Radius.circular(40),
-        ),
+        color: _card,
+        borderRadius: BorderRadius.circular(28),
+        border: Border.all(color: _primaryColor.withOpacity(0.08), width: 1.5),
         boxShadow: [
           BoxShadow(
-            color: darkGreen.withOpacity(0.2),
-            blurRadius: 30,
-            offset: const Offset(0, -10),
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 24,
+            offset: const Offset(0, 8),
+          ),
+          BoxShadow(
+            color: _primaryColor.withOpacity(0.04),
+            blurRadius: 48,
+            offset: const Offset(0, 16),
           ),
         ],
       ),
-      child: SingleChildScrollView(
-        physics: const BouncingScrollPhysics(),
-        padding: const EdgeInsets.all(28.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            const SizedBox(height: 20),
-            _buildEmailInfo(),
-            const SizedBox(height: 40),
-            _buildOTPFields(),
-            const SizedBox(height: 32),
-            _buildVerifyButton(),
-            const SizedBox(height: 24),
-            _buildResendSection(),
-          ],
-        ),
+      child: Stack(
+        children: [
+          Positioned.fill(
+            child: Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(28),
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    _primaryColor.withOpacity(0.015),
+                    Colors.transparent,
+                    _accentColor.withOpacity(0.01),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(28),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                _buildEmailInfo(),
+                const SizedBox(height: 40),
+                _buildOTPFields(),
+                const SizedBox(height: 32),
+                _buildVerifyButton(),
+                const SizedBox(height: 28),
+                _buildResendSection(),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
 
   Widget _buildEmailInfo() {
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: _primaryColor.withOpacity(0.06),
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 15,
-            offset: const Offset(0, 5),
-          ),
-        ],
+        border: Border.all(color: _primaryColor.withOpacity(0.12), width: 1.5),
       ),
       child: Column(
         children: [
-          Container(
-            width: 70,
-            height: 70,
-            decoration: BoxDecoration(color: paleGreen, shape: BoxShape.circle),
-            child: Icon(
-              Icons.mark_email_read_outlined,
-              size: 35,
-              color: primaryGreen,
-            ),
-          ),
-          const SizedBox(height: 16),
-          Text(
-            'Verification Code Sent',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: Colors.grey[800],
-            ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.mark_email_read_outlined,
+                size: 18,
+                color: _primaryColor,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                'Code sent to',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: _textSecondary,
+                  letterSpacing: 0.1,
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 8),
-          Text(
-            'We sent a 6-digit code to',
-            style: TextStyle(fontSize: 14, color: Colors.grey[600]),
-          ),
-          const SizedBox(height: 4),
           Text(
             widget.email,
             style: TextStyle(
               fontSize: 15,
-              fontWeight: FontWeight.w600,
-              color: primaryGreen,
+              fontWeight: FontWeight.w800,
+              color: _primaryColor,
+              letterSpacing: 0.1,
             ),
             textAlign: TextAlign.center,
           ),
@@ -417,123 +452,125 @@ class _ResetPasswordOtpScreenState extends State<ResetPasswordOtpScreen>
   }
 
   Widget _buildOTPFields() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.only(left: 4, bottom: 12),
-          child: Text(
-            'Enter Verification Code',
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-              color: Colors.grey[700],
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+      children: List.generate(6, (index) {
+        return Container(
+          width: 48,
+          height: 58,
+          decoration: BoxDecoration(
+            color: _bg,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color:
+                  _otpControllers[index].text.isNotEmpty
+                      ? _primaryColor
+                      : _primaryColor.withOpacity(0.12),
+              width: _otpControllers[index].text.isNotEmpty ? 2 : 1.5,
             ),
+            boxShadow:
+                _otpControllers[index].text.isNotEmpty
+                    ? [
+                      BoxShadow(
+                        color: _primaryColor.withOpacity(0.15),
+                        blurRadius: 12,
+                        offset: const Offset(0, 4),
+                      ),
+                    ]
+                    : [],
           ),
-        ),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-          children: List.generate(6, (index) {
-            return SizedBox(
-              width: 50,
-              height: 60,
-              child: TextField(
-                controller: _otpControllers[index],
-                focusNode: _focusNodes[index],
-                textAlign: TextAlign.center,
-                keyboardType: TextInputType.number,
-                maxLength: 1,
-                style: TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                  color: primaryGreen,
-                ),
-                decoration: InputDecoration(
-                  counterText: '',
-                  filled: true,
-                  fillColor: Colors.white,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide(color: paleGreen, width: 2),
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide(color: paleGreen, width: 2),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide(color: primaryGreen, width: 2),
-                  ),
-                ),
-                onChanged: (value) {
-                  if (value.isNotEmpty && index < 5) {
-                    _focusNodes[index + 1].requestFocus();
-                  } else if (value.isEmpty && index > 0) {
-                    _focusNodes[index - 1].requestFocus();
-                  }
+          child: TextField(
+            controller: _otpControllers[index],
+            focusNode: _focusNodes[index],
+            textAlign: TextAlign.center,
+            keyboardType: TextInputType.number,
+            maxLength: 1,
+            style: TextStyle(
+              fontSize: 24,
+              fontWeight: FontWeight.w900,
+              color: _primaryColor,
+              letterSpacing: 0,
+            ),
+            decoration: const InputDecoration(
+              counterText: '',
+              border: InputBorder.none,
+              contentPadding: EdgeInsets.zero,
+            ),
+            onChanged: (value) {
+              setState(() {});
+              if (value.isNotEmpty && index < 5) {
+                _focusNodes[index + 1].requestFocus();
+              } else if (value.isEmpty && index > 0) {
+                _focusNodes[index - 1].requestFocus();
+              }
 
-                  // Auto-submit when all fields are filled
-                  if (index == 5 && value.isNotEmpty) {
-                    final otp = _otpControllers.map((c) => c.text).join();
-                    if (otp.length == 6) {
-                      _verifyOTP();
-                    }
-                  }
-                },
-              ),
-            );
-          }),
-        ),
-      ],
+              // Auto-submit when all fields are filled
+              if (index == 5 && value.isNotEmpty) {
+                final otp = _otpControllers.map((c) => c.text).join();
+                if (otp.length == 6) {
+                  _verifyOTP();
+                }
+              }
+            },
+          ),
+        );
+      }),
     );
   }
 
   Widget _buildVerifyButton() {
-    return SizedBox(
+    return Container(
       width: double.infinity,
+      height: 56,
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [_primaryColor, _accentColor],
+          begin: Alignment.centerLeft,
+          end: Alignment.centerRight,
+        ),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: _primaryColor.withOpacity(0.3),
+            blurRadius: 16,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
       child: ElevatedButton(
         onPressed: _isLoading ? null : _verifyOTP,
         style: ElevatedButton.styleFrom(
-          backgroundColor: primaryGreen,
+          backgroundColor: Colors.transparent,
           foregroundColor: Colors.white,
-          padding: const EdgeInsets.symmetric(vertical: 18),
+          shadowColor: Colors.transparent,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
           ),
-          elevation: 0,
-          shadowColor: primaryGreen.withOpacity(0.4),
-          disabledBackgroundColor: Colors.grey[300],
+          padding: EdgeInsets.zero,
         ),
         child:
             _isLoading
                 ? const SizedBox(
-                  height: 22,
-                  width: 22,
+                  height: 24,
+                  width: 24,
                   child: CircularProgressIndicator(
                     strokeWidth: 2.5,
                     color: Colors.white,
                   ),
                 )
-                : Row(
+                : const Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Text(
+                    Text(
                       'Verify Code',
                       style: TextStyle(
-                        fontSize: 17,
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: 0.5,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 0.3,
                       ),
                     ),
-                    const SizedBox(width: 8),
-                    Container(
-                      padding: const EdgeInsets.all(4),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.2),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: const Icon(Icons.arrow_forward, size: 18),
-                    ),
+                    SizedBox(width: 8),
+                    Icon(Icons.arrow_forward_rounded, size: 20),
                   ],
                 ),
       ),
@@ -545,60 +582,91 @@ class _ResetPasswordOtpScreenState extends State<ResetPasswordOtpScreen>
       children: [
         Text(
           "Didn't receive the code?",
-          style: TextStyle(color: Colors.grey[600], fontSize: 15),
+          style: TextStyle(
+            color: _textSecondary,
+            fontSize: 14,
+            fontWeight: FontWeight.w500,
+          ),
         ),
         const SizedBox(height: 12),
         if (_resendCountdown > 0)
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
             decoration: BoxDecoration(
-              color: paleGreen.withOpacity(0.5),
-              borderRadius: BorderRadius.circular(20),
+              color: _primaryColor.withOpacity(0.06),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: _primaryColor.withOpacity(0.12),
+                width: 1.5,
+              ),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(Icons.timer_outlined, size: 18, color: Colors.grey[600]),
+                Icon(Icons.timer_outlined, size: 18, color: _textSecondary),
                 const SizedBox(width: 8),
                 Text(
                   'Resend in $_resendCountdown seconds',
                   style: TextStyle(
-                    color: Colors.grey[700],
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
+                    color: _textSecondary,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.1,
                   ),
                 ),
               ],
             ),
           )
         else
-          TextButton(
-            onPressed: _isResending ? null : _resendOTP,
-            style: TextButton.styleFrom(
-              foregroundColor: primaryGreen,
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(20),
-                side: BorderSide(color: primaryGreen, width: 2),
+          Container(
+            decoration: BoxDecoration(
+              color: _primaryColor.withOpacity(0.08),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: _primaryColor.withOpacity(0.2),
+                width: 1.5,
               ),
             ),
-            child:
-                _isResending
-                    ? const SizedBox(
-                      height: 16,
-                      width: 16,
-                      child: CircularProgressIndicator(
-                        color: primaryGreen,
-                        strokeWidth: 2,
+            child: TextButton(
+              onPressed: _isResending ? null : _resendOTP,
+              style: TextButton.styleFrom(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24,
+                  vertical: 12,
+                ),
+                minimumSize: const Size(140, 44),
+              ),
+              child:
+                  _isResending
+                      ? SizedBox(
+                        height: 18,
+                        width: 18,
+                        child: CircularProgressIndicator(
+                          color: _primaryColor,
+                          strokeWidth: 2.5,
+                        ),
+                      )
+                      : Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.refresh_rounded,
+                            size: 18,
+                            color: _primaryColor,
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            'Resend Code',
+                            style: TextStyle(
+                              color: _primaryColor,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 0.2,
+                            ),
+                          ),
+                        ],
                       ),
-                    )
-                    : const Text(
-                      'Resend Code',
-                      style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
+            ),
           ),
       ],
     );

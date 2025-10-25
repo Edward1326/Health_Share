@@ -1,5 +1,6 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:health_share/screens/organizations/all_orgs/doctor_profile.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 // Import services
@@ -89,8 +90,8 @@ class _OrgDetailsScreenState extends State<OrgDetailsScreen>
   }
 
   void _initializeColors() {
-    _primaryColor = const Color(0xFF03989E);
-    _accentColor = const Color(0xFF04B1B8);
+    _primaryColor = const Color(0xFF416240);
+    _accentColor = const Color(0xFFA3B18A);
     _bg = const Color(0xFFF7F9FC);
     _card = Colors.white;
     _textPrimary = const Color(0xFF1A1A2E);
@@ -282,20 +283,19 @@ class _OrgDetailsScreenState extends State<OrgDetailsScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: _bg,
+      backgroundColor: Colors.transparent,
       extendBodyBehindAppBar: true,
       body: Stack(
         children: [
+          // Background gradient
           Container(
-            height: 300,
-            decoration: BoxDecoration(
+            decoration: const BoxDecoration(
               gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
                 colors: [
-                  _primaryColor.withOpacity(0.08),
-                  _accentColor.withOpacity(0.05),
-                  _bg,
+                  Color(0xFFE8F0E3), // soft light green top
+                  Colors.white, // white bottom
                 ],
               ),
             ),
@@ -1231,7 +1231,17 @@ class _OrgDetailsScreenState extends State<OrgDetailsScreen>
         child: InkWell(
           borderRadius: BorderRadius.circular(20),
           onTap: () {
-            // Handle doctor tap - navigate to doctor profile if needed
+            // Navigate to doctor profile
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder:
+                    (context) => DoctorProfileScreen(
+                      doctorId: doctor['id'],
+                      organizationId: widget.orgId,
+                    ),
+              ),
+            );
           },
           child: Container(
             padding: const EdgeInsets.all(16),

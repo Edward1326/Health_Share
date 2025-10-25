@@ -25,11 +25,11 @@ class _UserFilesScreenState extends State<UserFilesScreen>
   late List<Map<String, dynamic>> _files;
   bool _isLoading = false;
   String? _currentUserId;
-  String _sortBy = 'date';
   late AnimationController _staggerController;
   String _searchQuery = '';
   final TextEditingController _searchController = TextEditingController();
   bool _isSearchVisible = false;
+  String _selectedFilter = 'All';
 
   // Colors matching GroupDetailsScreen
   late Color _primaryColor;
@@ -84,7 +84,6 @@ class _UserFilesScreenState extends State<UserFilesScreen>
       if (userKey.isNotEmpty) {
         setState(() {
           _files = filesByUser[userKey]!;
-          _sortFiles();
         });
         _showSuccess('Files refreshed');
       } else {
@@ -97,41 +96,99 @@ class _UserFilesScreenState extends State<UserFilesScreen>
     }
   }
 
-  void _sortFiles() {
-    switch (_sortBy) {
-      case 'name':
-        _files.sort((a, b) {
-          final nameA = a['file']['filename'] ?? '';
-          final nameB = b['file']['filename'] ?? '';
-          return nameA.compareTo(nameB);
-        });
-        break;
-      case 'size':
-        _files.sort((a, b) {
-          final sizeA = a['file']['file_size'] ?? 0;
-          final sizeB = b['file']['file_size'] ?? 0;
-          return sizeB.compareTo(sizeA);
-        });
-        break;
-      case 'date':
-      default:
-        _files.sort((a, b) {
-          final dateA = a['shared_at'] ?? '';
-          final dateB = b['shared_at'] ?? '';
-          return dateB.compareTo(dateA);
-        });
-    }
+  bool _isDocumentType(String fileType) {
+    const documentTypes = [
+      'PDF',
+      'DOC',
+      'DOCX',
+      'XLS',
+      'XLSX',
+      'PPT',
+      'PPTX',
+      'TXT',
+      'RTF',
+      'CSV',
+      'ODT',
+      'DOCUMENT',
+    ];
+    return documentTypes.contains(fileType.toUpperCase());
+  }
+
+  bool _isImageType(String fileType) {
+    const imageTypes = [
+      'JPG',
+      'JPEG',
+      'PNG',
+      'GIF',
+      'BMP',
+      'TIFF',
+      'TIF',
+      'WEBP',
+      'HEIC',
+      'SVG',
+      'IMAGE',
+    ];
+    return imageTypes.contains(fileType.toUpperCase());
+  }
+
+  bool _isAudioType(String fileType) {
+    const audioTypes = ['MP3', 'WAV', 'M4A', 'AAC', 'OGG', 'AUDIO'];
+    return audioTypes.contains(fileType.toUpperCase());
+  }
+
+  bool _isVideoType(String fileType) {
+    const videoTypes = ['MP4', 'MOV', 'AVI', 'MKV', 'WEBM', 'VIDEO'];
+    return videoTypes.contains(fileType.toUpperCase());
+  }
+
+  bool _isCompressedType(String fileType) {
+    const compressedTypes = ['ZIP', 'RAR', '7Z', 'ARCHIVE'];
+    return compressedTypes.contains(fileType.toUpperCase());
   }
 
   List<Map<String, dynamic>> get _filteredFiles {
-    if (_searchQuery.isEmpty) return _files;
-    return _files
-        .where(
-          (file) => (file['file']['filename'] ?? '').toLowerCase().contains(
-            _searchQuery.toLowerCase(),
-          ),
-        )
-        .toList();
+    List<Map<String, dynamic>> filtered = _files;
+
+    if (_searchQuery.isNotEmpty) {
+      filtered =
+          filtered
+              .where(
+                (file) => (file['file']['filename'] ?? '')
+                    .toLowerCase()
+                    .contains(_searchQuery.toLowerCase()),
+              )
+              .toList();
+    }
+
+    if (_selectedFilter != 'All') {
+      filtered =
+          filtered.where((file) {
+            final fileType = (file['file']['file_type'] ?? '').toUpperCase();
+            switch (_selectedFilter) {
+              case 'DOCUMENT':
+                return _isDocumentType(fileType);
+              case 'IMAGE':
+                return _isImageType(fileType);
+              case 'AUDIO':
+                return _isAudioType(fileType);
+              case 'VIDEO':
+                return _isVideoType(fileType);
+              case 'COMPRESSED':
+                return _isCompressedType(fileType);
+              default:
+                return true;
+            }
+          }).toList();
+    }
+
+    // Default sort by latest (shared_at descending)
+    filtered.sort((a, b) {
+      final dateA = a['shared_at'] ?? '';
+      final dateB = b['shared_at'] ?? '';
+      return dateB.compareTo(dateA);
+    });
+
+    return filtered;
   }
 
   bool _canRemoveFile(Map<String, dynamic> shareRecord) {
@@ -143,21 +200,19 @@ class _UserFilesScreenState extends State<UserFilesScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: _bg,
+      backgroundColor: Colors.transparent,
       extendBodyBehindAppBar: true,
       body: Stack(
         children: [
-          // Gradient background
+          // Background gradient
           Container(
-            height: 300,
-            decoration: BoxDecoration(
+            decoration: const BoxDecoration(
               gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
                 colors: [
-                  _primaryColor.withOpacity(0.08),
-                  _accentColor.withOpacity(0.05),
-                  _bg,
+                  Color(0xFFE8F0E3), // soft light green top
+                  Colors.white, // white bottom
                 ],
               ),
             ),
@@ -173,8 +228,7 @@ class _UserFilesScreenState extends State<UserFilesScreen>
                     child: CustomScrollView(
                       slivers: [
                         SliverToBoxAdapter(child: _buildHeader()),
-                        SliverToBoxAdapter(child: const SizedBox(height: 28)),
-                        SliverToBoxAdapter(child: _buildSortSection()),
+                        SliverToBoxAdapter(child: const SizedBox(height: 20)),
                         if (_isSearchVisible)
                           SliverToBoxAdapter(child: _buildSearchField()),
                         SliverToBoxAdapter(child: const SizedBox(height: 20)),
@@ -218,7 +272,9 @@ class _UserFilesScreenState extends State<UserFilesScreen>
             icon: Icons.arrow_back_ios_new_rounded,
             onTap: () => Navigator.pop(context),
           ),
-          const Spacer(),
+          const SizedBox(width: 12),
+          Expanded(child: _buildFilterDropdown()),
+          const SizedBox(width: 12),
           _buildIconButton(
             icon:
                 _isSearchVisible
@@ -390,113 +446,106 @@ class _UserFilesScreenState extends State<UserFilesScreen>
     );
   }
 
-  Widget _buildSortSection() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      child: Container(
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: _card,
-          borderRadius: BorderRadius.circular(22),
-          border: Border.all(color: _primaryColor.withOpacity(0.1), width: 1.5),
-          boxShadow: [
-            BoxShadow(
-              color: _primaryColor.withOpacity(0.06),
-              blurRadius: 16,
-              offset: const Offset(0, 4),
-            ),
-          ],
+  Widget _buildFilterDropdown() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.95),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color:
+              _selectedFilter != 'All'
+                  ? _primaryColor.withOpacity(0.3)
+                  : _primaryColor.withOpacity(0.08),
+          width: 1.5,
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Sort by',
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w700,
-                color: _textSecondary,
-                letterSpacing: 0.5,
-              ),
-            ),
-            const SizedBox(height: 14),
-            Row(
-              children: [
-                _buildSortChip('Date', 'date', Icons.access_time_rounded),
-                const SizedBox(width: 10),
-                _buildSortChip('Name', 'name', Icons.sort_by_alpha_rounded),
-                const SizedBox(width: 10),
-                _buildSortChip('Size', 'size', Icons.data_usage_rounded),
-              ],
-            ),
-          ],
+      ),
+      child: DropdownButton<String>(
+        value: _selectedFilter,
+        underline: const SizedBox(),
+        isExpanded: true,
+        icon: Icon(
+          Icons.arrow_drop_down_rounded,
+          color:
+              _selectedFilter != 'All'
+                  ? _primaryColor
+                  : _primaryColor.withOpacity(0.6),
+          size: 24,
         ),
+        borderRadius: BorderRadius.circular(16),
+        dropdownColor: Colors.white,
+        elevation: 8,
+        style: TextStyle(
+          color: _textPrimary,
+          fontSize: 14,
+          fontWeight: FontWeight.w600,
+        ),
+        onChanged: (String? newValue) {
+          if (newValue != null) {
+            setState(() => _selectedFilter = newValue);
+          }
+        },
+        items: [
+          _buildDropdownItem('All', Icons.folder_rounded, _primaryColor),
+          _buildDropdownItem(
+            'DOCUMENT',
+            Icons.description_rounded,
+            const Color(0xFF4299E1),
+          ),
+          _buildDropdownItem(
+            'IMAGE',
+            Icons.image_rounded,
+            const Color(0xFF667EEA),
+          ),
+          _buildDropdownItem(
+            'AUDIO',
+            Icons.audio_file_rounded,
+            const Color(0xFF9F7AEA),
+          ),
+          _buildDropdownItem(
+            'VIDEO',
+            Icons.video_file_rounded,
+            const Color(0xFFED64A6),
+          ),
+          _buildDropdownItem(
+            'COMPRESSED',
+            Icons.folder_zip_rounded,
+            const Color(0xFFECC94B),
+          ),
+        ],
       ),
     );
   }
 
-  Widget _buildSortChip(String label, String value, IconData icon) {
-    final isSelected = _sortBy == value;
-    return Expanded(
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: () {
-            setState(() {
-              _sortBy = value;
-              _sortFiles();
-            });
-          },
-          borderRadius: BorderRadius.circular(14),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+  DropdownMenuItem<String> _buildDropdownItem(
+    String value,
+    IconData icon,
+    Color color,
+  ) {
+    final labels = {
+      'All': 'All Files',
+      'DOCUMENT': 'Documents',
+      'IMAGE': 'Images',
+      'AUDIO': 'Audio',
+      'VIDEO': 'Videos',
+      'COMPRESSED': 'Compressed',
+    };
+
+    return DropdownMenuItem(
+      value: value,
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(6),
             decoration: BoxDecoration(
-              gradient:
-                  isSelected
-                      ? LinearGradient(colors: [_primaryColor, _accentColor])
-                      : null,
-              color: isSelected ? null : _bg,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(
-                color:
-                    isSelected
-                        ? Colors.transparent
-                        : _primaryColor.withOpacity(0.15),
-                width: 1.5,
-              ),
-              boxShadow:
-                  isSelected
-                      ? [
-                        BoxShadow(
-                          color: _primaryColor.withOpacity(0.4),
-                          blurRadius: 12,
-                          offset: const Offset(0, 4),
-                        ),
-                      ]
-                      : null,
+              color: color.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(8),
             ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  icon,
-                  size: 16,
-                  color: isSelected ? Colors.white : _primaryColor,
-                ),
-                const SizedBox(width: 6),
-                Text(
-                  label,
-                  style: TextStyle(
-                    color: isSelected ? Colors.white : _textPrimary,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 13,
-                  ),
-                ),
-              ],
-            ),
+            child: Icon(icon, color: color, size: 16),
           ),
-        ),
+          const SizedBox(width: 12),
+          Text(labels[value] ?? value),
+        ],
       ),
     );
   }
@@ -632,7 +681,7 @@ class _UserFilesScreenState extends State<UserFilesScreen>
         );
       },
       child: Padding(
-        padding: const EdgeInsets.only(bottom: 14),
+        padding: const EdgeInsets.only(bottom: 12),
         child: _buildFileCard(shareRecord),
       ),
     );
@@ -642,7 +691,6 @@ class _UserFilesScreenState extends State<UserFilesScreen>
     final fileData = shareRecord['file'] ?? {};
     final fileName = fileData['filename'] ?? 'Unknown File';
     final fileType = GroupFunctions.getFileType(fileName);
-    final fileSize = GroupFunctions.formatFileSize(fileData['file_size'] ?? 0);
     final sharedDate = GroupFunctions.formatDate(shareRecord['shared_at']);
     final canRemove = _canRemoveFile(shareRecord);
 
@@ -650,61 +698,51 @@ class _UserFilesScreenState extends State<UserFilesScreen>
       margin: const EdgeInsets.only(bottom: 0),
       child: Material(
         color: _card,
-        borderRadius: BorderRadius.circular(22),
+        borderRadius: BorderRadius.circular(18),
         elevation: 0,
         child: InkWell(
           onTap: () => _previewSharedFile(shareRecord),
-          borderRadius: BorderRadius.circular(22),
+          borderRadius: BorderRadius.circular(18),
           child: Container(
-            padding: const EdgeInsets.all(18),
+            padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(22),
+              borderRadius: BorderRadius.circular(18),
               border: Border.all(
                 color: _primaryColor.withOpacity(0.08),
                 width: 1.5,
               ),
               boxShadow: [
                 BoxShadow(
-                  color: _primaryColor.withOpacity(0.06),
-                  blurRadius: 16,
-                  offset: const Offset(0, 4),
+                  color: Colors.black.withOpacity(0.02),
+                  blurRadius: 12,
+                  offset: const Offset(0, 2),
                 ),
               ],
             ),
             child: Row(
               children: [
                 Container(
-                  width: 64,
-                  height: 64,
+                  width: 48,
+                  height: 48,
                   decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [
-                        GroupFunctions.getFileIconColor(fileType),
-                        GroupFunctions.getFileIconColor(
-                          fileType,
-                        ).withOpacity(0.7),
-                      ],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
+                    color: GroupFunctions.getFileIconColor(
+                      fileType,
+                    ).withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(
+                      color: GroupFunctions.getFileIconColor(
+                        fileType,
+                      ).withOpacity(0.3),
+                      width: 1.5,
                     ),
-                    borderRadius: BorderRadius.circular(18),
-                    boxShadow: [
-                      BoxShadow(
-                        color: GroupFunctions.getFileIconColor(
-                          fileType,
-                        ).withOpacity(0.3),
-                        blurRadius: 12,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
                   ),
                   child: Icon(
                     GroupFunctions.getFileIcon(fileType),
-                    color: Colors.white,
-                    size: 28,
+                    color: GroupFunctions.getFileIconColor(fileType),
+                    size: 24,
                   ),
                 ),
-                const SizedBox(width: 18),
+                const SizedBox(width: 12),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -713,39 +751,87 @@ class _UserFilesScreenState extends State<UserFilesScreen>
                         fileName,
                         style: TextStyle(
                           fontWeight: FontWeight.w800,
-                          fontSize: 16,
+                          fontSize: 14,
                           color: _textPrimary,
-                          letterSpacing: -0.3,
+                          letterSpacing: -0.2,
                         ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
-                      const SizedBox(height: 10),
-                      _buildFileInfoChip(
-                        Icons.access_time_rounded,
-                        sharedDate,
-                        _primaryColor,
+                      const SizedBox(height: 6),
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 3,
+                            ),
+                            decoration: BoxDecoration(
+                              color: GroupFunctions.getFileIconColor(
+                                fileType,
+                              ).withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(5),
+                              border: Border.all(
+                                color: GroupFunctions.getFileIconColor(
+                                  fileType,
+                                ).withOpacity(0.3),
+                                width: 1,
+                              ),
+                            ),
+                            child: Text(
+                              fileType.toUpperCase(),
+                              style: TextStyle(
+                                fontSize: 9,
+                                fontWeight: FontWeight.w900,
+                                color: GroupFunctions.getFileIconColor(
+                                  fileType,
+                                ),
+                                letterSpacing: 0.5,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Icon(
+                            Icons.access_time_rounded,
+                            size: 12,
+                            color: Colors.grey[600],
+                          ),
+                          const SizedBox(width: 4),
+                          Expanded(
+                            child: Text(
+                              sharedDate,
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: Colors.grey[600],
+                                fontWeight: FontWeight.w600,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),
                 ),
+                const SizedBox(width: 8),
                 PopupMenuButton<String>(
                   icon: Container(
-                    padding: const EdgeInsets.all(10),
+                    padding: const EdgeInsets.all(6),
                     decoration: BoxDecoration(
                       color: _primaryColor.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: BorderRadius.circular(8),
                     ),
                     child: Icon(
                       Icons.more_vert_rounded,
                       color: _primaryColor,
-                      size: 18,
+                      size: 16,
                     ),
                   ),
                   color: Colors.white,
                   elevation: 12,
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(20),
+                    borderRadius: BorderRadius.circular(16),
                   ),
                   shadowColor: Colors.black.withOpacity(0.1),
                   offset: const Offset(0, 8),
@@ -762,27 +848,27 @@ class _UserFilesScreenState extends State<UserFilesScreen>
                       (context) => [
                         PopupMenuItem(
                           value: 'preview',
-                          height: 56,
+                          height: 48,
                           child: Row(
                             children: [
                               Container(
-                                padding: const EdgeInsets.all(8),
+                                padding: const EdgeInsets.all(6),
                                 decoration: BoxDecoration(
-                                  color: _primaryColor.withOpacity(0.1),
-                                  borderRadius: BorderRadius.circular(10),
+                                  color: Colors.blue.withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(8),
                                 ),
                                 child: Icon(
-                                  Icons.visibility_rounded,
-                                  size: 18,
-                                  color: _primaryColor,
+                                  Icons.remove_red_eye_rounded,
+                                  size: 16,
+                                  color: Colors.blue[700],
                                 ),
                               ),
-                              const SizedBox(width: 14),
+                              const SizedBox(width: 12),
                               const Text(
                                 'Preview',
                                 style: TextStyle(
                                   fontWeight: FontWeight.w600,
-                                  fontSize: 15,
+                                  fontSize: 14,
                                 ),
                               ),
                             ],
@@ -790,27 +876,27 @@ class _UserFilesScreenState extends State<UserFilesScreen>
                         ),
                         PopupMenuItem(
                           value: 'info',
-                          height: 56,
+                          height: 48,
                           child: Row(
                             children: [
                               Container(
-                                padding: const EdgeInsets.all(8),
+                                padding: const EdgeInsets.all(6),
                                 decoration: BoxDecoration(
-                                  color: Colors.blue.withOpacity(0.1),
-                                  borderRadius: BorderRadius.circular(10),
+                                  color: Colors.grey.withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(8),
                                 ),
-                                child: const Icon(
+                                child: Icon(
                                   Icons.info_outline_rounded,
-                                  size: 18,
-                                  color: Colors.blue,
+                                  size: 16,
+                                  color: Colors.grey[700],
                                 ),
                               ),
-                              const SizedBox(width: 14),
+                              const SizedBox(width: 12),
                               const Text(
                                 'Details',
                                 style: TextStyle(
                                   fontWeight: FontWeight.w600,
-                                  fontSize: 15,
+                                  fontSize: 14,
                                 ),
                               ),
                             ],
@@ -819,28 +905,28 @@ class _UserFilesScreenState extends State<UserFilesScreen>
                         if (canRemove)
                           PopupMenuItem(
                             value: 'remove',
-                            height: 56,
+                            height: 48,
                             child: Row(
                               children: [
                                 Container(
-                                  padding: const EdgeInsets.all(8),
+                                  padding: const EdgeInsets.all(6),
                                   decoration: BoxDecoration(
                                     color: Colors.red.withOpacity(0.1),
-                                    borderRadius: BorderRadius.circular(10),
+                                    borderRadius: BorderRadius.circular(8),
                                   ),
                                   child: const Icon(
                                     Icons.delete_outline_rounded,
-                                    size: 18,
+                                    size: 16,
                                     color: Colors.red,
                                   ),
                                 ),
-                                const SizedBox(width: 14),
+                                const SizedBox(width: 12),
                                 const Text(
                                   'Remove',
                                   style: TextStyle(
                                     color: Colors.red,
                                     fontWeight: FontWeight.w600,
-                                    fontSize: 15,
+                                    fontSize: 14,
                                   ),
                                 ),
                               ],
@@ -852,32 +938,6 @@ class _UserFilesScreenState extends State<UserFilesScreen>
             ),
           ),
         ),
-      ),
-    );
-  }
-
-  Widget _buildFileInfoChip(IconData icon, String label, Color color) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: color.withOpacity(0.2), width: 1),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 12, color: color),
-          const SizedBox(width: 6),
-          Text(
-            label,
-            style: TextStyle(
-              color: _textPrimary,
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ],
       ),
     );
   }
