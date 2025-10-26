@@ -2,10 +2,12 @@ import 'dart:convert';
 import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 import 'package:convert/convert.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 class HiveTransactionService {
   // Hive API endpoint
-  static const String _hiveApiUrl = 'https://api.hive.blog';
+  static String get _hiveNodeUrl =>
+      dotenv.env['HIVE_NODE_URL'] ?? 'https://api.openhive.network/';
 
   /// Creates an unsigned Hive transaction with the given operations
   ///
@@ -67,7 +69,7 @@ class HiveTransactionService {
   static Future<Map<String, dynamic>?> _getDynamicGlobalProperties() async {
     try {
       final response = await http.post(
-        Uri.parse(_hiveApiUrl),
+        Uri.parse(_hiveNodeUrl),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
           'jsonrpc': '2.0',
