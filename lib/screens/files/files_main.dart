@@ -8,6 +8,7 @@ import 'package:health_share/components/navbar_main.dart';
 
 import 'package:health_share/services/files_services/upload_file.dart';
 import 'package:health_share/services/files_services/decrypt_file.dart';
+import 'package:health_share/services/files_services/file_delete.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 class FilesScreen extends StatefulWidget {
@@ -91,7 +92,13 @@ class _FilesScreenState extends State<FilesScreen>
         return;
       }
 
-      final fileData = await DecryptFileService.fetchUserFiles(user.id);
+      // Fetch only non-deleted files
+      final fileData = await supabase
+          .from('Files')
+          .select('*')
+          .eq('uploaded_by', user.id)
+          .isFilter('deleted_at', null)
+          .order('uploaded_at', ascending: false);
 
       final loadedItems =
           fileData.map((file) {
@@ -999,6 +1006,8 @@ class _FilesScreenState extends State<FilesScreen>
                       _showShareSelectionDialog([item]);
                     } else if (value == 'details') {
                       _showDetails(item);
+                    } else if (value == 'delete') {
+                      _confirmDeleteFile(item);
                     }
                   },
                   itemBuilder:
@@ -1076,6 +1085,35 @@ class _FilesScreenState extends State<FilesScreen>
                                 style: TextStyle(
                                   fontWeight: FontWeight.w600,
                                   fontSize: 14,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        PopupMenuItem(
+                          value: 'delete',
+                          height: 48,
+                          child: Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(6),
+                                decoration: BoxDecoration(
+                                  color: Colors.red.withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: const Icon(
+                                  Icons.delete_outline_rounded,
+                                  size: 16,
+                                  color: Color(0xFFD32F2F),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              const Text(
+                                'Delete',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 14,
+                                  color: Color(0xFFD32F2F),
                                 ),
                               ),
                             ],
@@ -1193,6 +1231,8 @@ class _FilesScreenState extends State<FilesScreen>
                           _showShareSelectionDialog([item]);
                         } else if (value == 'details') {
                           _showDetails(item);
+                        } else if (value == 'delete') {
+                          _confirmDeleteFile(item);
                         }
                       },
                       itemBuilder:
@@ -1270,6 +1310,35 @@ class _FilesScreenState extends State<FilesScreen>
                                     style: TextStyle(
                                       fontWeight: FontWeight.w600,
                                       fontSize: 14,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            PopupMenuItem(
+                              value: 'delete',
+                              height: 48,
+                              child: Row(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.all(6),
+                                    decoration: BoxDecoration(
+                                      color: Colors.red.withOpacity(0.1),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: const Icon(
+                                      Icons.delete_outline_rounded,
+                                      size: 16,
+                                      color: Color(0xFFD32F2F),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  const Text(
+                                    'Delete',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 14,
+                                      color: Color(0xFFD32F2F),
                                     ),
                                   ),
                                 ],
@@ -1684,6 +1753,202 @@ class _FilesScreenState extends State<FilesScreen>
         ],
       ),
     );
+  }
+
+  /// Shows confirmation dialog before deleting a file
+  void _confirmDeleteFile(FileItem item) {
+    showDialog(
+      context: context,
+      builder:
+          (context) => AlertDialog(
+            backgroundColor: Colors.white,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(24),
+            ),
+            title: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: Colors.red.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(
+                    Icons.warning_rounded,
+                    size: 22,
+                    color: Color(0xFFD32F2F),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                const Expanded(
+                  child: Text(
+                    'Delete File',
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w900,
+                      color: textPrimary,
+                      letterSpacing: -0.3,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Are you sure you want to delete this file?',
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: textPrimary,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.grey[50],
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: primaryColor.withOpacity(0.1),
+                      width: 1.5,
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(item.icon, color: item.color, size: 20),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          item.name,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w700,
+                            fontSize: 14,
+                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.orange.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: Colors.orange.withOpacity(0.3),
+                      width: 1.5,
+                    ),
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(
+                        Icons.info_outline_rounded,
+                        color: Colors.orange[800],
+                        size: 20,
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          'This action cannot be undone. The file will be permanently undecryptable.',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.orange[800],
+                            height: 1.4,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                style: TextButton.styleFrom(
+                  foregroundColor: Colors.grey[700],
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 24,
+                    vertical: 12,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                child: const Text(
+                  'Cancel',
+                  style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
+                ),
+              ),
+              ElevatedButton(
+                onPressed: () {
+                  Navigator.pop(context);
+                  _deleteFile(item);
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFFD32F2F),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 24,
+                    vertical: 12,
+                  ),
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                child: const Text(
+                  'Delete',
+                  style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
+                ),
+              ),
+            ],
+          ),
+    );
+  }
+
+  /// Deletes a file and reloads the file list
+  Future<void> _deleteFile(FileItem item) async {
+    try {
+      final supabase = Supabase.instance.client;
+      final user = supabase.auth.currentUser;
+
+      if (user == null) {
+        _showError('User not logged in');
+        return;
+      }
+
+      // Fetch file details including hash
+      final fileData =
+          await supabase.from('Files').select('*').eq('id', item.id).single();
+
+      // Calculate or fetch file hash
+      // Note: If you don't have sha256_hash in your Files table,
+      // you'll need to compute it or use a placeholder
+      final fileHash = fileData['sha256_hash'] ?? 'hash_not_available';
+
+      final success = await FileDeleteService.deleteFile(
+        fileId: item.id,
+        fileName: item.name,
+        fileHash: fileHash,
+        userId: user.id,
+        context: context,
+      );
+
+      if (success) {
+        await _loadFiles();
+      }
+    } catch (e) {
+      _showError('Error deleting file: $e');
+    }
   }
 }
 

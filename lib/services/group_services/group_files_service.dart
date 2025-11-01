@@ -26,6 +26,8 @@ class GroupFileService {
             shared_by:User!shared_by_user_id(email, Person!inner(first_name, last_name))
           ''')
           .eq('shared_with_group_id', groupId)
+          .isFilter('revoked_at', null) // ✅ Only show active shares
+          .isFilter('file.deleted_at', null) // ✅ Hide globally deleted files
           .order('shared_at', ascending: false);
 
       print('Fetched ${sharedFiles.length} shared files for group $groupId');

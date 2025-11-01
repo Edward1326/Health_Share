@@ -202,33 +202,20 @@ class _OrgDoctorsFilesScreenState extends State<OrgDoctorsFilesScreen>
     return _currentUserId == fileOwnerId;
   }
 
+  // Replace _removeFileFromDoctor() with:
   Future<void> _removeFileFromDoctor(Map<String, dynamic> file) async {
-    if (_currentUserId == null || _doctorUserId == null) {
-      _showError('User not logged in');
-      return;
-    }
-
-    final fileName = file['filename'] ?? 'Unknown File';
-    final fileId = file['id'];
-
-    final confirm = await _showRemoveDialog(fileName);
+    final confirm = await _showRemoveDialog(file['filename']);
 
     if (confirm == true) {
-      try {
-        final success = await OrgFilesService.revokeFileFromDoctor(
-          fileId: fileId,
-          doctorUserId: _doctorUserId!,
-          userId: _currentUserId!,
-        );
+      final success = await OrgFilesService.revokeFileFromOrganization(
+        fileId: file['id'],
+        doctorId: _doctorUserId!,
+        userId: _currentUserId!,
+        context: context,
+      );
 
-        if (success) {
-          await _fetchSharedFiles();
-          _showSuccess('File share removed');
-        } else {
-          _showError('Failed to remove file share');
-        }
-      } catch (e) {
-        _showError('Error removing file share: $e');
+      if (success) {
+        await _fetchSharedFiles(); // Refresh list
       }
     }
   }
