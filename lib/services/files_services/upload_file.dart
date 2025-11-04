@@ -45,6 +45,9 @@ class UploadFileService {
 
       // Hash the encrypted AES output instead of the plaintext
       final fileHash = await _calculateSHA256(encryptedBytes);
+      print(
+        '📋 Original File Hash (Blockchain): $fileHash (recorded at upload)',
+      );
 
       // 4. Get current user
       final supabase = Supabase.instance.client;
@@ -85,7 +88,14 @@ class UploadFileService {
       );
 
       // 8. Upload encrypted file to Pinata
+      print('📤 Starting IPFS upload...');
+      print(
+        '   File size: ${(encryptedBytes.length / 1024).toStringAsFixed(2)} KB (${encryptedBytes.length} bytes)',
+      );
+      final uploadStartTime = DateTime.now();
+
       final ipfsCid = await _uploadToPinata(encryptedBytes, fileName);
+
       if (ipfsCid == null) {
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -94,7 +104,17 @@ class UploadFileService {
         }
         return false;
       }
-      print('Upload successful. CID: $ipfsCid');
+
+      final uploadEndTime = DateTime.now();
+      final uploadDuration = uploadEndTime.difference(uploadStartTime);
+      print('✓ IPFS upload successful!');
+      print('   CID: $ipfsCid');
+      print(
+        '   Upload time: ${uploadDuration.inSeconds}.${(uploadDuration.inMilliseconds % 1000).toString().padLeft(3, '0')} seconds',
+      );
+      print(
+        '   Upload speed: ${(encryptedBytes.length / 1024 / uploadDuration.inSeconds).toStringAsFixed(2)} KB/s',
+      );
 
       // 9. Insert file metadata into Supabase (WITHOUT sha256_hash)
       final uploadTimestamp = DateTime.now();
@@ -136,6 +156,7 @@ class UploadFileService {
       }
 
       // 🔗 11. HIVE BLOCKCHAIN INTEGRATION - The key connection point!
+      print('🔗 Uploading hash to Hive blockchain: $fileHash');
       final hiveResult = await _logToHiveBlockchain(
         fileName: fileName,
         fileHash: fileHash,
@@ -242,6 +263,7 @@ class UploadFileService {
 
         if (logSuccess) {
           print('✓ Hive log inserted into database');
+          print('✓ File hash $fileHash successfully recorded on blockchain');
           return HiveLogResult(
             success: true,
             transactionId: broadcastResult.getTxId(),

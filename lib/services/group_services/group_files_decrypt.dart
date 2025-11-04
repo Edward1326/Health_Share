@@ -10,6 +10,7 @@ import 'package:health_share/services/hive_service/verify_hive/hive_compare.dart
 class FilesDecryptGroup {
   // Cryptography instances
   static final _aesGcm = AesGcm.with256bits();
+  static final _sha256 = Sha256();
 
   /// Check if current user has access to a specific file in a group
   static Future<bool> hasGroupFileAccess(
@@ -56,21 +57,64 @@ class FilesDecryptGroup {
     required String groupId,
     required String userId,
     required String ipfsCid,
-    bool skipVerification = false, // Add this parameter
+    bool skipVerification = false,
   }) async {
+    final startTime = DateTime.now();
+    print('⏱️ Group decryption started at: $startTime');
+
     try {
       final supabase = Supabase.instance.client;
 
-      print('=== GROUP FILE DECRYPTION DEBUG ===');
+      print('=== GROUP FILE DECRYPTION START ===');
       print('File ID: $fileId');
       print('Group ID: $groupId');
       print('User ID: $userId');
       print('IPFS CID: $ipfsCid');
 
-      // 🔒 STEP 1: Verify blockchain integrity FIRST
+      // Verify user has access to this file
+      final hasAccess = await hasGroupFileAccess(fileId, groupId, userId);
+      if (!hasAccess) {
+        print('❌ User does not have access to this file');
+        return null;
+      }
+      print('✅ User has access to file');
+
+      // ═══════════════════════════════════════════════════════════
+      // STEP 1: DOWNLOAD ENCRYPTED FILE FROM IPFS
+      // ═══════════════════════════════════════════════════════════
+      print('\n📥 === STEP 1: DOWNLOAD FROM IPFS ===');
+      final downloadStart = DateTime.now();
+      final encryptedBytes = await _downloadFromIPFS(ipfsCid);
+
+      if (encryptedBytes == null) {
+        print('❌ Failed to download file from IPFS');
+        return null;
+      }
+
+      final downloadDuration = DateTime.now().difference(downloadStart);
+      print(
+        '✅ Downloaded file size: ${encryptedBytes.length} bytes (${(encryptedBytes.length / 1024).toStringAsFixed(2)} KB)',
+      );
+      print('⏱️ Download time: ${downloadDuration.inMilliseconds}ms');
+
+      // ═══════════════════════════════════════════════════════════
+      // STEP 2: REHASH THE DOWNLOADED FILE
+      // ═══════════════════════════════════════════════════════════
       if (!skipVerification) {
-        print('\n🔐 === BLOCKCHAIN VERIFICATION START ===');
-        print('Verifying file integrity against Hive blockchain...');
+        print('\n🔐 === STEP 2: REHASH DOWNLOADED FILE ===');
+        final hashStart = DateTime.now();
+
+        final downloadedFileHash = await _calculateSHA256(encryptedBytes);
+
+        final hashDuration = DateTime.now().difference(hashStart);
+        print('✅ Rehashed downloaded file: $downloadedFileHash');
+        print('⏱️ Hashing time: ${hashDuration.inMilliseconds}ms');
+
+        // ═══════════════════════════════════════════════════════════
+        // STEP 3: VERIFY BLOCKCHAIN INTEGRITY (Hive_Logs ↔ Blockchain)
+        // ═══════════════════════════════════════════════════════════
+        print('\n🔐 === STEP 3: BLOCKCHAIN INTEGRITY VERIFICATION ===');
+        print('Verifying Hive_Logs against Blockchain...');
 
         // Get Hive username from .env
         final hiveUsername = dotenv.env['HIVE_ACCOUNT_NAME'];
@@ -79,41 +123,65 @@ class FilesDecryptGroup {
           return null;
         }
 
-        final isVerified = await HiveCompareService.verifyBeforeDecryption(
-          fileId: fileId,
-          username: hiveUsername,
-        );
+        final blockchainVerification =
+            await HiveCompareService.verifyBeforeDecryption(
+              fileId: fileId,
+              username: hiveUsername,
+            );
 
-        if (!isVerified) {
-          print('❌ BLOCKCHAIN VERIFICATION FAILED');
-          print('File hash does not match blockchain record');
+        if (!blockchainVerification) {
+          print('❌ BLOCKCHAIN INTEGRITY VERIFICATION FAILED');
+          print('Hive_Logs hash does not match blockchain record');
           print('DECRYPTION ABORTED FOR SECURITY');
-          print('=== BLOCKCHAIN VERIFICATION END ===\n');
           return null;
         }
 
-        print('✅ BLOCKCHAIN VERIFICATION PASSED');
-        print('File integrity confirmed - proceeding with decryption');
-        print('=== BLOCKCHAIN VERIFICATION END ===\n');
+        print('✅ BLOCKCHAIN INTEGRITY VERIFIED');
+        print('Hive_Logs ↔ Blockchain match confirmed');
+
+        // ═══════════════════════════════════════════════════════════
+        // STEP 4: VERIFY FILE INTEGRITY (Downloaded File ↔ Blockchain)
+        // ═══════════════════════════════════════════════════════════
+        print('\n🔐 === STEP 4: FILE INTEGRITY VERIFICATION ===');
+        print('Comparing downloaded file hash with blockchain record...');
+
+        // Get the confirmed hash from Hive_Logs (which we just verified matches blockchain)
+        final hiveLogRecord =
+            await supabase
+                .from('Hive_Logs')
+                .select('file_hash')
+                .eq('file_id', fileId)
+                .maybeSingle();
+
+        if (hiveLogRecord == null) {
+          print('❌ No Hive_Logs record found');
+          return null;
+        }
+
+        final blockchainConfirmedHash = hiveLogRecord['file_hash'] as String;
+
+        print('Downloaded file hash: $downloadedFileHash');
+        print('Blockchain hash:       $blockchainConfirmedHash');
+
+        if (downloadedFileHash != blockchainConfirmedHash) {
+          print('❌ FILE INTEGRITY VERIFICATION FAILED');
+          print('Downloaded file hash DOES NOT match blockchain record');
+          print('The file may have been tampered with or corrupted on IPFS');
+          print('DECRYPTION ABORTED FOR SECURITY');
+          return null;
+        }
+
+        print('✅ FILE INTEGRITY VERIFIED');
+        print('Downloaded file matches blockchain record');
+        print('✅ ALL SECURITY CHECKS PASSED - Proceeding with decryption');
       } else {
-        print('⚠️ WARNING: Blockchain verification skipped');
+        print('⚠️ WARNING: All verification steps skipped');
       }
 
-      // Verify user has access to this file
-      final hasAccess = await hasGroupFileAccess(fileId, groupId, userId);
-      if (!hasAccess) {
-        print('❌ User does not have access to this file');
-        return null;
-      }
-      print('✓ User has access to file');
-
-      // Download encrypted file from IPFS
-      final encryptedBytes = await _downloadFromIPFS(ipfsCid);
-      if (encryptedBytes == null) {
-        print('❌ Failed to download file from IPFS');
-        return null;
-      }
-      print('✓ Downloaded ${encryptedBytes.length} bytes from IPFS');
+      // ═══════════════════════════════════════════════════════════
+      // STEP 5: DECRYPT THE FILE (Only if all checks passed)
+      // ═══════════════════════════════════════════════════════════
+      print('\n🔓 === STEP 5: DECRYPTION ===');
 
       // Get group's RSA private key
       print('Fetching group RSA private key...');
@@ -125,7 +193,7 @@ class FilesDecryptGroup {
               .single();
 
       final groupRsaPrivateKeyPem = groupData['rsa_private_key'] as String;
-      print('✓ Retrieved group RSA private key');
+      print('✅ Retrieved group RSA private key');
 
       // Get encrypted AES key package for this group
       print('Fetching group file key package...');
@@ -144,13 +212,13 @@ class FilesDecryptGroup {
       }
 
       final encryptedKeyPackage = groupFileKey['aes_key_encrypted'] as String;
-      print(
-        '✓ Retrieved encrypted AES key package, length: ${encryptedKeyPackage.length}',
-      );
+      print('✅ Retrieved encrypted AES key package');
 
       // Decrypt AES key package using group's RSA private key with fallback
       print('Decrypting AES key package...');
+      final rsaDecryptStart = DateTime.now();
       String? decryptedKeyJson;
+
       try {
         // Try RSA-OAEP first (for new group shares)
         decryptedKeyJson = await RSA.decryptOAEP(
@@ -159,15 +227,22 @@ class FilesDecryptGroup {
           Hash.SHA256,
           groupRsaPrivateKeyPem,
         );
-        print('✓ Successfully decrypted using RSA-OAEP');
+        final rsaDecryptDuration = DateTime.now().difference(rsaDecryptStart);
+        print('✅ Successfully decrypted using RSA-OAEP');
+        print('⏱️ RSA decryption time: ${rsaDecryptDuration.inMilliseconds}ms');
       } catch (e) {
-        print('RSA-OAEP decryption failed, trying PKCS1v15 fallback: $e');
+        print('⚠️ RSA-OAEP decryption failed: $e');
+        print('Attempting fallback to PKCS1v15 for backward compatibility...');
         try {
           decryptedKeyJson = await RSA.decryptPKCS1v15(
             encryptedKeyPackage,
             groupRsaPrivateKeyPem,
           );
-          print('✓ Successfully decrypted using PKCS1v15 fallback');
+          final rsaDecryptDuration = DateTime.now().difference(rsaDecryptStart);
+          print('✅ Successfully decrypted using PKCS1v15 fallback');
+          print(
+            '⏱️ RSA decryption time (fallback): ${rsaDecryptDuration.inMilliseconds}ms',
+          );
         } catch (fallbackError) {
           print('❌ Both RSA decryption methods failed: $fallbackError');
           return null;
@@ -183,15 +258,13 @@ class FilesDecryptGroup {
       final aesKeyBytes = base64Decode(aesKeyBase64);
       final nonceBytes = base64Decode(nonceBase64);
 
-      print('✓ Successfully decrypted AES key package');
-      print('AES key length: ${aesKeyBytes.length} bytes');
-      print('Nonce length: ${nonceBytes.length} bytes');
+      print('✅ Successfully extracted AES key and nonce');
 
       // Create SecretKey from bytes
       final aesKey = SecretKey(aesKeyBytes);
 
-      // Decrypt file using AES-GCM with cryptography package
-      print('Decrypting file data using AES-GCM...');
+      // Decrypt file using AES-GCM
+      final aesDecryptStart = DateTime.now();
       final decryptedBytes = await _decryptFileData(
         encryptedBytes,
         nonceBytes,
@@ -203,13 +276,29 @@ class FilesDecryptGroup {
         return null;
       }
 
-      print('✓ Successfully decrypted group shared file');
-      print('Decrypted size: ${decryptedBytes.length} bytes');
-      print('=== GROUP FILE DECRYPTION COMPLETED ===');
+      final aesDecryptDuration = DateTime.now().difference(aesDecryptStart);
+      print(
+        '⏱️ AES-GCM decryption time: ${aesDecryptDuration.inMilliseconds}ms',
+      );
+      print(
+        '📄 Decrypted file size: ${decryptedBytes.length} bytes (${(decryptedBytes.length / 1024).toStringAsFixed(2)} KB)',
+      );
+
+      // Calculate total time
+      final totalDuration = DateTime.now().difference(startTime);
+      print('\n✅ === GROUP DECRYPTION COMPLETE ===');
+      print(
+        '⏱️ Total decryption time: ${totalDuration.inMilliseconds}ms (${(totalDuration.inMilliseconds / 1000).toStringAsFixed(2)}s)',
+      );
+      print(
+        '📊 Decryption speed: ${(encryptedBytes.length / 1024 / (totalDuration.inMilliseconds / 1000)).toStringAsFixed(2)} KB/s',
+      );
 
       return decryptedBytes;
     } catch (e, stackTrace) {
+      final errorDuration = DateTime.now().difference(startTime);
       print('❌ Error during group file decryption: $e');
+      print('⏱️ Failed after: ${errorDuration.inMilliseconds}ms');
       print('Stack trace: $stackTrace');
       return null;
     }
@@ -222,6 +311,7 @@ class FilesDecryptGroup {
     required String userId,
     required String ipfsCid,
     String? groupId,
+    bool skipVerification = false,
   }) async {
     try {
       final supabase = Supabase.instance.client;
@@ -231,14 +321,6 @@ class FilesDecryptGroup {
       print('User ID: $userId');
       print('Group ID: $groupId');
       print('IPFS CID: $ipfsCid');
-
-      // Download encrypted file from IPFS first
-      final encryptedBytes = await _downloadFromIPFS(ipfsCid);
-      if (encryptedBytes == null) {
-        print('❌ Failed to download file from IPFS');
-        return null;
-      }
-      print('✓ Downloaded ${encryptedBytes.length} bytes from IPFS');
 
       // Try user's own key first (if they uploaded the file)
       print('Attempting decryption with user key...');
@@ -262,6 +344,13 @@ class FilesDecryptGroup {
                 .maybeSingle();
 
         if (userFileKey != null) {
+          // Download once for user key attempt
+          final encryptedBytes = await _downloadFromIPFS(ipfsCid);
+          if (encryptedBytes == null) {
+            print('❌ Failed to download file from IPFS');
+            return null;
+          }
+
           final encryptedKeyPackage =
               userFileKey['aes_key_encrypted'] as String;
 
@@ -296,7 +385,7 @@ class FilesDecryptGroup {
           );
 
           if (decryptedBytes != null) {
-            print('✓ Successfully decrypted using user key');
+            print('✅ Successfully decrypted using user key');
             return decryptedBytes;
           }
         }
@@ -312,6 +401,7 @@ class FilesDecryptGroup {
           groupId: groupId,
           userId: userId,
           ipfsCid: ipfsCid,
+          skipVerification: skipVerification,
         );
       }
 
@@ -331,10 +421,11 @@ class FilesDecryptGroup {
           groupId: testGroupId,
           userId: userId,
           ipfsCid: ipfsCid,
+          skipVerification: skipVerification,
         );
 
         if (result != null) {
-          print('✓ Successfully decrypted using group key: $testGroupId');
+          print('✅ Successfully decrypted using group key: $testGroupId');
           return result;
         }
       }
@@ -346,6 +437,14 @@ class FilesDecryptGroup {
       print('Stack trace: $stackTrace');
       return null;
     }
+  }
+
+  /// Calculate SHA-256 hash of file data
+  static Future<String> _calculateSHA256(Uint8List data) async {
+    final hash = await _sha256.hash(data);
+    return hash.bytes
+        .map((byte) => byte.toRadixString(16).padLeft(2, '0'))
+        .join();
   }
 
   /// Decrypt file data using AES-GCM with cryptography package
@@ -361,9 +460,7 @@ class FilesDecryptGroup {
 
       // Check if we have enough data (at least 16 bytes for MAC)
       if (combinedData.length < 16) {
-        print(
-          'Error: Combined data too short, must be at least 16 bytes for MAC',
-        );
+        print('❌ Combined data too short, must be at least 16 bytes for MAC');
         return null;
       }
 
@@ -383,7 +480,8 @@ class FilesDecryptGroup {
 
       return Uint8List.fromList(decryptedData);
     } catch (e) {
-      print('AES-GCM decryption failed: $e');
+      print('❌ AES-GCM decryption failed: $e');
+      print('This might be due to incorrect MAC separation or corrupted data');
 
       // Try alternative approaches for backward compatibility
       return await _tryAlternativeDecryption(combinedData, nonce, aesKey);
@@ -451,7 +549,7 @@ class FilesDecryptGroup {
 
       if (response.statusCode == 200) {
         print(
-          '✓ Successfully downloaded from IPFS. Size: ${response.bodyBytes.length} bytes',
+          '✅ Successfully downloaded from IPFS. Size: ${response.bodyBytes.length} bytes',
         );
         return response.bodyBytes;
       } else {

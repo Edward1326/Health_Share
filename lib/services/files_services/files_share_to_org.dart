@@ -303,7 +303,7 @@ class FileShareToOrgService {
       print('    🔑 Creating File_Keys record for doctor...');
       final keyInsertData = {
         'file_id': fileId,
-        'recipient_type': 'doctor',
+        'recipient_type': 'user',
         'recipient_id': doctorUserId, // Use User.id
         'aes_key_encrypted': doctorEncryptedKeyPackage,
         if (nonceHex != null && nonceHex.isNotEmpty) 'nonce_hex': nonceHex,

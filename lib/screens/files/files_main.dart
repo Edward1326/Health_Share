@@ -1512,9 +1512,8 @@ class _FilesScreenState extends State<FilesScreen>
       );
 
       Navigator.of(context).pop();
-
       if (decryptedBytes == null || decryptedBytes.isEmpty) {
-        _showError('Failed to decrypt file');
+        _showTamperedFileDialog(item.name);
         return;
       }
 
@@ -1531,6 +1530,76 @@ class _FilesScreenState extends State<FilesScreen>
       Navigator.of(context).pop();
       _showError('Error opening file: $e');
     }
+  }
+
+  void _showTamperedFileDialog(String fileName) {
+    showDialog(
+      context: context,
+      builder:
+          (context) => AlertDialog(
+            backgroundColor: Colors.white,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(24),
+            ),
+            title: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: Colors.red.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(
+                    Icons.warning_rounded,
+                    color: Color(0xFFD32F2F),
+                    size: 22,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                const Expanded(
+                  child: Text(
+                    'File Cannot Be Viewed',
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w900,
+                      color: Color(0xFF1A1A2E),
+                      letterSpacing: -0.3,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            content: Text(
+              'The file "$fileName" cannot be decrypted.\n\n'
+              'It may have been tampered with, corrupted, or failed integrity verification.',
+              style: const TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w500,
+                color: Color(0xFF444444),
+                height: 1.5,
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                style: TextButton.styleFrom(
+                  foregroundColor: const Color(0xFF416240),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 12,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                child: const Text(
+                  'OK',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                ),
+              ),
+            ],
+          ),
+    );
   }
 
   void _enableSelectionMode(int index) {

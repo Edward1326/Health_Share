@@ -7,11 +7,12 @@ import 'package:pointycastle/export.dart' hide Mac;
 import 'package:asn1lib/asn1lib.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:health_share/services/hive_service/verify_hive/hive_compare.dart';
-import 'package:fast_rsa/fast_rsa.dart'; // Added Fast RSA import
+import 'package:fast_rsa/fast_rsa.dart';
 
 class OrgFilesDecryptService {
   static final _supabase = Supabase.instance.client;
   static final _aesGcm = AesGcm.with256bits();
+  static final _sha256 = Sha256();
 
   /// Get the current authenticated user or throw an error
   static User get _currentUser {
@@ -23,6 +24,13 @@ class OrgFilesDecryptService {
   }
 
   /// Decrypt a file shared between doctor and patient using PointyCastle RSA
+  ///
+  /// CORRECT SECURITY FLOW:
+  /// 1. Download encrypted file from IPFS
+  /// 2. Rehash the downloaded file (SHA-256)
+  /// 3. Verify blockchain integrity (Hive_Logs ↔ Blockchain)
+  /// 4. Verify file integrity (Downloaded file ↔ Blockchain)
+  /// 5. Only decrypt if ALL verifications pass
   static Future<Uint8List?> decryptSharedFile({
     required String fileId,
     required String ipfsCid,
@@ -30,6 +38,9 @@ class OrgFilesDecryptService {
     required String doctorId,
     bool skipVerification = false,
   }) async {
+    final startTime = DateTime.now();
+    print('⏱️ Decryption started at: $startTime');
+
     try {
       print('=== ORG FILE DECRYPTION DEBUG ===');
       print('File ID: $fileId');
@@ -37,10 +48,42 @@ class OrgFilesDecryptService {
       print('Shared by: $sharedBy');
       print('Doctor ID: $doctorId');
 
-      // 🔒 STEP 1: Verify blockchain integrity FIRST
+      // ═══════════════════════════════════════════════════════════
+      // STEP 1: DOWNLOAD ENCRYPTED FILE FROM IPFS
+      // ═══════════════════════════════════════════════════════════
+      print('\n📥 === STEP 1: DOWNLOAD FROM IPFS ===');
+      final downloadStart = DateTime.now();
+      final encryptedBytes = await _downloadFromIPFS(ipfsCid);
+
+      if (encryptedBytes == null) {
+        print('❌ Failed to download file from IPFS');
+        return null;
+      }
+
+      final downloadDuration = DateTime.now().difference(downloadStart);
+      print(
+        '✅ Downloaded file size: ${encryptedBytes.length} bytes (${(encryptedBytes.length / 1024).toStringAsFixed(2)} KB)',
+      );
+      print('⏱️ Download time: ${downloadDuration.inMilliseconds}ms');
+
+      // ═══════════════════════════════════════════════════════════
+      // STEP 2: REHASH THE DOWNLOADED FILE
+      // ═══════════════════════════════════════════════════════════
       if (!skipVerification) {
-        print('\n🔐 === BLOCKCHAIN VERIFICATION START ===');
-        print('Verifying file integrity against Hive blockchain...');
+        print('\n🔐 === STEP 2: REHASH DOWNLOADED FILE ===');
+        final hashStart = DateTime.now();
+
+        final downloadedFileHash = await _calculateSHA256(encryptedBytes);
+
+        final hashDuration = DateTime.now().difference(hashStart);
+        print('✅ Rehashed downloaded file: $downloadedFileHash');
+        print('⏱️ Hashing time: ${hashDuration.inMilliseconds}ms');
+
+        // ═══════════════════════════════════════════════════════════
+        // STEP 3: VERIFY BLOCKCHAIN INTEGRITY (Hive_Logs ↔ Blockchain)
+        // ═══════════════════════════════════════════════════════════
+        print('\n🔐 === STEP 3: BLOCKCHAIN INTEGRITY VERIFICATION ===');
+        print('Verifying Hive_Logs against Blockchain...');
 
         // Get Hive username from .env
         final hiveUsername = dotenv.env['HIVE_ACCOUNT_NAME'];
@@ -49,36 +92,67 @@ class OrgFilesDecryptService {
           return null;
         }
 
-        final isVerified = await HiveCompareService.verifyBeforeDecryption(
-          fileId: fileId,
-          username: hiveUsername,
-        );
+        final blockchainVerification =
+            await HiveCompareService.verifyBeforeDecryption(
+              fileId: fileId,
+              username: hiveUsername,
+            );
 
-        if (!isVerified) {
-          print('❌ BLOCKCHAIN VERIFICATION FAILED');
-          print('File hash does not match blockchain record');
+        if (!blockchainVerification) {
+          print('❌ BLOCKCHAIN INTEGRITY VERIFICATION FAILED');
+          print('Hive_Logs hash does not match blockchain record');
           print('DECRYPTION ABORTED FOR SECURITY');
-          print('=== BLOCKCHAIN VERIFICATION END ===\n');
           return null;
         }
 
-        print('✅ BLOCKCHAIN VERIFICATION PASSED');
-        print('File integrity confirmed - proceeding with decryption');
-        print('=== BLOCKCHAIN VERIFICATION END ===\n');
+        print('✅ BLOCKCHAIN INTEGRITY VERIFIED');
+        print('Hive_Logs ↔ Blockchain match confirmed');
+
+        // ═══════════════════════════════════════════════════════════
+        // STEP 4: VERIFY FILE INTEGRITY (Downloaded File ↔ Blockchain)
+        // ═══════════════════════════════════════════════════════════
+        print('\n🔐 === STEP 4: FILE INTEGRITY VERIFICATION ===');
+        print('Comparing downloaded file hash with blockchain record...');
+
+        // Get the confirmed hash from Hive_Logs (which we just verified matches blockchain)
+        final hiveLogRecord =
+            await _supabase
+                .from('Hive_Logs')
+                .select('file_hash')
+                .eq('file_id', fileId)
+                .maybeSingle();
+
+        if (hiveLogRecord == null) {
+          print('❌ No Hive_Logs record found');
+          return null;
+        }
+
+        final blockchainConfirmedHash = hiveLogRecord['file_hash'] as String;
+
+        print('Downloaded file hash: $downloadedFileHash');
+        print('Blockchain hash:       $blockchainConfirmedHash');
+
+        if (downloadedFileHash != blockchainConfirmedHash) {
+          print('❌ FILE INTEGRITY VERIFICATION FAILED');
+          print('Downloaded file hash DOES NOT match blockchain record');
+          print('The file may have been tampered with or corrupted on IPFS');
+          print('DECRYPTION ABORTED FOR SECURITY');
+          return null;
+        }
+
+        print('✅ FILE INTEGRITY VERIFIED');
+        print('Downloaded file matches blockchain record');
+        print('✅ ALL SECURITY CHECKS PASSED - Proceeding with decryption');
       } else {
-        print('⚠️ WARNING: Blockchain verification skipped');
+        print('⚠️ WARNING: All verification steps skipped');
       }
 
-      // STEP 1: Download encrypted file from IPFS
-      print('\n--- Step 1: Downloading from IPFS ---');
-      final encryptedBytes = await _downloadFromIPFS(ipfsCid);
-      if (encryptedBytes == null) {
-        throw Exception('Failed to download file from IPFS');
-      }
-      print('✓ Downloaded ${encryptedBytes.length} bytes from IPFS');
+      // ═══════════════════════════════════════════════════════════
+      // STEP 5: DECRYPT THE FILE (Only if all checks passed)
+      // ═══════════════════════════════════════════════════════════
+      print('\n🔓 === STEP 5: DECRYPTION ===');
 
-      // STEP 2: Get current user's RSA private key
-      print('\n--- Step 2: Getting user RSA key ---');
+      // Get current user's RSA private key
       final userData =
           await _supabase
               .from('User')
@@ -93,8 +167,7 @@ class OrgFilesDecryptService {
 
       print('✓ Retrieved RSA private key for user: ${userData['email']}');
 
-      // STEP 3: Get the encrypted AES key
-      print('\n--- Step 3: Getting encrypted AES key ---');
+      // Get the encrypted AES key
       final fileKeyRecord =
           await _supabase
               .from('File_Keys')
@@ -108,35 +181,96 @@ class OrgFilesDecryptService {
         throw Exception('No decryption key found for this file');
       }
 
-      // STEP 4: Decrypt the file with PointyCastle and Fast RSA fallback
-      return _performDecryptionWithFallback(
+      // Decrypt the file with PointyCastle and Fast RSA fallback
+      final decryptedBytes = await _performDecryptionWithFallback(
         encryptedBytes,
         fileKeyRecord['aes_key_encrypted'] as String,
         fileKeyRecord['nonce_hex'] as String?,
         rsaPrivateKeyPem,
       );
+
+      if (decryptedBytes == null) {
+        print('❌ Failed to decrypt file data');
+        return null;
+      }
+
+      // Calculate total time
+      final totalDuration = DateTime.now().difference(startTime);
+      print('\n✅ === DECRYPTION COMPLETE ===');
+      print(
+        '⏱️ Total decryption time: ${totalDuration.inMilliseconds}ms (${(totalDuration.inMilliseconds / 1000).toStringAsFixed(2)}s)',
+      );
+      print(
+        '📊 Decryption speed: ${(encryptedBytes.length / 1024 / (totalDuration.inMilliseconds / 1000)).toStringAsFixed(2)} KB/s',
+      );
+
+      return decryptedBytes;
     } catch (e, stackTrace) {
+      final errorDuration = DateTime.now().difference(startTime);
       print('❌ Error in decryptSharedFile: $e');
+      print('⏱️ Failed after: ${errorDuration.inMilliseconds}ms');
       print('Stack trace: $stackTrace');
       return null;
     }
   }
 
   /// Alternative method that doesn't require knowing the sharing direction
+  ///
+  /// CORRECT SECURITY FLOW:
+  /// 1. Download encrypted file from IPFS
+  /// 2. Rehash the downloaded file (SHA-256)
+  /// 3. Verify blockchain integrity (Hive_Logs ↔ Blockchain)
+  /// 4. Verify file integrity (Downloaded file ↔ Blockchain)
+  /// 5. Only decrypt if ALL verifications pass
   static Future<Uint8List?> decryptSharedFileSimple({
     required String fileId,
     required String ipfsCid,
     bool skipVerification = false,
   }) async {
+    final startTime = DateTime.now();
+    print('⏱️ Simple decryption started at: $startTime');
+
     try {
       print('=== SIMPLE ORG FILE DECRYPTION ===');
       print('File ID: $fileId');
       print('IPFS CID: $ipfsCid');
 
-      // 🔒 STEP 1: Verify blockchain integrity FIRST
+      // ═══════════════════════════════════════════════════════════
+      // STEP 1: DOWNLOAD ENCRYPTED FILE FROM IPFS
+      // ═══════════════════════════════════════════════════════════
+      print('\n📥 === STEP 1: DOWNLOAD FROM IPFS ===');
+      final downloadStart = DateTime.now();
+      final encryptedBytes = await _downloadFromIPFS(ipfsCid);
+
+      if (encryptedBytes == null) {
+        print('❌ Failed to download file from IPFS');
+        return null;
+      }
+
+      final downloadDuration = DateTime.now().difference(downloadStart);
+      print(
+        '✅ Downloaded file size: ${encryptedBytes.length} bytes (${(encryptedBytes.length / 1024).toStringAsFixed(2)} KB)',
+      );
+      print('⏱️ Download time: ${downloadDuration.inMilliseconds}ms');
+
+      // ═══════════════════════════════════════════════════════════
+      // STEP 2: REHASH THE DOWNLOADED FILE
+      // ═══════════════════════════════════════════════════════════
       if (!skipVerification) {
-        print('\n🔐 === BLOCKCHAIN VERIFICATION START ===');
-        print('Verifying file integrity against Hive blockchain...');
+        print('\n🔐 === STEP 2: REHASH DOWNLOADED FILE ===');
+        final hashStart = DateTime.now();
+
+        final downloadedFileHash = await _calculateSHA256(encryptedBytes);
+
+        final hashDuration = DateTime.now().difference(hashStart);
+        print('✅ Rehashed downloaded file: $downloadedFileHash');
+        print('⏱️ Hashing time: ${hashDuration.inMilliseconds}ms');
+
+        // ═══════════════════════════════════════════════════════════
+        // STEP 3: VERIFY BLOCKCHAIN INTEGRITY (Hive_Logs ↔ Blockchain)
+        // ═══════════════════════════════════════════════════════════
+        print('\n🔐 === STEP 3: BLOCKCHAIN INTEGRITY VERIFICATION ===');
+        print('Verifying Hive_Logs against Blockchain...');
 
         // Get Hive username from .env
         final hiveUsername = dotenv.env['HIVE_ACCOUNT_NAME'];
@@ -145,31 +279,65 @@ class OrgFilesDecryptService {
           return null;
         }
 
-        final isVerified = await HiveCompareService.verifyBeforeDecryption(
-          fileId: fileId,
-          username: hiveUsername,
-        );
+        final blockchainVerification =
+            await HiveCompareService.verifyBeforeDecryption(
+              fileId: fileId,
+              username: hiveUsername,
+            );
 
-        if (!isVerified) {
-          print('❌ BLOCKCHAIN VERIFICATION FAILED');
-          print('File hash does not match blockchain record');
+        if (!blockchainVerification) {
+          print('❌ BLOCKCHAIN INTEGRITY VERIFICATION FAILED');
+          print('Hive_Logs hash does not match blockchain record');
           print('DECRYPTION ABORTED FOR SECURITY');
-          print('=== BLOCKCHAIN VERIFICATION END ===\n');
           return null;
         }
 
-        print('✅ BLOCKCHAIN VERIFICATION PASSED');
-        print('File integrity confirmed - proceeding with decryption');
-        print('=== BLOCKCHAIN VERIFICATION END ===\n');
+        print('✅ BLOCKCHAIN INTEGRITY VERIFIED');
+        print('Hive_Logs ↔ Blockchain match confirmed');
+
+        // ═══════════════════════════════════════════════════════════
+        // STEP 4: VERIFY FILE INTEGRITY (Downloaded File ↔ Blockchain)
+        // ═══════════════════════════════════════════════════════════
+        print('\n🔐 === STEP 4: FILE INTEGRITY VERIFICATION ===');
+        print('Comparing downloaded file hash with blockchain record...');
+
+        // Get the confirmed hash from Hive_Logs (which we just verified matches blockchain)
+        final hiveLogRecord =
+            await _supabase
+                .from('Hive_Logs')
+                .select('file_hash')
+                .eq('file_id', fileId)
+                .maybeSingle();
+
+        if (hiveLogRecord == null) {
+          print('❌ No Hive_Logs record found');
+          return null;
+        }
+
+        final blockchainConfirmedHash = hiveLogRecord['file_hash'] as String;
+
+        print('Downloaded file hash: $downloadedFileHash');
+        print('Blockchain hash:       $blockchainConfirmedHash');
+
+        if (downloadedFileHash != blockchainConfirmedHash) {
+          print('❌ FILE INTEGRITY VERIFICATION FAILED');
+          print('Downloaded file hash DOES NOT match blockchain record');
+          print('The file may have been tampered with or corrupted on IPFS');
+          print('DECRYPTION ABORTED FOR SECURITY');
+          return null;
+        }
+
+        print('✅ FILE INTEGRITY VERIFIED');
+        print('Downloaded file matches blockchain record');
+        print('✅ ALL SECURITY CHECKS PASSED - Proceeding with decryption');
       } else {
-        print('⚠️ WARNING: Blockchain verification skipped');
+        print('⚠️ WARNING: All verification steps skipped');
       }
 
-      // Download encrypted file
-      final encryptedBytes = await _downloadFromIPFS(ipfsCid);
-      if (encryptedBytes == null) {
-        throw Exception('Failed to download file from IPFS');
-      }
+      // ═══════════════════════════════════════════════════════════
+      // STEP 5: DECRYPT THE FILE (Only if all checks passed)
+      // ═══════════════════════════════════════════════════════════
+      print('\n🔓 === STEP 5: DECRYPTION ===');
 
       // Get user's RSA private key
       final userData =
@@ -196,17 +364,44 @@ class OrgFilesDecryptService {
       // Use the first valid key found
       final fileKeyRecord = fileKeyRecords.first;
 
-      return _performDecryptionWithFallback(
+      final decryptedBytes = await _performDecryptionWithFallback(
         encryptedBytes,
         fileKeyRecord['aes_key_encrypted'] as String,
         fileKeyRecord['nonce_hex'] as String?,
         rsaPrivateKeyPem,
       );
+
+      if (decryptedBytes == null) {
+        print('❌ Failed to decrypt file data');
+        return null;
+      }
+
+      // Calculate total time
+      final totalDuration = DateTime.now().difference(startTime);
+      print('\n✅ === DECRYPTION COMPLETE ===');
+      print(
+        '⏱️ Total decryption time: ${totalDuration.inMilliseconds}ms (${(totalDuration.inMilliseconds / 1000).toStringAsFixed(2)}s)',
+      );
+      print(
+        '📊 Decryption speed: ${(encryptedBytes.length / 1024 / (totalDuration.inMilliseconds / 1000)).toStringAsFixed(2)} KB/s',
+      );
+
+      return decryptedBytes;
     } catch (e, stackTrace) {
+      final errorDuration = DateTime.now().difference(startTime);
       print('❌ Error in decryptSharedFileSimple: $e');
+      print('⏱️ Failed after: ${errorDuration.inMilliseconds}ms');
       print('Stack trace: $stackTrace');
       return null;
     }
+  }
+
+  /// Calculate SHA-256 hash of file data
+  static Future<String> _calculateSHA256(Uint8List data) async {
+    final hash = await _sha256.hash(data);
+    return hash.bytes
+        .map((byte) => byte.toRadixString(16).padLeft(2, '0'))
+        .join();
   }
 
   /// Perform decryption with PointyCastle RSA first, then Fast RSA fallback
@@ -223,6 +418,7 @@ class OrgFilesDecryptService {
 
       String? decryptedJson;
       bool usedFastRSA = false;
+      final rsaDecryptStart = DateTime.now();
 
       // ATTEMPT 1: PointyCastle RSA-OAEP
       try {
@@ -288,9 +484,11 @@ class OrgFilesDecryptService {
         return null;
       }
 
+      final rsaDecryptDuration = DateTime.now().difference(rsaDecryptStart);
       print(
         'Decryption method used: ${usedFastRSA ? "Fast RSA" : "PointyCastle"}',
       );
+      print('⏱️ RSA decryption time: ${rsaDecryptDuration.inMilliseconds}ms');
 
       // Parse the decrypted JSON
       final keyData = jsonDecode(decryptedJson);
@@ -326,6 +524,7 @@ class OrgFilesDecryptService {
       final aesKey = SecretKey(aesKeyBytes);
 
       // Decrypt file using AES-GCM
+      final aesDecryptStart = DateTime.now();
       final decryptedBytes = await _decryptFileData(
         encryptedBytes,
         nonceBytes,
@@ -337,9 +536,14 @@ class OrgFilesDecryptService {
         return null;
       }
 
+      final aesDecryptDuration = DateTime.now().difference(aesDecryptStart);
+      print(
+        '⏱️ AES-GCM decryption time: ${aesDecryptDuration.inMilliseconds}ms',
+      );
       print(
         '✓ Successfully decrypted file. Size: ${decryptedBytes.length} bytes',
       );
+
       return decryptedBytes;
     } catch (e) {
       print('Error in _performDecryptionWithFallback: $e');
@@ -514,6 +718,7 @@ class OrgFilesDecryptService {
   }
 
   /// Decrypt file data using AES-GCM with cryptography package
+  /// Properly separates MAC from combined encrypted data
   static Future<Uint8List?> _decryptFileData(
     Uint8List combinedData, // Contains both ciphertext and MAC
     List<int> nonce,
@@ -666,5 +871,66 @@ class OrgFilesDecryptService {
       print('Error fetching file metadata: $e');
       return null;
     }
+  }
+
+  /// Batch decrypt multiple org files with three-way verification
+  ///
+  /// Efficiently verifies and decrypts multiple files in sequence
+  /// Returns a map of fileId -> decrypted bytes (or null if failed)
+  static Future<Map<String, Uint8List?>> decryptMultipleFiles({
+    required List<Map<String, String>>
+    files, // [{fileId, ipfsCid, sharedBy, doctorId}]
+    bool skipVerification = false,
+  }) async {
+    final batchStartTime = DateTime.now();
+    print('=== BATCH ORG FILE DECRYPTION START ===');
+    print('⏱️ Batch started at: $batchStartTime');
+    print('Files to decrypt: ${files.length}');
+
+    final results = <String, Uint8List?>{};
+    int totalBytes = 0;
+
+    for (final file in files) {
+      final fileId = file['fileId']!;
+      final ipfsCid = file['ipfsCid']!;
+      final sharedBy = file['sharedBy']!;
+      final doctorId = file['doctorId']!;
+
+      print('\nDecrypting file: $fileId');
+
+      final decryptedBytes = await decryptSharedFile(
+        fileId: fileId,
+        ipfsCid: ipfsCid,
+        sharedBy: sharedBy,
+        doctorId: doctorId,
+        skipVerification: skipVerification,
+      );
+
+      results[fileId] = decryptedBytes;
+      if (decryptedBytes != null) {
+        totalBytes += decryptedBytes.length;
+      }
+    }
+
+    final successCount = results.values.where((v) => v != null).length;
+    final failCount = files.length - successCount;
+    final batchDuration = DateTime.now().difference(batchStartTime);
+
+    print('\n=== BATCH ORG FILE DECRYPTION END ===');
+    print('Success: $successCount / ${files.length}');
+    print('Failed: $failCount / ${files.length}');
+    print(
+      '📦 Total data decrypted: ${totalBytes} bytes (${(totalBytes / 1024).toStringAsFixed(2)} KB)',
+    );
+    print(
+      '⏱️ Total batch time: ${batchDuration.inMilliseconds}ms (${(batchDuration.inMilliseconds / 1000).toStringAsFixed(2)}s)',
+    );
+    if (successCount > 0) {
+      print(
+        '📊 Average time per file: ${(batchDuration.inMilliseconds / successCount).toStringAsFixed(2)}ms',
+      );
+    }
+
+    return results;
   }
 }

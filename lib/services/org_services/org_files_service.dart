@@ -121,7 +121,7 @@ class OrgFilesService {
         final doctorFileKeys = await _supabase
             .from('File_Keys')
             .select('file_id')
-            .eq('recipient_type', 'doctor')
+            .eq('recipient_type', 'user')
             .eq('recipient_id', doctorUserId)
             .inFilter('file_id', userFileIds);
 
@@ -379,7 +379,7 @@ class OrgFilesService {
               .from('File_Keys')
               .delete()
               .eq('file_id', fileId)
-              .eq('recipient_type', 'doctor')
+              .eq('recipient_type', 'user')
               .eq('recipient_id', doctorId)
               .select();
 
