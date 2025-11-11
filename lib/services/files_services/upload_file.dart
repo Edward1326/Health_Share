@@ -17,6 +17,9 @@ class UploadFileService {
   // Pinata JWT token (store securely in .env)
   static final String _pinataJWT = dotenv.env['PINATA_JWT'] ?? '';
 
+  // Maximum file size: 200 MB in bytes
+  static const int maxFileSizeBytes = 200 * 1024 * 1024; // 200 MB
+
   // Cryptography instances
   static final _aesGcm = AesGcm.with256bits();
   static final _sha256 = Sha256();
@@ -33,6 +36,27 @@ class UploadFileService {
       final fileBytes = await file.readAsBytes();
       final fileName = file.path.split('/').last;
       final fileType = fileName.split('.').last.toUpperCase();
+
+      // 🚨 CHECK FILE SIZE LIMIT (200 MB)
+      if (fileBytes.length > maxFileSizeBytes) {
+        final fileSizeMB = (fileBytes.length / (1024 * 1024)).toStringAsFixed(
+          2,
+        );
+        final maxSizeMB = (maxFileSizeBytes / (1024 * 1024)).toStringAsFixed(0);
+
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'File size ($fileSizeMB MB) exceeds the maximum allowed size of $maxSizeMB MB',
+              ),
+              backgroundColor: Colors.red,
+              duration: const Duration(seconds: 4),
+            ),
+          );
+        }
+        return false;
+      }
 
       // 2. Calculate SHA-256 hash of original file
       // (Note: We will hash the encrypted data later for Hive logging)
@@ -393,7 +417,15 @@ class UploadFileService {
     return status;
   }
 
-  // ... (keep all existing helper methods unchanged)
+  /// Helper method to format file size for display
+  static String formatFileSize(int bytes) {
+    if (bytes < 1024) return '$bytes B';
+    if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(2)} KB';
+    if (bytes < 1024 * 1024 * 1024) {
+      return '${(bytes / (1024 * 1024)).toStringAsFixed(2)} MB';
+    }
+    return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(2)} GB';
+  }
 
   /// Calculate SHA-256 hash of file data
   static Future<String> _calculateSHA256(Uint8List data) async {
