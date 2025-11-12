@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:path/path.dart' as path;
@@ -45,6 +46,7 @@ class _EditProfileScreenState extends State<EditProfileScreen>
   static const Color _card = Colors.white;
   static const Color _textPrimary = Color(0xFF1A1A2E);
   static const Color _textSecondary = Color(0xFF6B7280);
+  static const Color _saveButtonColor = Color(0xFF416240);
 
   final List<String> _bloodTypes = [
     'O+',
@@ -440,36 +442,26 @@ class _EditProfileScreenState extends State<EditProfileScreen>
             ),
           ),
           Material(
-            color: _primaryColor,
+            color: const Color(0xFFDC2626),
             borderRadius: BorderRadius.circular(16),
             elevation: 0,
             child: InkWell(
-              onTap: _isLoading ? null : _saveProfile,
+              onTap: _isLoading ? null : () => Navigator.pop(context),
               borderRadius: BorderRadius.circular(16),
               child: Container(
                 padding: const EdgeInsets.symmetric(
                   horizontal: 20,
                   vertical: 12,
                 ),
-                child:
-                    _isLoading
-                        ? const SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Colors.white,
-                          ),
-                        )
-                        : const Text(
-                          'Save',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w700,
-                            fontSize: 15,
-                            letterSpacing: 0.2,
-                          ),
-                        ),
+                child: const Text(
+                  'Cancel',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 15,
+                    letterSpacing: 0.2,
+                  ),
+                ),
               ),
             ),
           ),
@@ -496,7 +488,7 @@ class _EditProfileScreenState extends State<EditProfileScreen>
                 const SizedBox(height: 16),
                 _buildStaggeredCard(2, _buildMedicalInfoCard()),
                 const SizedBox(height: 20),
-                _buildStaggeredCard(3, _buildCancelButton()),
+                _buildStaggeredCard(3, _buildSaveButton()),
                 const SizedBox(height: 100),
               ],
             ),
@@ -709,6 +701,8 @@ class _EditProfileScreenState extends State<EditProfileScreen>
             _contactController,
             Icons.phone_rounded,
             keyboardType: TextInputType.phone,
+            maxLength: 11,
+            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
           ),
         ],
       ),
@@ -811,6 +805,8 @@ class _EditProfileScreenState extends State<EditProfileScreen>
     int maxLines = 1,
     TextInputType keyboardType = TextInputType.text,
     String? hintText,
+    int? maxLength,
+    List<TextInputFormatter>? inputFormatters,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -829,6 +825,8 @@ class _EditProfileScreenState extends State<EditProfileScreen>
           controller: controller,
           maxLines: maxLines,
           keyboardType: keyboardType,
+          maxLength: maxLength,
+          inputFormatters: inputFormatters,
           style: const TextStyle(
             fontSize: 15,
             color: _textPrimary,
@@ -847,6 +845,7 @@ class _EditProfileScreenState extends State<EditProfileScreen>
             ),
             filled: true,
             fillColor: _bg,
+            counterText: '',
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(14),
               borderSide: BorderSide(
@@ -961,33 +960,43 @@ class _EditProfileScreenState extends State<EditProfileScreen>
     );
   }
 
-  Widget _buildCancelButton() {
+  Widget _buildSaveButton() {
     return SizedBox(
       width: double.infinity,
       child: ElevatedButton(
-        onPressed: _isLoading ? null : () => Navigator.pop(context),
+        onPressed: _isLoading ? null : _saveProfile,
         style: ElevatedButton.styleFrom(
-          backgroundColor: const Color.fromARGB(
-            255,
-            255,
-            0,
-            0,
-          ), // 🔴 Dark red (same darkness as 0xFF416240)
-          foregroundColor: Colors.white, // ⚪ Text color
+          backgroundColor: _saveButtonColor,
+          foregroundColor: Colors.white,
+          disabledBackgroundColor: _saveButtonColor.withOpacity(0.6),
+          disabledForegroundColor: Colors.white.withOpacity(0.7),
           padding: const EdgeInsets.symmetric(vertical: 18),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
           ),
           elevation: 0,
+          shadowColor: Colors.transparent,
+          surfaceTintColor: Colors.transparent,
         ),
-        child: const Text(
-          'Cancel',
-          style: TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w700,
-            letterSpacing: 0.2,
-          ),
-        ),
+
+        child:
+            _isLoading
+                ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: Colors.white,
+                  ),
+                )
+                : const Text(
+                  'Save',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.2,
+                  ),
+                ),
       ),
     );
   }

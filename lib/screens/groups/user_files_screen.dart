@@ -1043,6 +1043,10 @@ class _UserFilesScreenState extends State<UserFilesScreen>
     );
   }
 
+  // Replace the _previewSharedFile method in UserFilesScreen with this enhanced version:
+
+  // Replace the _previewSharedFile method in UserFilesScreen with this simplified version:
+
   Future<void> _previewSharedFile(Map<String, dynamic> shareRecord) async {
     if (_currentUserId == null) {
       _showError('User not logged in');
@@ -1060,7 +1064,9 @@ class _UserFilesScreenState extends State<UserFilesScreen>
         groupId: widget.groupId,
       );
     } catch (e) {
+      // The loading dialog is already closed by GroupFunctions
       final err = e.toString().toLowerCase();
+
       // If the error message suggests decryption/integrity failure, show the tampered dialog
       if (err.contains('decrypt') ||
           err.contains('decryption') ||
@@ -1074,7 +1080,7 @@ class _UserFilesScreenState extends State<UserFilesScreen>
     }
   }
 
-  // --- paste into UserFilesScreen State ---
+  // Keep the _showTamperedFileDialog method as is
   void _showTamperedFileDialog(String fileName) {
     showDialog(
       context: context,

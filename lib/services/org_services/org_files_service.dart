@@ -5,6 +5,7 @@ class OrgFilesService {
   static final _supabase = Supabase.instance.client;
 
   /// Fetch files shared between a user and doctor
+  /// Fetch files shared between a user and doctor
   static Future<List<Map<String, dynamic>>> fetchSharedFiles(
     String userId,
     String doctorId,
@@ -32,24 +33,29 @@ class OrgFilesService {
       // Map to store unique files (keyed by file_id)
       final Map<String, Map<String, dynamic>> allUniqueFiles = {};
 
-      // APPROACH 1: Direct doctor shares
+      // APPROACH 1: Direct doctor shares (fixed - only for current user)
       print('Approach 1: Direct doctor shares...');
       final directDoctorShares = await _supabase
           .from('File_Shares')
           .select('''
-          id,
-          file_id,
-          shared_at,
-          shared_by_user_id,
-          shared_with_user_id,
-          shared_with_doctor,
-          Files!inner(
-            id, filename, file_type, file_size, category, uploaded_at, sha256_hash, uploaded_by
-          )
-        ''')
+            id,
+            file_id,
+            shared_at,
+            shared_by_user_id,
+            shared_with_user_id,
+            shared_with_doctor,
+            Files!inner(
+              id, filename, file_type, file_size, category, uploaded_at, sha256_hash, uploaded_by
+            )
+          ''')
           .eq('shared_with_doctor', doctorUserId)
+          .eq(
+            'shared_by_user_id',
+            userId,
+          ) // ✅ Only include files shared by THIS user
           .isFilter('revoked_at', null);
 
+      print('Approach 1 results: ${directDoctorShares.length}');
       _processShares(directDoctorShares, allUniqueFiles, userId, doctorUserId);
 
       // APPROACH 2: Patient to doctor shares
@@ -57,20 +63,21 @@ class OrgFilesService {
       final patientToDoctorShares = await _supabase
           .from('File_Shares')
           .select('''
-          id,
-          file_id,
-          shared_at,
-          shared_by_user_id,
-          shared_with_user_id,
-          shared_with_doctor,
-          Files!inner(
-            id, filename, file_type, file_size, category, uploaded_at, sha256_hash, uploaded_by
-          )
-        ''')
+            id,
+            file_id,
+            shared_at,
+            shared_by_user_id,
+            shared_with_user_id,
+            shared_with_doctor,
+            Files!inner(
+              id, filename, file_type, file_size, category, uploaded_at, sha256_hash, uploaded_by
+            )
+          ''')
           .eq('shared_by_user_id', userId)
           .eq('shared_with_user_id', doctorUserId)
           .isFilter('revoked_at', null);
 
+      print('Approach 2 results: ${patientToDoctorShares.length}');
       _processShares(
         patientToDoctorShares,
         allUniqueFiles,
@@ -83,20 +90,21 @@ class OrgFilesService {
       final doctorToPatientShares = await _supabase
           .from('File_Shares')
           .select('''
-          id,
-          file_id,
-          shared_at,
-          shared_by_user_id,
-          shared_with_user_id,
-          shared_with_doctor,
-          Files!inner(
-            id, filename, file_type, file_size, category, uploaded_at, sha256_hash, uploaded_by
-          )
-        ''')
+            id,
+            file_id,
+            shared_at,
+            shared_by_user_id,
+            shared_with_user_id,
+            shared_with_doctor,
+            Files!inner(
+              id, filename, file_type, file_size, category, uploaded_at, sha256_hash, uploaded_by
+            )
+          ''')
           .eq('shared_by_user_id', doctorUserId)
           .eq('shared_with_user_id', userId)
           .isFilter('revoked_at', null);
 
+      print('Approach 3 results: ${doctorToPatientShares.length}');
       _processShares(
         doctorToPatientShares,
         allUniqueFiles,
@@ -104,131 +112,7 @@ class OrgFilesService {
         doctorUserId,
       );
 
-      // APPROACH 4: Cross-reference File_Keys (OPTIMIZED)
-      print('Approach 4: Cross-referencing File_Keys...');
-
-      // Get file IDs that both users have keys for
-      final userFileKeys = await _supabase
-          .from('File_Keys')
-          .select('file_id')
-          .eq('recipient_type', 'user')
-          .eq('recipient_id', userId);
-
-      final userFileIds =
-          userFileKeys.map((fk) => fk['file_id'] as String).toList();
-
-      if (userFileIds.isNotEmpty) {
-        final doctorFileKeys = await _supabase
-            .from('File_Keys')
-            .select('file_id')
-            .eq('recipient_type', 'user')
-            .eq('recipient_id', doctorUserId)
-            .inFilter('file_id', userFileIds);
-
-        final sharedFileIds =
-            doctorFileKeys.map((fk) => fk['file_id'] as String).toList();
-
-        if (sharedFileIds.isNotEmpty) {
-          // Filter out files already found in previous approaches
-          final newFileIds =
-              sharedFileIds
-                  .where((id) => !allUniqueFiles.containsKey(id))
-                  .toList();
-
-          if (newFileIds.isNotEmpty) {
-            print(
-              'Found ${newFileIds.length} new files from File_Keys cross-reference',
-            );
-
-            // SINGLE QUERY: Get ALL share records for these files at once
-            final allShareRecords = await _supabase
-                .from('File_Shares')
-                .select(
-                  'file_id, shared_by_user_id, shared_with_user_id, shared_at, shared_with_doctor',
-                )
-                .inFilter('file_id', newFileIds)
-                .isFilter('revoked_at', null)
-                .order('shared_at', ascending: true);
-
-            // Create lookup map: fileId -> earliest share record
-            final Map<String, Map<String, dynamic>> shareRecordsByFileId = {};
-            for (final record in allShareRecords) {
-              final fileId = record['file_id'] as String;
-              // Keep only the earliest share record per file
-              if (!shareRecordsByFileId.containsKey(fileId)) {
-                shareRecordsByFileId[fileId] = record;
-              }
-            }
-
-            // SINGLE QUERY: Get file details for all new files
-            final sharedFilesDetails = await _supabase
-                .from('Files')
-                .select(
-                  'id, filename, file_type, file_size, category, uploaded_at, sha256_hash, uploaded_by',
-                )
-                .inFilter('id', newFileIds);
-
-            // Process each file with its share record
-            for (final file in sharedFilesDetails) {
-              final fileId = file['id'] as String;
-              final shareRecord = shareRecordsByFileId[fileId];
-
-              String sharedBy = 'Unknown';
-              String sharedWith = 'Unknown';
-              String? sharedAt;
-              String? sharedByUserId;
-
-              if (shareRecord != null) {
-                // Use the share record
-                sharedAt = shareRecord['shared_at'];
-                sharedByUserId = shareRecord['shared_by_user_id'];
-
-                if (shareRecord['shared_with_doctor'] == doctorUserId) {
-                  sharedBy = 'You';
-                  sharedWith = 'Doctor';
-                } else if (shareRecord['shared_by_user_id'] == userId) {
-                  sharedBy = 'You';
-                  sharedWith = 'Doctor';
-                } else if (shareRecord['shared_by_user_id'] == doctorUserId) {
-                  sharedBy = 'Doctor';
-                  sharedWith = 'You';
-                }
-
-                allUniqueFiles[fileId] = {
-                  ...file,
-                  'shared_at': sharedAt,
-                  'shared_by': sharedBy,
-                  'shared_with': sharedWith,
-                  'shared_by_user_id': sharedByUserId,
-                };
-              } else {
-                // No share record found - use uploaded_at as fallback
-                print(
-                  '⚠️ No share record found for file $fileId, using uploaded_at as fallback',
-                );
-
-                // Determine sharedBy based on who uploaded the file
-                if (file['uploaded_by'] == userId) {
-                  sharedBy = 'You';
-                  sharedWith = 'Doctor';
-                } else if (file['uploaded_by'] == doctorUserId) {
-                  sharedBy = 'Doctor';
-                  sharedWith = 'You';
-                }
-
-                allUniqueFiles[fileId] = {
-                  ...file,
-                  'shared_at':
-                      file['uploaded_at'] ?? DateTime.now().toIso8601String(),
-                  'shared_by': sharedBy,
-                  'shared_with': sharedWith,
-                  'shared_by_user_id': file['uploaded_by'],
-                };
-              }
-            }
-          }
-        }
-      }
+      // ✅ Approach 4 (File_Keys cross-reference) has been removed completely
 
       // Sort by shared_at date and return
       final filesList = allUniqueFiles.values.toList();

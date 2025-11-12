@@ -1404,48 +1404,113 @@ class _OrgDoctorsFilesScreenState extends State<OrgDoctorsFilesScreen>
       child: InkWell(
         borderRadius: BorderRadius.circular(18),
         onTap: () async {
+          // Show enhanced loading dialog
           showDialog(
             context: context,
             barrierDismissible: false,
-            builder:
-                (context) => Dialog(
-                  shape: RoundedRectangleBorder(
+            builder: (BuildContext context) {
+              return Dialog(
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Container(
+                  padding: const EdgeInsets.all(24),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
                     borderRadius: BorderRadius.circular(20),
                   ),
-                  child: Padding(
-                    padding: const EdgeInsets.all(28),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(20),
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              colors: [
-                                _primaryColor.withOpacity(0.1),
-                                _accentColor.withOpacity(0.1),
-                              ],
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // Animated circular progress indicator
+                      Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          SizedBox(
+                            width: 80,
+                            height: 80,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 4,
+                              valueColor: AlwaysStoppedAnimation<Color>(
+                                _primaryColor,
+                              ),
                             ),
-                            shape: BoxShape.circle,
                           ),
-                          child: CircularProgressIndicator(
-                            color: _primaryColor,
-                            strokeWidth: 3.5,
+                          Container(
+                            width: 60,
+                            height: 60,
+                            decoration: BoxDecoration(
+                              color: _primaryColor.withOpacity(0.1),
+                              shape: BoxShape.circle,
+                            ),
+                            child: Icon(
+                              Icons.lock_open_rounded,
+                              color: _primaryColor,
+                              size: 32,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 24),
+                      Text(
+                        'Decrypting File',
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w900,
+                          color: _textPrimary,
+                          letterSpacing: -0.3,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Please wait while we decrypt and verify $fileName...',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                          color: _textPrimary.withOpacity(0.6),
+                          height: 1.4,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 10,
+                        ),
+                        decoration: BoxDecoration(
+                          color: _primaryColor.withOpacity(0.05),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: _primaryColor.withOpacity(0.1),
+                            width: 1,
                           ),
                         ),
-                        const SizedBox(height: 20),
-                        Text(
-                          'Decrypting file...',
-                          style: TextStyle(
-                            fontWeight: FontWeight.w700,
-                            color: _textPrimary,
-                            fontSize: 16,
-                          ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.verified_user_rounded,
+                              size: 16,
+                              color: _primaryColor.withOpacity(0.7),
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              'Verifying integrity from blockchain',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: _primaryColor.withOpacity(0.8),
+                              ),
+                            ),
+                          ],
                         ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
                 ),
+              );
+            },
           );
 
           try {

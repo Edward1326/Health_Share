@@ -491,8 +491,8 @@ class AuthService {
       print('Email: $email');
       print('');
 
-      // Ensure we're signed out first
-      print('Step 1/2: Ensuring clean state...');
+      // Step 1: Sign out to ensure clean state
+      print('Step 1/5: Ensuring clean state...');
       try {
         await _supabase.auth.signOut();
         print('✅ Previous session cleared');
@@ -500,9 +500,61 @@ class AuthService {
         print('ℹ️ No previous session to clear');
       }
 
-      // Sign in
+      // Step 2: Try to authenticate to get user ID
       print('');
-      print('Step 2/2: Signing in with credentials...');
+      print('Step 2/5: Authenticating to get user ID...');
+
+      AuthResponse tempResponse;
+      try {
+        tempResponse = await _supabase.auth.signInWithPassword(
+          email: email,
+          password: password,
+        );
+      } catch (e) {
+        print('❌ Authentication failed: $e');
+        throw Exception('Invalid email or password');
+      }
+
+      if (tempResponse.session == null || tempResponse.user == null) {
+        throw Exception('Sign in failed - no session created');
+      }
+
+      print('✅ Credentials verified');
+      final userId = tempResponse.user!.id;
+      print('   User ID: $userId');
+
+      // Step 3: Immediately sign out (we just needed the user ID)
+      print('');
+      print('Step 3/5: Signing out to check profile...');
+      await _supabase.auth.signOut();
+      print('✅ Signed out');
+
+      // Step 4: Check if user profile exists in database
+      print('');
+      print('Step 4/5: Checking user profile existence...');
+
+      final userProfile =
+          await _supabase.from('User').select().eq('id', userId).maybeSingle();
+
+      if (userProfile == null) {
+        print('❌ No user profile found in database');
+        print('   This indicates incomplete registration');
+        print('');
+        print('╔═══════════════════════════════════════════╗');
+        print('║      SIGN-IN BLOCKED: NO PROFILE          ║');
+        print('╚═══════════════════════════════════════════╝');
+        print('');
+
+        throw Exception('registration_incomplete');
+      }
+
+      print('✅ User profile found');
+      print('   Person ID: ${userProfile['person_id']}');
+      print('   Email: ${userProfile['email']}');
+
+      // Step 5: Profile exists, now actually sign in
+      print('');
+      print('Step 5/5: Profile verified, signing in...');
       final response = await _supabase.auth.signInWithPassword(
         email: email,
         password: password,
@@ -513,8 +565,6 @@ class AuthService {
       }
 
       print('✅ Sign in successful');
-      print('   User ID: ${response.user?.id}');
-      print('   Email: ${response.user?.email}');
       print('');
       print('╔═══════════════════════════════════════════╗');
       print('║   EMAIL/PASSWORD SIGN-IN COMPLETED        ║');
@@ -529,7 +579,14 @@ class AuthService {
       print('╚═══════════════════════════════════════════╝');
       print('');
       print('Error: $e');
-      throw Exception('Failed to sign in: $e');
+
+      // Make sure user is signed out on any error
+      try {
+        await _supabase.auth.signOut();
+      } catch (_) {}
+
+      // Re-throw the original error
+      rethrow;
     }
   }
 

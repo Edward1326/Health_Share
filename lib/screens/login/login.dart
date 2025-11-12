@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:health_share/screens/login/complete_registration.dart';
 import 'package:health_share/screens/login/forgot_password.dart';
 import 'package:health_share/screens/registration/register.dart';
 import 'package:health_share/services/auth_services/auth_service.dart';
@@ -93,10 +94,14 @@ class _LoginScreenState extends State<LoginScreen>
     final password = _passwordController.text.trim();
 
     try {
+      print('🎯 CALLING signInWithEmailPassword...');
       final response = await authService.signInWithEmailPassword(
         email,
         password,
       );
+
+      print('🎯 signInWithEmailPassword RETURNED');
+      print('Response session: ${response.session}');
 
       if (response.session != null && mounted) {
         setState(() => _isLoading = false);
@@ -106,13 +111,170 @@ class _LoginScreenState extends State<LoginScreen>
           _primaryColor,
         );
       }
+    } on Exception catch (e) {
+      print('');
+      print('🔍 EXCEPTION CATCH BLOCK REACHED');
+      print('Exception: $e');
+      print('Exception type: ${e.runtimeType}');
+
+      if (mounted) {
+        setState(() => _isLoading = false);
+
+        final errorString = e.toString().toLowerCase();
+        print('Error string (lowercase): $errorString');
+        print(
+          'Contains registration_incomplete: ${errorString.contains('registration_incomplete')}',
+        );
+
+        // Check for registration incomplete
+        if (errorString.contains('registration_incomplete')) {
+          print('✅ CONDITION MATCHED - Showing dialog');
+          _showCompleteRegistrationDialog(email);
+          return;
+        }
+
+        // Other error handling
+        String errorMessage = 'Login failed. Please try again.';
+        IconData errorIcon = Icons.error_outline_rounded;
+
+        if (errorString.contains('invalid') ||
+            errorString.contains('password')) {
+          errorMessage = 'Invalid email or password';
+        }
+
+        _showSnackBar(errorMessage, errorIcon, Colors.red[700]!);
+      }
     } catch (e) {
+      print('');
+      print('🔍 GENERAL CATCH BLOCK REACHED');
+      print('Error: $e');
+      print('Error type: ${e.runtimeType}');
+
       if (mounted) {
         setState(() => _isLoading = false);
         _showSnackBar(
-          e.toString().contains('Invalid login credentials')
-              ? 'Invalid email or password'
-              : 'Login failed. Please try again.',
+          'Login failed. Please try again.',
+          Icons.error_outline_rounded,
+          Colors.red[700]!,
+        );
+      }
+    }
+  }
+
+  void _showCompleteRegistrationDialog(String email) {
+    print('');
+    print('🎬 _showCompleteRegistrationDialog CALLED');
+    print('Email: $email');
+    print('Context mounted: $mounted');
+    print('');
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) {
+        print('📦 Dialog builder executing');
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          title: Row(
+            children: [
+              Icon(
+                Icons.pending_actions_rounded,
+                color: _primaryColor,
+                size: 28,
+              ),
+              const SizedBox(width: 12),
+              const Text(
+                'Complete Registration',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+              ),
+            ],
+          ),
+          content: Text(
+            'Your registration is incomplete. We\'ll resend the verification code to:\n\n$email\n\nPlease enter the code to complete your registration.',
+            style: TextStyle(fontSize: 14, color: _textSecondary, height: 1.5),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text(
+                'Cancel',
+                style: TextStyle(
+                  color: _textSecondary,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                Navigator.pop(context);
+                await _resendOTPAndNavigate(email);
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _primaryColor,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24,
+                  vertical: 12,
+                ),
+              ),
+              child: const Text(
+                'Resend Code',
+                style: TextStyle(
+                  fontWeight: FontWeight.w700,
+                  color: Colors.white,
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+    print('✅ showDialog executed');
+  }
+
+  Future<void> _resendOTPAndNavigate(String email) async {
+    try {
+      // Show loading
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const Center(child: CircularProgressIndicator()),
+      );
+
+      // Resend OTP
+      await authService.sendOTP(email);
+
+      if (mounted) {
+        // Close loading dialog
+        Navigator.pop(context);
+
+        _showSnackBar(
+          'Verification code sent! Check your email.',
+          Icons.check_circle_rounded,
+          _primaryColor,
+        );
+
+        // Navigate to CompleteRegistrationScreen
+        await Future.delayed(const Duration(milliseconds: 500));
+
+        if (mounted) {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => CompleteRegistrationScreen(email: email),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        Navigator.pop(context); // Close loading
+        _showSnackBar(
+          'Failed to send code. Please try again.',
           Icons.error_outline_rounded,
           Colors.red[700]!,
         );

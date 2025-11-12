@@ -91,7 +91,8 @@ class OrgDoctorService {
               )
             )
           ''')
-          .eq('patient_id', patientId);
+          .eq('patient_id', patientId)
+          .eq('status', 'active');
 
       // Filter for this specific organization
       final filteredAssignments =

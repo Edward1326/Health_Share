@@ -1,8 +1,8 @@
 import 'dart:ui';
-
 import 'package:flutter/material.dart';
 import 'package:health_share/screens/groups/user_files_screen.dart';
 import 'package:health_share/screens/profile/view_profile.dart';
+import 'package:health_share/services/group_services/group_delete.dart';
 import 'package:health_share/services/group_services/group_files_service.dart';
 import 'package:health_share/services/group_services/group_functions.dart';
 import 'package:health_share/services/group_services/group_fetch_service.dart';
@@ -333,6 +333,7 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen>
       ),
       onSelected: (v) {
         if (v == 'leave') _showLeaveGroupDialog();
+        if (v == 'delete') _showDeleteGroupDialog();
         if (v == 'add') _showAddMemberDialog();
       },
       itemBuilder:
@@ -367,8 +368,9 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen>
                   ],
                 ),
               ),
+            // Show "Delete Group" if owner, "Leave Group" if not
             PopupMenuItem(
-              value: 'leave',
+              value: _isGroupOwner ? 'delete' : 'leave',
               height: 56,
               child: Row(
                 children: [
@@ -378,16 +380,18 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen>
                       color: Colors.red.withOpacity(0.1),
                       borderRadius: BorderRadius.circular(10),
                     ),
-                    child: const Icon(
-                      Icons.exit_to_app_rounded,
+                    child: Icon(
+                      _isGroupOwner
+                          ? Icons.delete_rounded
+                          : Icons.exit_to_app_rounded,
                       size: 18,
                       color: Colors.red,
                     ),
                   ),
                   const SizedBox(width: 14),
-                  const Text(
-                    'Leave Group',
-                    style: TextStyle(
+                  Text(
+                    _isGroupOwner ? 'Delete Group' : 'Leave Group',
+                    style: const TextStyle(
                       color: Colors.red,
                       fontWeight: FontWeight.w600,
                       fontSize: 15,
@@ -437,7 +441,6 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen>
           ),
           child: Row(
             children: [
-              // Compact avatar
               Hero(
                 tag: avatarTag,
                 child: Container(
@@ -473,7 +476,6 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen>
                 ),
               ),
               const SizedBox(width: 18),
-              // Group info and stats
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -1623,6 +1625,194 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen>
       );
       await _fetchMembers();
       _showSuccess('$email removed successfully');
+    } catch (e) {
+      _showError(e.toString().replaceAll('Exception: ', ''));
+    }
+  }
+
+  void _showDeleteGroupDialog() async {
+    // Get deletion summary
+    final summary = await GroupDeleteService.getGroupDeletionSummary(
+      groupId: widget.groupId,
+    );
+
+    if (!mounted) return;
+
+    showDialog(
+      context: context,
+      builder:
+          (context) => Dialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(28),
+            ),
+            backgroundColor: _card,
+            child: Padding(
+              padding: const EdgeInsets.all(28),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.red.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: const Icon(
+                      Icons.delete_rounded,
+                      color: Colors.red,
+                      size: 32,
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  const Text(
+                    'Delete Group',
+                    style: TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.w900,
+                      color: Colors.red,
+                      letterSpacing: -0.5,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    'Are you sure you want to delete "${widget.groupName}"? This action cannot be undone.',
+                    style: TextStyle(
+                      fontSize: 15,
+                      color: _textSecondary,
+                      fontWeight: FontWeight.w500,
+                      height: 1.5,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 20),
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: _bg,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: _textSecondary.withOpacity(0.2),
+                        width: 1,
+                      ),
+                    ),
+                    child: Column(
+                      children: [
+                        Text(
+                          'This will permanently:',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            color: _textPrimary,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        _buildDeletionItem(
+                          Icons.people_rounded,
+                          'Remove ${summary['members_count']} member(s)',
+                        ),
+                        _buildDeletionItem(
+                          Icons.folder_off_rounded,
+                          'Revoke ${summary['file_shares_count']} file share(s)',
+                        ),
+                        _buildDeletionItem(
+                          Icons.delete_forever_rounded,
+                          'Delete the group permanently',
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () => Navigator.pop(context),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: _textSecondary,
+                            side: BorderSide(
+                              color: _textSecondary.withOpacity(0.3),
+                              width: 1.5,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                          ),
+                          child: const Text(
+                            'Cancel',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w700,
+                              fontSize: 15,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: ElevatedButton(
+                          onPressed: () async {
+                            Navigator.pop(context);
+                            await _deleteGroup();
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.red,
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            elevation: 0,
+                          ),
+                          child: const Text(
+                            'Delete',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w800,
+                              fontSize: 15,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+    );
+  }
+
+  Widget _buildDeletionItem(IconData icon, String text) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        children: [
+          Icon(icon, size: 16, color: Colors.red),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              text,
+              style: TextStyle(
+                fontSize: 13,
+                color: _textSecondary,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _deleteGroup() async {
+    try {
+      await GroupDeleteService.deleteGroup(
+        groupId: widget.groupId,
+        userId: _currentUserId!,
+      );
+      if (mounted) {
+        Navigator.pop(context, true);
+        _showSuccess('Group "${widget.groupName}" deleted successfully');
+      }
     } catch (e) {
       _showError(e.toString().replaceAll('Exception: ', ''));
     }

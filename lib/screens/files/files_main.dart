@@ -303,17 +303,109 @@ class _FilesScreenState extends State<FilesScreen>
       showDialog(
         context: context,
         barrierDismissible: false,
-        builder:
-            (context) => AlertDialog(
-              content: Column(
+        builder: (BuildContext context) {
+          return Dialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const CircularProgressIndicator(color: primaryColor),
+                  // Animated circular progress indicator
+                  Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      const SizedBox(
+                        width: 80,
+                        height: 80,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 4,
+                          valueColor: AlwaysStoppedAnimation<Color>(
+                            primaryColor,
+                          ),
+                        ),
+                      ),
+                      Container(
+                        width: 60,
+                        height: 60,
+                        decoration: BoxDecoration(
+                          color: primaryColor.withOpacity(0.1),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.share_rounded,
+                          color: primaryColor,
+                          size: 32,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
+                  const Text(
+                    'Sharing Files',
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w900,
+                      color: textPrimary,
+                      letterSpacing: -0.3,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Sharing ${filesToShare.length} file(s) to selected recipients...',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                      color: textPrimary.withOpacity(0.6),
+                      height: 1.4,
+                    ),
+                  ),
                   const SizedBox(height: 16),
-                  Text('Sharing ${filesToShare.length} file(s)...'),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 10,
+                    ),
+                    decoration: BoxDecoration(
+                      color: primaryColor.withOpacity(0.05),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: primaryColor.withOpacity(0.1),
+                        width: 1,
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.security_rounded,
+                          size: 16,
+                          color: primaryColor.withOpacity(0.7),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Creating secure share links',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: primaryColor.withOpacity(0.8),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ],
               ),
             ),
+          );
+        },
       );
 
       final fileIds = filesToShare.map((file) => file.id).toList();
@@ -1457,9 +1549,137 @@ class _FilesScreenState extends State<FilesScreen>
     );
   }
 
+  // Add this method to your _FilesScreenState class
+
   void _uploadFile() async {
-    final success = await UploadFileService.uploadFile(context);
-    if (success) await _loadFiles();
+    // Show loading dialog
+    showDialog(
+      context: context,
+      barrierDismissible: false, // Prevent dismissing by tapping outside
+      builder: (BuildContext context) {
+        return Dialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Animated circular progress indicator
+                Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    SizedBox(
+                      width: 80,
+                      height: 80,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 4,
+                        valueColor: AlwaysStoppedAnimation<Color>(primaryColor),
+                      ),
+                    ),
+                    Container(
+                      width: 60,
+                      height: 60,
+                      decoration: BoxDecoration(
+                        color: primaryColor.withOpacity(0.1),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.cloud_upload_rounded,
+                        color: primaryColor,
+                        size: 32,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 24),
+                const Text(
+                  'Uploading File',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w900,
+                    color: textPrimary,
+                    letterSpacing: -0.3,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Please wait while we encrypt and upload your file...',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                    color: textPrimary.withOpacity(0.6),
+                    height: 1.4,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                // Optional: Add detailed status
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 10,
+                  ),
+                  decoration: BoxDecoration(
+                    color: primaryColor.withOpacity(0.05),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: primaryColor.withOpacity(0.1),
+                      width: 1,
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.lock_rounded,
+                        size: 16,
+                        color: primaryColor.withOpacity(0.7),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Encrypting & uploading to IPFS',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: primaryColor.withOpacity(0.8),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+
+    try {
+      // Perform the actual upload
+      final success = await UploadFileService.uploadFile(context);
+
+      // Close loading dialog
+      if (mounted) {
+        Navigator.of(context).pop();
+      }
+
+      // Reload files if successful
+      if (success) {
+        await _loadFiles();
+      }
+    } catch (e) {
+      // Close loading dialog on error
+      if (mounted) {
+        Navigator.of(context).pop();
+      }
+      _showError('Upload failed: $e');
+    }
   }
 
   void _shareSelectedFiles() async {
@@ -1469,21 +1689,116 @@ class _FilesScreenState extends State<FilesScreen>
     await _showShareSelectionDialog(selectedItems);
   }
 
+  // Replace your _previewFile() method with this enhanced version:
+
   void _previewFile(FileItem item) async {
+    // Show enhanced loading dialog
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder:
-          (context) => AlertDialog(
-            content: Column(
+      builder: (BuildContext context) {
+        return Dialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const CircularProgressIndicator(color: primaryColor),
+                // Animated circular progress indicator
+                Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    const SizedBox(
+                      width: 80,
+                      height: 80,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 4,
+                        valueColor: AlwaysStoppedAnimation<Color>(
+                          Color(0xFF416240), // primaryColor
+                        ),
+                      ),
+                    ),
+                    Container(
+                      width: 60,
+                      height: 60,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF416240).withOpacity(0.1),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.lock_open_rounded,
+                        color: Color(0xFF416240),
+                        size: 32,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 24),
+                const Text(
+                  'Decrypting File',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w900,
+                    color: Color(0xFF1A1A2E), // textPrimary
+                    letterSpacing: -0.3,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Please wait while we decrypt and verify ${item.name}...',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                    color: const Color(0xFF1A1A2E).withOpacity(0.6),
+                    height: 1.4,
+                  ),
+                ),
                 const SizedBox(height: 16),
-                Text('Decrypting ${item.name}...'),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 10,
+                  ),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF416240).withOpacity(0.05),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: const Color(0xFF416240).withOpacity(0.1),
+                      width: 1,
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.verified_user_rounded,
+                        size: 16,
+                        color: const Color(0xFF416240).withOpacity(0.7),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Verifying integrity from blockchain',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: const Color(0xFF416240).withOpacity(0.8),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ],
             ),
           ),
+        );
+      },
     );
 
     try {
@@ -1512,6 +1827,7 @@ class _FilesScreenState extends State<FilesScreen>
       );
 
       Navigator.of(context).pop();
+
       if (decryptedBytes == null || decryptedBytes.isEmpty) {
         _showTamperedFileDialog(item.name);
         return;

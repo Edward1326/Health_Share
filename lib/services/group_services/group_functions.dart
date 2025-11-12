@@ -161,7 +161,122 @@ class GroupFunctions {
     return GroupFileService.organizeFilesByUser(sharedFiles);
   }
 
-  /// Preview a shared file using fullscreen preview
+  /// Show enhanced loading dialog for file decryption
+  static void showDecryptionLoadingDialog({
+    required BuildContext context,
+    required String fileName,
+  }) {
+    final primaryColor = const Color(0xFF416240);
+    final textPrimary = const Color(0xFF1A1A2E);
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return Dialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Animated circular progress indicator
+                Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    SizedBox(
+                      width: 80,
+                      height: 80,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 4,
+                        valueColor: AlwaysStoppedAnimation<Color>(primaryColor),
+                      ),
+                    ),
+                    Container(
+                      width: 60,
+                      height: 60,
+                      decoration: BoxDecoration(
+                        color: primaryColor.withOpacity(0.1),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        Icons.lock_open_rounded,
+                        color: primaryColor,
+                        size: 32,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 24),
+                Text(
+                  'Decrypting File',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w900,
+                    color: textPrimary,
+                    letterSpacing: -0.3,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Please wait while we decrypt and verify $fileName...',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                    color: textPrimary.withOpacity(0.6),
+                    height: 1.4,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 10,
+                  ),
+                  decoration: BoxDecoration(
+                    color: primaryColor.withOpacity(0.05),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: primaryColor.withOpacity(0.1),
+                      width: 1,
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.verified_user_rounded,
+                        size: 16,
+                        color: primaryColor.withOpacity(0.7),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Verifying integrity from blockchain',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: primaryColor.withOpacity(0.8),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  /// Preview a shared file using fullscreen preview with enhanced loading dialog
   static Future<void> previewSharedFile({
     required BuildContext context,
     required Map<String, dynamic> shareRecord,
@@ -174,22 +289,8 @@ class GroupFunctions {
       final fileId = fileData['id'];
       final ipfsCid = fileData['ipfs_cid'];
 
-      // Show loading dialog
-      showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder:
-            (context) => AlertDialog(
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const CircularProgressIndicator(),
-                  const SizedBox(height: 16),
-                  Text('Decrypting $fileName...'),
-                ],
-              ),
-            ),
-      );
+      // Show enhanced loading dialog
+      showDecryptionLoadingDialog(context: context, fileName: fileName);
 
       final decryptedBytes = await FilesDecryptGroup.decryptGroupSharedFile(
         fileId: fileId,
@@ -250,7 +351,6 @@ class GroupFunctions {
     return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(1)} GB';
   }
 
-  /// Format date to human readable string
   /// Format date to human-readable string with time in 12-hour format
   static String formatDate(String dateString) {
     try {

@@ -3,30 +3,25 @@ import 'package:health_share/screens/files/files_main.dart';
 import 'package:health_share/services/auth_services/auth_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-class EmailVerificationScreen extends StatefulWidget {
+class CompleteRegistrationScreen extends StatefulWidget {
   final String email;
-  final String firstName;
-  final String middleName;
-  final String lastName;
-  final String phone;
 
-  const EmailVerificationScreen({
-    super.key,
-    required this.email,
-    required this.firstName,
-    required this.middleName,
-    required this.lastName,
-    required this.phone,
-  });
+  const CompleteRegistrationScreen({super.key, required this.email});
 
   @override
-  State<EmailVerificationScreen> createState() =>
-      _EmailVerificationScreenState();
+  State<CompleteRegistrationScreen> createState() =>
+      _CompleteRegistrationScreenState();
 }
 
-class _EmailVerificationScreenState extends State<EmailVerificationScreen>
+class _CompleteRegistrationScreenState extends State<CompleteRegistrationScreen>
     with SingleTickerProviderStateMixin {
   final authService = AuthService();
+  final _supabase = Supabase.instance.client;
+
+  final _firstNameController = TextEditingController();
+  final _middleNameController = TextEditingController();
+  final _lastNameController = TextEditingController();
+  final _phoneController = TextEditingController();
 
   final List<TextEditingController> _otpControllers = List.generate(
     6,
@@ -46,7 +41,7 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen>
   late Animation<double> _scaleAnimation;
   late Animation<Offset> _slideAnimation;
 
-  // Consistent color scheme
+  // Consistent color scheme matching other screens
   static const Color _primaryColor = Color(0xFF416240);
   static const Color _accentColor = Color(0xFFA3B18A);
   static const Color _bg = Color(0xFFF8FAF8);
@@ -93,6 +88,10 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen>
   @override
   void dispose() {
     _animationController.dispose();
+    _firstNameController.dispose();
+    _middleNameController.dispose();
+    _lastNameController.dispose();
+    _phoneController.dispose();
     for (var controller in _otpControllers) {
       controller.dispose();
     }
@@ -156,8 +155,12 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen>
     );
   }
 
-  void _verifyOtp() async {
+  void _verifyAndComplete() async {
     final otpCode = _getOtpCode();
+    final firstName = _firstNameController.text.trim();
+    final lastName = _lastNameController.text.trim();
+    final middleName = _middleNameController.text.trim();
+    final phone = _phoneController.text.trim();
 
     if (otpCode.length != 6) {
       _showSnackBar(
@@ -168,50 +171,61 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen>
       return;
     }
 
+    if (firstName.isEmpty || lastName.isEmpty || phone.isEmpty) {
+      _showSnackBar(
+        'Please fill in all required fields',
+        Icons.warning_amber_rounded,
+        Colors.orange[700]!,
+      );
+      return;
+    }
+
     setState(() => _isLoading = true);
 
     try {
-      // Step 1: Verify OTP and create profile
       await authService.verifyOTPAndCreateProfile(
         widget.email,
         otpCode,
-        widget.firstName,
-        widget.middleName,
-        widget.lastName,
-        widget.phone,
+        firstName,
+        middleName,
+        lastName,
+        phone,
       );
 
-      // Step 2: Wait and verify profile was actually created
+      // Wait and verify profile was created
       print('Waiting for profile creation to complete...');
       await Future.delayed(const Duration(milliseconds: 1000));
 
-      // Step 3: Double-check profile exists before navigating
       final userId = authService.getCurrentUser()?.id;
       if (userId != null) {
-        final supabase = Supabase.instance.client;
         final profile =
-            await supabase.from('User').select().eq('id', userId).maybeSingle();
+            await _supabase
+                .from('User')
+                .select()
+                .eq('id', userId)
+                .maybeSingle();
 
         if (profile == null) {
           throw Exception('Profile creation failed. Please try again.');
         }
 
-        print('✅ Profile verified to exist before navigation');
+        print('✅ Profile verified to exist');
       }
 
       if (mounted) {
         setState(() => _isLoading = false);
         _showSnackBar(
-          'Email verified! Account created successfully!',
+          'Registration completed successfully!',
           Icons.check_circle_rounded,
-          Color(0xFF416240),
+          _primaryColor,
         );
 
         await Future.delayed(const Duration(milliseconds: 500));
         if (mounted) {
-          Navigator.pushReplacement(
+          Navigator.pushAndRemoveUntil(
             context,
             MaterialPageRoute(builder: (context) => const FilesScreen()),
+            (route) => false,
           );
         }
       }
@@ -259,7 +273,7 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen>
       backgroundColor: _bg,
       body: Stack(
         children: [
-          // Subtle background gradient
+          // Subtle background gradient matching other screens
           Positioned.fill(
             child: Container(
               decoration: BoxDecoration(
@@ -293,7 +307,7 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen>
                       const SizedBox(height: 50),
                       SlideTransition(
                         position: _slideAnimation,
-                        child: _buildVerificationCard(),
+                        child: _buildRegistrationCard(),
                       ),
                       const SizedBox(height: 32),
                     ],
@@ -329,14 +343,14 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen>
             ],
           ),
           child: const Icon(
-            Icons.mail_outline_rounded,
+            Icons.app_registration_rounded,
             color: Colors.white,
             size: 42,
           ),
         ),
         const SizedBox(height: 24),
         const Text(
-          'Verify Email',
+          'Complete Registration',
           style: TextStyle(
             fontSize: 32,
             fontWeight: FontWeight.w900,
@@ -347,7 +361,7 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen>
         ),
         const SizedBox(height: 8),
         Text(
-          'Enter the 6-digit code',
+          'Enter code and your details',
           style: TextStyle(
             fontSize: 16,
             fontWeight: FontWeight.w500,
@@ -359,7 +373,7 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen>
     );
   }
 
-  Widget _buildVerificationCard() {
+  Widget _buildRegistrationCard() {
     return Container(
       decoration: BoxDecoration(
         color: _card,
@@ -450,12 +464,42 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen>
                     ],
                   ),
                 ),
-                const SizedBox(height: 40),
-                _buildOtpInputFields(),
                 const SizedBox(height: 32),
-                _buildVerifyButton(),
-                const SizedBox(height: 28),
+                _buildOtpInputFields(),
+                const SizedBox(height: 20),
                 _buildResendSection(),
+                const SizedBox(height: 32),
+                _buildInputField(
+                  label: 'First Name',
+                  controller: _firstNameController,
+                  icon: Icons.person_outline_rounded,
+                  hint: 'Enter first name',
+                ),
+                const SizedBox(height: 18),
+                _buildInputField(
+                  label: 'Middle Name',
+                  controller: _middleNameController,
+                  icon: Icons.person_outline_rounded,
+                  hint: 'Enter middle name',
+                  isOptional: true,
+                ),
+                const SizedBox(height: 18),
+                _buildInputField(
+                  label: 'Last Name',
+                  controller: _lastNameController,
+                  icon: Icons.person_outline_rounded,
+                  hint: 'Enter last name',
+                ),
+                const SizedBox(height: 18),
+                _buildInputField(
+                  label: 'Phone Number',
+                  controller: _phoneController,
+                  icon: Icons.phone_outlined,
+                  hint: '09123456789',
+                  keyboardType: TextInputType.phone,
+                ),
+                const SizedBox(height: 32),
+                _buildCompleteButton(),
               ],
             ),
           ),
@@ -520,65 +564,6 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen>
     );
   }
 
-  Widget _buildVerifyButton() {
-    return Container(
-      width: double.infinity,
-      height: 56,
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [_primaryColor, _accentColor],
-          begin: Alignment.centerLeft,
-          end: Alignment.centerRight,
-        ),
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: _primaryColor.withOpacity(0.3),
-            blurRadius: 16,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
-      child: ElevatedButton(
-        onPressed: _isLoading ? null : _verifyOtp,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: Colors.transparent,
-          foregroundColor: Colors.white,
-          shadowColor: Colors.transparent,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
-          padding: EdgeInsets.zero,
-        ),
-        child:
-            _isLoading
-                ? const SizedBox(
-                  height: 24,
-                  width: 24,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2.5,
-                    color: Colors.white,
-                  ),
-                )
-                : const Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      'Verify Email',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: 0.3,
-                      ),
-                    ),
-                    SizedBox(width: 8),
-                    Icon(Icons.check_circle_outline_rounded, size: 20),
-                  ],
-                ),
-      ),
-    );
-  }
-
   Widget _buildResendSection() {
     return Column(
       children: [
@@ -638,6 +623,142 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen>
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildInputField({
+    required String label,
+    required TextEditingController controller,
+    required IconData icon,
+    required String hint,
+    TextInputType? keyboardType,
+    bool isOptional = false,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(left: 4, bottom: 10),
+          child: Row(
+            children: [
+              Text(
+                label,
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  color: _textPrimary,
+                  letterSpacing: 0.2,
+                ),
+              ),
+              if (isOptional)
+                Text(
+                  ' (Optional)',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                    color: _textSecondary.withOpacity(0.7),
+                  ),
+                ),
+            ],
+          ),
+        ),
+        Container(
+          decoration: BoxDecoration(
+            color: _bg,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: _primaryColor.withOpacity(0.12),
+              width: 1.5,
+            ),
+          ),
+          child: TextField(
+            controller: controller,
+            keyboardType: keyboardType,
+            style: const TextStyle(
+              fontSize: 15,
+              color: _textPrimary,
+              fontWeight: FontWeight.w600,
+            ),
+            decoration: InputDecoration(
+              prefixIcon: Container(
+                margin: const EdgeInsets.only(right: 12),
+                padding: const EdgeInsets.all(12),
+                child: Icon(icon, color: _primaryColor, size: 20),
+              ),
+              hintText: hint,
+              hintStyle: TextStyle(
+                color: _textSecondary.withOpacity(0.5),
+                fontSize: 15,
+                fontWeight: FontWeight.w500,
+              ),
+              border: InputBorder.none,
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 20,
+                vertical: 18,
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCompleteButton() {
+    return Container(
+      width: double.infinity,
+      height: 56,
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [_primaryColor, _accentColor],
+          begin: Alignment.centerLeft,
+          end: Alignment.centerRight,
+        ),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: _primaryColor.withOpacity(0.3),
+            blurRadius: 16,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: ElevatedButton(
+        onPressed: _isLoading ? null : _verifyAndComplete,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: Colors.transparent,
+          foregroundColor: Colors.white,
+          shadowColor: Colors.transparent,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          padding: EdgeInsets.zero,
+        ),
+        child:
+            _isLoading
+                ? const SizedBox(
+                  height: 24,
+                  width: 24,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2.5,
+                    color: Colors.white,
+                  ),
+                )
+                : const Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      'Complete Registration',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 0.3,
+                      ),
+                    ),
+                    SizedBox(width: 8),
+                    Icon(Icons.check_circle_outline_rounded, size: 20),
+                  ],
+                ),
+      ),
     );
   }
 }
