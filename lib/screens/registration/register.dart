@@ -491,6 +491,7 @@ class _RegisterScreenState extends State<RegisterScreen>
                   icon: Icons.phone_outlined,
                   hint: '09123456789',
                   keyboardType: TextInputType.phone,
+                  maxLength: 11,
                 ),
                 const SizedBox(height: 18),
                 _buildPasswordField(
@@ -537,6 +538,7 @@ class _RegisterScreenState extends State<RegisterScreen>
     required String hint,
     TextInputType? keyboardType,
     bool isOptional = false,
+    int? maxLength, // Add this parameter
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -578,6 +580,7 @@ class _RegisterScreenState extends State<RegisterScreen>
           child: TextField(
             controller: controller,
             keyboardType: keyboardType,
+            maxLength: maxLength, // Add this
             style: const TextStyle(
               fontSize: 15,
               color: _textPrimary,
@@ -596,6 +599,7 @@ class _RegisterScreenState extends State<RegisterScreen>
                 fontWeight: FontWeight.w500,
               ),
               border: InputBorder.none,
+              counterText: '', // Add this to hide the counter text
               contentPadding: const EdgeInsets.symmetric(
                 horizontal: 20,
                 vertical: 18,

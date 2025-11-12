@@ -497,6 +497,7 @@ class _CompleteRegistrationScreenState extends State<CompleteRegistrationScreen>
                   icon: Icons.phone_outlined,
                   hint: '09123456789',
                   keyboardType: TextInputType.phone,
+                  maxLength: 11,
                 ),
                 const SizedBox(height: 32),
                 _buildCompleteButton(),
@@ -633,6 +634,7 @@ class _CompleteRegistrationScreenState extends State<CompleteRegistrationScreen>
     required String hint,
     TextInputType? keyboardType,
     bool isOptional = false,
+    int? maxLength, // Add this parameter
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -674,6 +676,7 @@ class _CompleteRegistrationScreenState extends State<CompleteRegistrationScreen>
           child: TextField(
             controller: controller,
             keyboardType: keyboardType,
+            maxLength: maxLength, // Add this
             style: const TextStyle(
               fontSize: 15,
               color: _textPrimary,
@@ -692,6 +695,7 @@ class _CompleteRegistrationScreenState extends State<CompleteRegistrationScreen>
                 fontWeight: FontWeight.w500,
               ),
               border: InputBorder.none,
+              counterText: '', // Add this to hide the counter text
               contentPadding: const EdgeInsets.symmetric(
                 horizontal: 20,
                 vertical: 18,
