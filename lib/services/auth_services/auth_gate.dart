@@ -40,7 +40,17 @@ class _AuthGateState extends State<AuthGate> {
           return;
         }
 
-        // Only check profile for certain events with a LONGER delay
+        // CRITICAL: Skip profile check if email is NOT confirmed
+        // This means user is still in registration flow (hasn't verified OTP yet)
+        if (session.user.emailConfirmedAt == null) {
+          print(
+            '⏭️ Skipping profile check (email not confirmed - registration in progress)',
+          );
+          print('   User needs to verify OTP first');
+          return;
+        }
+
+        // Only check profile for confirmed users on signedIn or tokenRefreshed
         if (event == AuthChangeEvent.signedIn ||
             event == AuthChangeEvent.tokenRefreshed) {
           // Add LONGER delay (3 seconds) to give login screen time to catch error and show dialog
@@ -67,6 +77,13 @@ class _AuthGateState extends State<AuthGate> {
   Future<void> _checkUserProfile(String userId) async {
     if (_isCheckingProfile) return;
 
+    // Double-check: Don't check profile if email is not confirmed
+    final currentUser = _supabase.auth.currentUser;
+    if (currentUser?.emailConfirmedAt == null) {
+      print('⏭️ Email not confirmed, skipping profile check');
+      return;
+    }
+
     setState(() {
       _isCheckingProfile = true;
     });
@@ -80,6 +97,9 @@ class _AuthGateState extends State<AuthGate> {
 
       if (userProfile == null) {
         print('❌ PROFILE CHECK FAILED: No profile found for user $userId');
+        print(
+          '   This is an incomplete registration (email confirmed but no profile)',
+        );
         print('   Signing out user...');
 
         // Sign out user if no profile exists
@@ -152,6 +172,9 @@ class _AuthGateState extends State<AuthGate> {
         if (session != null) {
           print('AuthGate: User ID - ${session.user.id}');
           print('AuthGate: User Email - ${session.user.email}');
+          print(
+            'AuthGate: Email Confirmed - ${session.user.emailConfirmedAt != null}',
+          );
         }
 
         // Navigate based on session state

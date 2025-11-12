@@ -478,6 +478,7 @@ class AuthService {
   }
 
   // Sign in with email and password
+  // Sign in with email and password
   Future<AuthResponse> signInWithEmailPassword(
     String email,
     String password,
@@ -491,59 +492,62 @@ class AuthService {
       print('Email: $email');
       print('');
 
-      // Step 1: Sign out to ensure clean state
-      print('Step 1/5: Ensuring clean state...');
+      // Step 1: Try to authenticate
+      print('Step 1/3: Authenticating...');
+      AuthResponse response;
       try {
-        await _supabase.auth.signOut();
-        print('✅ Previous session cleared');
-      } catch (e) {
-        print('ℹ️ No previous session to clear');
-      }
-
-      // Step 2: Try to authenticate to get user ID
-      print('');
-      print('Step 2/5: Authenticating to get user ID...');
-
-      AuthResponse tempResponse;
-      try {
-        tempResponse = await _supabase.auth.signInWithPassword(
+        response = await _supabase.auth.signInWithPassword(
           email: email,
           password: password,
         );
+      } on AuthApiException catch (e) {
+        print('❌ Authentication failed: ${e.message}');
+        print('   Status Code: ${e.statusCode}');
+        print('   Error Code: ${e.code}');
+
+        // CRITICAL: Check if email is not confirmed (incomplete registration)
+        if (e.code == 'email_not_confirmed' ||
+            e.message.toLowerCase().contains('email not confirmed')) {
+          print('');
+          print('⚠️  EMAIL NOT CONFIRMED - INCOMPLETE REGISTRATION');
+          print('   User started registration but never verified OTP');
+          print('   Throwing registration_incomplete');
+          print('');
+          throw Exception('registration_incomplete');
+        }
+
+        // Other auth errors
+        print('❌ Invalid credentials');
+        throw Exception('Invalid email or password');
       } catch (e) {
-        print('❌ Authentication failed: $e');
+        print('❌ Authentication error: $e');
         throw Exception('Invalid email or password');
       }
 
-      if (tempResponse.session == null || tempResponse.user == null) {
+      if (response.session == null || response.user == null) {
         throw Exception('Sign in failed - no session created');
       }
 
       print('✅ Credentials verified');
-      final userId = tempResponse.user!.id;
+      final userId = response.user!.id;
+      final emailConfirmed = response.user!.emailConfirmedAt != null;
       print('   User ID: $userId');
+      print('   Email Confirmed: $emailConfirmed');
 
-      // Step 3: Immediately sign out (we just needed the user ID)
+      // Step 2: Check if user profile exists in database
       print('');
-      print('Step 3/5: Signing out to check profile...');
-      await _supabase.auth.signOut();
-      print('✅ Signed out');
-
-      // Step 4: Check if user profile exists in database
-      print('');
-      print('Step 4/5: Checking user profile existence...');
+      print('Step 2/3: Checking user profile existence...');
 
       final userProfile =
           await _supabase.from('User').select().eq('id', userId).maybeSingle();
 
       if (userProfile == null) {
         print('❌ No user profile found in database');
-        print('   This indicates incomplete registration');
+        print('   Email is confirmed but profile was never created');
+        print('   This should not happen - data inconsistency!');
         print('');
-        print('╔═══════════════════════════════════════════╗');
-        print('║      SIGN-IN BLOCKED: NO PROFILE          ║');
-        print('╚═══════════════════════════════════════════╝');
-        print('');
+
+        await _supabase.auth.signOut();
 
         throw Exception('registration_incomplete');
       }
@@ -552,19 +556,8 @@ class AuthService {
       print('   Person ID: ${userProfile['person_id']}');
       print('   Email: ${userProfile['email']}');
 
-      // Step 5: Profile exists, now actually sign in
       print('');
-      print('Step 5/5: Profile verified, signing in...');
-      final response = await _supabase.auth.signInWithPassword(
-        email: email,
-        password: password,
-      );
-
-      if (response.session == null) {
-        throw Exception('Sign in failed - no session created');
-      }
-
-      print('✅ Sign in successful');
+      print('Step 3/3: Sign-in successful!');
       print('');
       print('╔═══════════════════════════════════════════╗');
       print('║   EMAIL/PASSWORD SIGN-IN COMPLETED        ║');

@@ -61,17 +61,31 @@ class OrgDoctorService {
     try {
       print('DEBUG: fetchAssignedDoctors for user: $userId, org: $orgId');
 
-      // Get patient record
-      final patientResponse =
-          await _supabase
-              .from('Patient')
-              .select('id')
-              .eq('user_id', userId)
-              .single();
+      // Get all patient records for this user
+      final patientResponse = await _supabase
+          .from('Patient')
+          .select('id, organization_id')
+          .eq('user_id', userId);
 
-      final patientId = patientResponse['id'];
+      if (patientResponse.isEmpty) {
+        print('DEBUG: No patient record found for user');
+        return [];
+      }
 
-      // Get doctor assignments
+      // Find the patient record for this specific organization
+      final patientRecord = patientResponse.firstWhere(
+        (p) => p['organization_id'].toString() == orgId,
+        orElse: () => <String, dynamic>{},
+      );
+
+      if (patientRecord.isEmpty) {
+        print('DEBUG: No patient record found for this organization');
+        return [];
+      }
+
+      final patientId = patientRecord['id'];
+
+      // Get doctor assignments with proper filtering
       final assignmentResponse = await _supabase
           .from('Doctor_User_Assignment')
           .select('''
@@ -79,7 +93,7 @@ class OrgDoctorService {
             status,
             assigned_at,
             doctor_id,
-            Organization_User!doctor_id(
+            Organization_User!inner(
               id,
               position,
               department,
@@ -92,23 +106,27 @@ class OrgDoctorService {
             )
           ''')
           .eq('patient_id', patientId)
-          .eq('status', 'active');
+          .eq('status', 'active')
+          .eq('Organization_User.organization_id', orgId)
+          .eq('Organization_User.position', 'Doctor');
 
-      // Filter for this specific organization
-      final filteredAssignments =
-          assignmentResponse.where((assignment) {
-            final orgUser = assignment['Organization_User'];
-            return orgUser != null &&
-                orgUser['organization_id'].toString() == orgId &&
-                orgUser['position'] == 'Doctor';
-          }).toList();
+      print('DEBUG: Found ${assignmentResponse.length} assigned doctors');
 
-      print('DEBUG: Found ${filteredAssignments.length} assigned doctors');
-      return List<Map<String, dynamic>>.from(filteredAssignments);
+      // Ensure proper data structure
+      final List<Map<String, dynamic>> validAssignments = [];
+      for (final assignment in assignmentResponse) {
+        if (assignment['Organization_User'] != null) {
+          validAssignments.add(Map<String, dynamic>.from(assignment));
+        }
+      }
+
+      return validAssignments;
     } catch (e, stackTrace) {
       print('ERROR in OrgDoctorService.fetchAssignedDoctors: $e');
       print('Stack trace: $stackTrace');
-      rethrow;
+
+      // Return empty list instead of rethrowing to prevent UI crash
+      return [];
     }
   }
 
@@ -135,7 +153,7 @@ class OrgDoctorService {
           ''')
               .eq('id', doctorId)
               .eq('position', 'Doctor')
-              .single();
+              .maybeSingle();
 
       return response;
     } catch (e, stackTrace) {
