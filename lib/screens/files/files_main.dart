@@ -27,7 +27,7 @@ class _FilesScreenState extends State<FilesScreen>
 
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
-  String _selectedFilter = 'All';
+  String _selectedFilter = 'ALL';
 
   bool _isList = true;
 
@@ -641,6 +641,20 @@ class _FilesScreenState extends State<FilesScreen>
     );
   }
 
+  static const Map<String, String> fileCategories = {
+    'ALL': 'All Files',
+    'medical_report': 'Medical Report',
+    'lab_results': 'Lab Results',
+    'prescription': 'Prescription',
+    'x_ray': 'X-ray',
+    'mri_scan': 'MRI Scan',
+    'ct_scan': 'CT Scan',
+    'ultrasound': 'Ultrasound',
+    'blood_test': 'Blood Test',
+    'discharge_summary': 'Discharge Summary',
+    'consultation_notes': 'Consultation Notes',
+  };
+
   Widget _buildFilterButton() {
     return PopupMenuButton<String>(
       initialValue: _selectedFilter,
@@ -656,13 +670,13 @@ class _FilesScreenState extends State<FilesScreen>
         height: 48,
         decoration: BoxDecoration(
           color:
-              _selectedFilter != 'All'
+              _selectedFilter != 'ALL'
                   ? primaryColor.withOpacity(0.1)
                   : Colors.white,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
             color:
-                _selectedFilter != 'All'
+                _selectedFilter != 'ALL'
                     ? primaryColor.withOpacity(0.3)
                     : primaryColor.withOpacity(0.1),
             width: 1.5,
@@ -678,92 +692,46 @@ class _FilesScreenState extends State<FilesScreen>
         child: Icon(
           Icons.filter_list_rounded,
           color:
-              _selectedFilter != 'All'
+              _selectedFilter != 'ALL'
                   ? primaryColor
                   : primaryColor.withOpacity(0.7),
           size: 22,
         ),
       ),
       itemBuilder:
-          (BuildContext context) => [
-            _buildFilterMenuItem('All', Icons.folder_rounded, primaryColor),
-            _buildFilterMenuItem(
-              'DOCUMENT',
-              Icons.description_rounded,
-              const Color(0xFF4299E1),
-            ),
-            _buildFilterMenuItem(
-              'IMAGE',
-              Icons.image_rounded,
-              const Color(0xFF667EEA),
-            ),
-            _buildFilterMenuItem(
-              'AUDIO',
-              Icons.audio_file_rounded,
-              const Color(0xFF9F7AEA),
-            ),
-            _buildFilterMenuItem(
-              'VIDEO',
-              Icons.video_file_rounded,
-              const Color(0xFFED64A6),
-            ),
-            _buildFilterMenuItem(
-              'COMPRESSED',
-              Icons.folder_zip_rounded,
-              const Color(0xFFECC94B),
-            ),
-          ],
-    );
-  }
-
-  PopupMenuItem<String> _buildFilterMenuItem(
-    String value,
-    IconData icon,
-    Color color,
-  ) {
-    final labels = {
-      'All': 'All Files',
-      'DOCUMENT': 'Documents',
-      'IMAGE': 'Images',
-      'AUDIO': 'Audio',
-      'VIDEO': 'Videos',
-      'COMPRESSED': 'Compressed',
-    };
-
-    final isSelected = _selectedFilter == value;
-
-    return PopupMenuItem(
-      value: value,
-      child: Container(
-        decoration: BoxDecoration(
-          color: isSelected ? color.withOpacity(0.1) : null,
-          borderRadius: BorderRadius.circular(8),
-        ),
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-        child: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(6),
-              decoration: BoxDecoration(
-                color: color.withOpacity(0.15),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Icon(icon, color: color, size: 18),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                labels[value] ?? value,
-                style: TextStyle(
-                  fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
-                  fontSize: 14,
-                ),
-              ),
-            ),
-            if (isSelected) Icon(Icons.check_rounded, color: color, size: 20),
-          ],
-        ),
-      ),
+          (BuildContext context) =>
+              fileCategories.entries.map((entry) {
+                final isSelected = _selectedFilter == entry.key;
+                return PopupMenuItem(
+                  value: entry.key,
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.label_rounded,
+                        color: isSelected ? primaryColor : Colors.grey,
+                        size: 18,
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          entry.value,
+                          style: TextStyle(
+                            fontWeight:
+                                isSelected ? FontWeight.w700 : FontWeight.w600,
+                            fontSize: 14,
+                          ),
+                        ),
+                      ),
+                      if (isSelected)
+                        Icon(
+                          Icons.check_rounded,
+                          color: primaryColor,
+                          size: 20,
+                        ),
+                    ],
+                  ),
+                );
+              }).toList(),
     );
   }
 
@@ -1551,11 +1519,302 @@ class _FilesScreenState extends State<FilesScreen>
 
   // Add this method to your _FilesScreenState class
 
+  // Replace the _uploadFile() method with this improved version:
+
   void _uploadFile() async {
-    // Show loading dialog
+    // 1. Ask user to pick a category with improved UI
+    String? selectedCategory = await showDialog<String>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) {
+        String? tempCategory;
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return Dialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(24),
+              ),
+              child: Container(
+                constraints: const BoxConstraints(
+                  maxWidth: 500,
+                  maxHeight: 600,
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Header
+                    Container(
+                      padding: const EdgeInsets.all(20),
+                      decoration: const BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [primaryColor, accentColor],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                        borderRadius: BorderRadius.vertical(
+                          top: Radius.circular(24),
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(0.2),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: const Icon(
+                              Icons.category_rounded,
+                              color: Colors.white,
+                              size: 24,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          const Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Select Category',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 20,
+                                    fontWeight: FontWeight.w900,
+                                    letterSpacing: -0.3,
+                                  ),
+                                ),
+                                SizedBox(height: 4),
+                                Text(
+                                  'Choose the type of medical file',
+                                  style: TextStyle(
+                                    color: Colors.white70,
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    // Category Grid
+                    Flexible(
+                      child: ListView(
+                        shrinkWrap: true,
+                        padding: const EdgeInsets.all(20),
+                        children:
+                            fileCategories.entries
+                                .where((e) => e.key != 'ALL')
+                                .map((entry) {
+                                  final isSelected = tempCategory == entry.key;
+                                  return Padding(
+                                    padding: const EdgeInsets.only(bottom: 12),
+                                    child: Material(
+                                      color: Colors.transparent,
+                                      child: InkWell(
+                                        onTap: () {
+                                          setState(() {
+                                            tempCategory = entry.key;
+                                          });
+                                        },
+                                        borderRadius: BorderRadius.circular(16),
+                                        child: Container(
+                                          padding: const EdgeInsets.all(16),
+                                          decoration: BoxDecoration(
+                                            color:
+                                                isSelected
+                                                    ? primaryColor.withOpacity(
+                                                      0.1,
+                                                    )
+                                                    : Colors.white,
+                                            borderRadius: BorderRadius.circular(
+                                              16,
+                                            ),
+                                            border: Border.all(
+                                              color:
+                                                  isSelected
+                                                      ? primaryColor
+                                                      : primaryColor
+                                                          .withOpacity(0.15),
+                                              width: isSelected ? 2 : 1.5,
+                                            ),
+                                            boxShadow: [
+                                              if (isSelected)
+                                                BoxShadow(
+                                                  color: primaryColor
+                                                      .withOpacity(0.2),
+                                                  blurRadius: 12,
+                                                  offset: const Offset(0, 4),
+                                                ),
+                                            ],
+                                          ),
+                                          child: Row(
+                                            children: [
+                                              Container(
+                                                width: 48,
+                                                height: 48,
+                                                decoration: BoxDecoration(
+                                                  color:
+                                                      isSelected
+                                                          ? primaryColor
+                                                              .withOpacity(0.2)
+                                                          : primaryColor
+                                                              .withOpacity(
+                                                                0.08,
+                                                              ),
+                                                  borderRadius:
+                                                      BorderRadius.circular(12),
+                                                ),
+                                                child: Icon(
+                                                  _getCategoryIcon(entry.key),
+                                                  color:
+                                                      isSelected
+                                                          ? primaryColor
+                                                          : primaryColor
+                                                              .withOpacity(0.6),
+                                                  size: 24,
+                                                ),
+                                              ),
+                                              const SizedBox(width: 16),
+                                              Expanded(
+                                                child: Text(
+                                                  entry.value,
+                                                  style: TextStyle(
+                                                    fontSize: 15,
+                                                    fontWeight:
+                                                        isSelected
+                                                            ? FontWeight.w800
+                                                            : FontWeight.w600,
+                                                    color:
+                                                        isSelected
+                                                            ? primaryColor
+                                                            : textPrimary,
+                                                    letterSpacing: -0.2,
+                                                  ),
+                                                ),
+                                              ),
+                                              if (isSelected)
+                                                Container(
+                                                  width: 28,
+                                                  height: 28,
+                                                  decoration:
+                                                      const BoxDecoration(
+                                                        color: primaryColor,
+                                                        shape: BoxShape.circle,
+                                                      ),
+                                                  child: const Icon(
+                                                    Icons.check_rounded,
+                                                    color: Colors.white,
+                                                    size: 18,
+                                                  ),
+                                                )
+                                              else
+                                                Container(
+                                                  width: 28,
+                                                  height: 28,
+                                                  decoration: BoxDecoration(
+                                                    border: Border.all(
+                                                      color: Colors.grey[300]!,
+                                                      width: 2,
+                                                    ),
+                                                    shape: BoxShape.circle,
+                                                  ),
+                                                ),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  );
+                                })
+                                .toList(),
+                      ),
+                    ),
+
+                    // Footer Buttons
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.grey[50],
+                        borderRadius: const BorderRadius.vertical(
+                          bottom: Radius.circular(24),
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: TextButton(
+                              onPressed: () => Navigator.of(context).pop(),
+                              style: TextButton.styleFrom(
+                                foregroundColor: primaryColor,
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 14,
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                              ),
+                              child: const Text(
+                                'Cancel',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 15,
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            flex: 2,
+                            child: ElevatedButton(
+                              onPressed:
+                                  tempCategory == null
+                                      ? null
+                                      : () => Navigator.of(
+                                        context,
+                                      ).pop(tempCategory),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: primaryColor,
+                                foregroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 14,
+                                ),
+                                elevation: 0,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                disabledBackgroundColor: primaryColor
+                                    .withOpacity(0.3),
+                              ),
+                              child: const Text(
+                                'Continue',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 15,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+
+    if (selectedCategory == null) return; // User cancelled
+
+    // 2. Proceed with file picking and upload
     showDialog(
       context: context,
-      barrierDismissible: false, // Prevent dismissing by tapping outside
+      barrierDismissible: false,
       builder: (BuildContext context) {
         return Dialog(
           shape: RoundedRectangleBorder(
@@ -1570,7 +1829,6 @@ class _FilesScreenState extends State<FilesScreen>
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // Animated circular progress indicator
                 Stack(
                   alignment: Alignment.center,
                   children: [
@@ -1619,7 +1877,6 @@ class _FilesScreenState extends State<FilesScreen>
                   ),
                 ),
                 const SizedBox(height: 16),
-                // Optional: Add detailed status
                 Container(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 16,
@@ -1661,24 +1918,52 @@ class _FilesScreenState extends State<FilesScreen>
     );
 
     try {
-      // Perform the actual upload
-      final success = await UploadFileService.uploadFile(context);
+      // Pass the selectedCategory to your upload service
+      final success = await UploadFileService.uploadFile(
+        context,
+        category: selectedCategory,
+      );
 
-      // Close loading dialog
       if (mounted) {
         Navigator.of(context).pop();
       }
 
-      // Reload files if successful
       if (success) {
         await _loadFiles();
       }
     } catch (e) {
-      // Close loading dialog on error
       if (mounted) {
         Navigator.of(context).pop();
       }
       _showError('Upload failed: $e');
+    }
+  }
+
+  // Helper method to get icons for each category
+  IconData _getCategoryIcon(String categoryKey) {
+    switch (categoryKey) {
+      case 'medical_report':
+        return Icons.description_rounded;
+      case 'lab_results':
+        return Icons.science_rounded;
+      case 'prescription':
+        return Icons.medication_rounded;
+      case 'x_ray':
+        return Icons.photo_camera_rounded;
+      case 'mri_scan':
+        return Icons.monitor_heart_rounded;
+      case 'ct_scan':
+        return Icons.camera_enhance_rounded;
+      case 'ultrasound':
+        return Icons.sensors_rounded;
+      case 'blood_test':
+        return Icons.water_drop_rounded;
+      case 'discharge_summary':
+        return Icons.article_rounded;
+      case 'consultation_notes':
+        return Icons.notes_rounded;
+      default:
+        return Icons.folder_rounded;
     }
   }
 
@@ -1976,25 +2261,9 @@ class _FilesScreenState extends State<FilesScreen>
               .toList();
     }
 
-    if (_selectedFilter != 'All') {
+    if (_selectedFilter != 'ALL') {
       filtered =
-          filtered.where((file) {
-            final fileType = file.type.toUpperCase();
-            switch (_selectedFilter) {
-              case 'DOCUMENT':
-                return _isDocumentType(fileType);
-              case 'IMAGE':
-                return _isImageType(fileType);
-              case 'AUDIO':
-                return _isAudioType(fileType);
-              case 'VIDEO':
-                return _isVideoType(fileType);
-              case 'COMPRESSED':
-                return _isCompressedType(fileType);
-              default:
-                return true;
-            }
-          }).toList();
+          filtered.where((file) => file.category == _selectedFilter).toList();
     }
 
     return filtered;

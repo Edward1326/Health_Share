@@ -27,7 +27,10 @@ class UploadFileService {
   /// Uploads a file with encryption, stores metadata in Supabase, AND logs to Hive blockchain
   /// This is the main integration point that connects all services
   /// Returns true if successful, false otherwise
-  static Future<bool> uploadFile(BuildContext context) async {
+  static Future<bool> uploadFile(
+    BuildContext context, {
+    required String category,
+  }) async {
     try {
       // 1. Pick a file
       final file = await FilePickerService.pickFile();
@@ -140,14 +143,14 @@ class UploadFileService {
         '   Upload speed: ${(encryptedBytes.length / 1024 / uploadDuration.inSeconds).toStringAsFixed(2)} KB/s',
       );
 
-      // 9. Insert file metadata into Supabase (WITHOUT sha256_hash)
+      // 9. Insert file metadata into Supabase (WITH category)
       final uploadTimestamp = DateTime.now();
       final fileInsert =
           await supabase
               .from('Files')
               .insert({
                 'filename': fileName,
-                'category': 'General',
+                'category': category, // Use selected category
                 'file_type': fileType,
                 'uploaded_at': uploadTimestamp.toIso8601String(),
                 'file_size': fileBytes.length,
