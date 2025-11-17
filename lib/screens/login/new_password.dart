@@ -161,7 +161,12 @@ class _NewPasswordScreenState extends State<NewPasswordScreen>
     setState(() => _isLoading = true);
 
     try {
+      print('');
+      print('🔐 RESETTING PASSWORD...');
+
+      // Update the password
       await _authService.updatePasswordAfterVerification(newPassword);
+      print('✅ Password updated successfully');
 
       if (mounted) {
         _showSnackBar(
@@ -170,8 +175,16 @@ class _NewPasswordScreenState extends State<NewPasswordScreen>
           _primaryColor,
         );
 
-        await Future.delayed(const Duration(milliseconds: 500));
+        // CRITICAL: Sign out the user after password reset
+        // This ensures a clean state for the next login
+        print('🔓 Signing out user after password reset...');
+        await _authService.signOut();
+        print('✅ User signed out');
+
+        await Future.delayed(const Duration(milliseconds: 800));
+
         if (mounted) {
+          // Navigate to login and remove all previous routes
           Navigator.pushAndRemoveUntil(
             context,
             MaterialPageRoute(builder: (context) => const LoginScreen()),
@@ -180,6 +193,7 @@ class _NewPasswordScreenState extends State<NewPasswordScreen>
         }
       }
     } catch (e) {
+      print('❌ Password reset failed: $e');
       if (mounted) {
         setState(() => _isLoading = false);
 

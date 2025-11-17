@@ -1332,158 +1332,171 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen>
               borderRadius: BorderRadius.circular(28),
             ),
             backgroundColor: _card,
-            child: Padding(
-              padding: const EdgeInsets.all(28),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [
-                          _primaryColor.withOpacity(0.15),
-                          _accentColor.withOpacity(0.1),
-                        ],
+            insetPadding: const EdgeInsets.symmetric(
+              horizontal: 20,
+              vertical: 20,
+            ),
+            child: SingleChildScrollView(
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.of(context).viewInsets.bottom,
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [
+                            _primaryColor.withOpacity(0.15),
+                            _accentColor.withOpacity(0.1),
+                          ],
+                        ),
+                        borderRadius: BorderRadius.circular(16),
                       ),
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: Icon(
-                      Icons.person_add_rounded,
-                      color: _primaryColor,
-                      size: 32,
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  Text(
-                    'Add Member',
-                    style: TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.w900,
-                      color: _textPrimary,
-                      letterSpacing: -0.5,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Enter the email address of the member you want to add',
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: _textSecondary,
-                      fontWeight: FontWeight.w500,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 24),
-                  Container(
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(
-                        color: _primaryColor.withOpacity(0.2),
-                        width: 1.5,
+                      child: Icon(
+                        Icons.person_add_rounded,
+                        color: _primaryColor,
+                        size: 28,
                       ),
                     ),
-                    child: TextField(
-                      controller: emailController,
-                      keyboardType: TextInputType.emailAddress,
+                    const SizedBox(height: 16),
+                    Text(
+                      'Add Member',
                       style: TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w900,
                         color: _textPrimary,
-                        fontWeight: FontWeight.w600,
+                        letterSpacing: -0.5,
                       ),
-                      decoration: InputDecoration(
-                        hintText: 'member@example.com',
-                        hintStyle: TextStyle(
-                          color: _textSecondary.withOpacity(0.5),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'Enter the email address of the member you want to add',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: _textSecondary,
+                        fontWeight: FontWeight.w500,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 20),
+                    Container(
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: _primaryColor.withOpacity(0.2),
+                          width: 1.5,
                         ),
-                        prefixIcon: Icon(
-                          Icons.email_rounded,
-                          color: _primaryColor,
+                      ),
+                      child: TextField(
+                        controller: emailController,
+                        keyboardType: TextInputType.emailAddress,
+                        textInputAction: TextInputAction.done,
+                        style: TextStyle(
+                          color: _textPrimary,
+                          fontWeight: FontWeight.w600,
                         ),
-                        filled: true,
-                        fillColor: _bg,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(16),
-                          borderSide: BorderSide.none,
-                        ),
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 20,
-                          vertical: 18,
+                        decoration: InputDecoration(
+                          hintText: 'member@example.com',
+                          hintStyle: TextStyle(
+                            color: _textSecondary.withOpacity(0.5),
+                          ),
+                          prefixIcon: Icon(
+                            Icons.email_rounded,
+                            color: _primaryColor,
+                            size: 20,
+                          ),
+                          filled: true,
+                          fillColor: _bg,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(16),
+                            borderSide: BorderSide.none,
+                          ),
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 16,
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 24),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: OutlinedButton(
-                          onPressed: () => Navigator.pop(context),
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: _textSecondary,
-                            side: BorderSide(
-                              color: _textSecondary.withOpacity(0.3),
-                              width: 1.5,
-                            ),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(14),
-                            ),
-                            padding: const EdgeInsets.symmetric(vertical: 16),
-                          ),
-                          child: const Text(
-                            'Cancel',
-                            style: TextStyle(
-                              fontWeight: FontWeight.w700,
-                              fontSize: 15,
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        flex: 2,
-                        child: Container(
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              colors: [_primaryColor, _accentColor],
-                            ),
-                            borderRadius: BorderRadius.circular(14),
-                            boxShadow: [
-                              BoxShadow(
-                                color: _primaryColor.withOpacity(0.4),
-                                blurRadius: 12,
-                                offset: const Offset(0, 4),
+                    const SizedBox(height: 20),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton(
+                            onPressed: () => Navigator.pop(context),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: _textSecondary,
+                              side: BorderSide(
+                                color: _textSecondary.withOpacity(0.3),
+                                width: 1.5,
                               ),
-                            ],
-                          ),
-                          child: ElevatedButton(
-                            onPressed: () async {
-                              if (emailController.text.isNotEmpty) {
-                                Navigator.pop(context);
-                                await _addMember(emailController.text);
-                              }
-                            },
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.transparent,
-                              foregroundColor: Colors.white,
-                              shadowColor: Colors.transparent,
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(14),
                               ),
-                              padding: const EdgeInsets.symmetric(vertical: 16),
+                              padding: const EdgeInsets.symmetric(vertical: 14),
                             ),
                             child: const Text(
-                              'Add Member',
+                              'Cancel',
                               style: TextStyle(
-                                fontWeight: FontWeight.w800,
-                                fontSize: 15,
+                                fontWeight: FontWeight.w700,
+                                fontSize: 14,
                               ),
                             ),
                           ),
                         ),
-                      ),
-                    ],
-                  ),
-                ],
+                        const SizedBox(width: 12),
+                        Expanded(
+                          flex: 2,
+                          child: Container(
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                colors: [_primaryColor, _accentColor],
+                              ),
+                              borderRadius: BorderRadius.circular(14),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: _primaryColor.withOpacity(0.4),
+                                  blurRadius: 12,
+                                  offset: const Offset(0, 4),
+                                ),
+                              ],
+                            ),
+                            child: ElevatedButton(
+                              onPressed: () async {
+                                if (emailController.text.isNotEmpty) {
+                                  Navigator.pop(context);
+                                  await _addMember(emailController.text);
+                                }
+                              },
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.transparent,
+                                foregroundColor: Colors.white,
+                                shadowColor: Colors.transparent,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(14),
+                                ),
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 14,
+                                ),
+                              ),
+                              child: const Text(
+                                'Add Member',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w800,
+                                  fontSize: 14,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
