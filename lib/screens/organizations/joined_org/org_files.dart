@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:health_share/services/files_services/files_share_to_org.dart';
 import 'dart:ui';
 import 'dart:io';
 import 'package:path_provider/path_provider.dart';
@@ -42,7 +43,7 @@ class _OrgDoctorsFilesScreenState extends State<OrgDoctorsFilesScreen>
   String _searchQuery = '';
   final TextEditingController _searchController = TextEditingController();
   bool _isSearchVisible = false;
-  String _sortOrder = 'all';
+  String _selectedFilter = 'ALL'; // Added filter state
 
   // Colors
   late Color _primaryColor;
@@ -51,6 +52,21 @@ class _OrgDoctorsFilesScreenState extends State<OrgDoctorsFilesScreen>
   late Color _card;
   late Color _textPrimary;
   late Color _textSecondary;
+
+  // File categories map
+  static const Map<String, String> fileCategories = {
+    'ALL': 'All Files',
+    'medical_report': 'Medical Report',
+    'lab_results': 'Lab Results',
+    'prescription': 'Prescription',
+    'x_ray': 'X-ray',
+    'mri_scan': 'MRI Scan',
+    'ct_scan': 'CT Scan',
+    'ultrasound': 'Ultrasound',
+    'blood_test': 'Blood Test',
+    'discharge_summary': 'Discharge Summary',
+    'consultation_notes': 'Consultation Notes',
+  };
 
   @override
   void initState() {
@@ -145,47 +161,29 @@ class _OrgDoctorsFilesScreenState extends State<OrgDoctorsFilesScreen>
     }
   }
 
-  void _toggleSortOrder() {
-    setState(() {
-      if (_sortOrder == 'all') {
-        _sortOrder = 'you';
-      } else if (_sortOrder == 'you') {
-        _sortOrder = 'doctor';
-      } else {
-        _sortOrder = 'all';
-      }
-    });
-  }
-
-  // In your _OrgDoctorsFilesScreenState class, update the _filteredFiles getter:
-
   List<Map<String, dynamic>> get _filteredFiles {
     var filtered =
         _sharedFiles.where((file) {
-          if (_searchQuery.isEmpty) return true;
-          final name = (file['filename'] ?? '').toLowerCase();
-          final type = (file['file_type'] ?? '').toLowerCase();
-          final query = _searchQuery.toLowerCase();
-          return name.contains(query) || type.contains(query);
+          // Search filter
+          if (_searchQuery.isNotEmpty) {
+            final name = (file['filename'] ?? '').toLowerCase();
+            final type = (file['file_type'] ?? '').toLowerCase();
+            final query = _searchQuery.toLowerCase();
+            if (!name.contains(query) && !type.contains(query)) {
+              return false;
+            }
+          }
+          return true;
         }).toList();
 
-    // Filter by who shared the file
-    if (_sortOrder == 'patient') {
-      // Show files shared by the patient (current user)
+    // Category filter
+    if (_selectedFilter != 'ALL') {
       filtered =
           filtered.where((file) {
-            final sharedBy = file['shared_by_user_id'];
-            return sharedBy == _currentUserId;
-          }).toList();
-    } else if (_sortOrder == 'doctor') {
-      // Show files shared by the doctor
-      filtered =
-          filtered.where((file) {
-            final sharedBy = file['shared_by_user_id'];
-            return sharedBy == _doctorUserId;
+            final category = file['category'] ?? '';
+            return category == _selectedFilter;
           }).toList();
     }
-    // 'all' shows everything, no additional filtering needed
 
     // Sort by shared_at date (newest first)
     filtered.sort((a, b) {
@@ -202,7 +200,6 @@ class _OrgDoctorsFilesScreenState extends State<OrgDoctorsFilesScreen>
     return _currentUserId == fileOwnerId;
   }
 
-  // Replace _removeFileFromDoctor() with:
   Future<void> _removeFileFromDoctor(Map<String, dynamic> file) async {
     final confirm = await _showRemoveDialog(file['filename']);
 
@@ -215,9 +212,204 @@ class _OrgDoctorsFilesScreenState extends State<OrgDoctorsFilesScreen>
       );
 
       if (success) {
-        await _fetchSharedFiles(); // Refresh list
+        await _fetchSharedFiles();
       }
     }
+  }
+
+  Future<void> _shareAllFilesToDoctor() async {
+    if (_currentUserId == null) {
+      _showError('User not logged in');
+      return;
+    }
+
+    final confirm = await _showShareAllDialog();
+    if (confirm != true) return;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder:
+          (context) => Dialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(28),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [
+                          _primaryColor.withOpacity(0.1),
+                          _accentColor.withOpacity(0.1),
+                        ],
+                      ),
+                      shape: BoxShape.circle,
+                    ),
+                    child: CircularProgressIndicator(
+                      color: _primaryColor,
+                      strokeWidth: 3.5,
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  Text(
+                    'Sharing files...',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w700,
+                      color: _textPrimary,
+                      fontSize: 16,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Please wait while we securely share your files',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: _textSecondary,
+                      fontWeight: FontWeight.w500,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              ),
+            ),
+          ),
+    );
+
+    try {
+      await FileShareToOrgService.shareAllOwnedFilesToDoctor(
+        userId: _currentUserId!,
+        doctorId: widget.doctorId,
+      );
+
+      Navigator.of(context).pop();
+      _showSuccess('Successfully shared all files with ${widget.doctorName}');
+      await _fetchSharedFiles();
+    } catch (e) {
+      Navigator.of(context).pop();
+
+      final errorMessage = e.toString();
+      if (errorMessage.contains('no files to share')) {
+        _showError('You don\'t have any files to share');
+      } else if (errorMessage.contains('already shared')) {
+        _showSuccess('All files are already shared with this doctor');
+      } else {
+        _showError('Failed to share files: $errorMessage');
+      }
+    }
+  }
+
+  Future<bool?> _showShareAllDialog() {
+    return showDialog<bool>(
+      context: context,
+      builder:
+          (context) => Dialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(28),
+            ),
+            backgroundColor: _card,
+            child: Padding(
+              padding: const EdgeInsets.all(28),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [
+                          _primaryColor.withOpacity(0.15),
+                          _accentColor.withOpacity(0.1),
+                        ],
+                      ),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Icon(
+                      Icons.share_rounded,
+                      color: _primaryColor,
+                      size: 32,
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  Text(
+                    'Share All Files',
+                    style: TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.w900,
+                      color: _textPrimary,
+                      letterSpacing: -0.5,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    'Share all your medical files with ${widget.doctorName}? This will include all files you currently own.',
+                    style: TextStyle(
+                      fontSize: 15,
+                      color: _textSecondary,
+                      fontWeight: FontWeight.w500,
+                      height: 1.5,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 24),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () => Navigator.pop(context, false),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: _textSecondary,
+                            side: BorderSide(
+                              color: _textSecondary.withOpacity(0.3),
+                              width: 1.5,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                          ),
+                          child: const Text(
+                            'Cancel',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w700,
+                              fontSize: 15,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: ElevatedButton(
+                          onPressed: () => Navigator.pop(context, true),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: _primaryColor,
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            elevation: 0,
+                          ),
+                          child: const Text(
+                            'Share All',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w800,
+                              fontSize: 15,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+    );
   }
 
   Future<bool?> _showRemoveDialog(String fileName) {
@@ -417,7 +609,6 @@ class _OrgDoctorsFilesScreenState extends State<OrgDoctorsFilesScreen>
   }
 
   void _showFileInfo(Map<String, dynamic> file) {
-    // Determine who shared the file based on shared_by_user_id
     String sharedByDisplay = 'Unknown';
     final sharedByUserId = file['shared_by_user_id'];
 
@@ -426,6 +617,10 @@ class _OrgDoctorsFilesScreenState extends State<OrgDoctorsFilesScreen>
     } else if (sharedByUserId == _doctorUserId) {
       sharedByDisplay = '${widget.doctorName}';
     }
+
+    // Get category display name
+    final category = file['category'] ?? 'General';
+    final categoryDisplay = fileCategories[category] ?? category;
 
     showDialog(
       context: context,
@@ -475,6 +670,8 @@ class _OrgDoctorsFilesScreenState extends State<OrgDoctorsFilesScreen>
                       'File Type',
                       file['file_type'] ?? 'Unknown',
                     ),
+                    const SizedBox(height: 16),
+                    _buildDetailRow('Category', categoryDisplay),
                     const SizedBox(height: 16),
                     _buildDetailRow(
                       'File Size',
@@ -669,6 +866,34 @@ class _OrgDoctorsFilesScreenState extends State<OrgDoctorsFilesScreen>
     }
   }
 
+  // Helper method to get icons for each category
+  IconData _getCategoryIcon(String categoryKey) {
+    switch (categoryKey) {
+      case 'medical_report':
+        return Icons.description_rounded;
+      case 'lab_results':
+        return Icons.science_rounded;
+      case 'prescription':
+        return Icons.medication_rounded;
+      case 'x_ray':
+        return Icons.photo_camera_rounded;
+      case 'mri_scan':
+        return Icons.monitor_heart_rounded;
+      case 'ct_scan':
+        return Icons.camera_enhance_rounded;
+      case 'ultrasound':
+        return Icons.sensors_rounded;
+      case 'blood_test':
+        return Icons.water_drop_rounded;
+      case 'discharge_summary':
+        return Icons.article_rounded;
+      case 'consultation_notes':
+        return Icons.notes_rounded;
+      default:
+        return Icons.folder_rounded;
+    }
+  }
+
   @override
   void dispose() {
     _staggerController.dispose();
@@ -684,16 +909,12 @@ class _OrgDoctorsFilesScreenState extends State<OrgDoctorsFilesScreen>
       extendBodyBehindAppBar: true,
       body: Stack(
         children: [
-          // Background gradient
           Container(
             decoration: const BoxDecoration(
               gradient: LinearGradient(
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
-                colors: [
-                  Color(0xFFE8F0E3), // soft light green top
-                  Colors.white, // white bottom
-                ],
+                colors: [Color(0xFFE8F0E3), Colors.white],
               ),
             ),
           ),
@@ -711,11 +932,6 @@ class _OrgDoctorsFilesScreenState extends State<OrgDoctorsFilesScreen>
                         SliverToBoxAdapter(child: const SizedBox(height: 20)),
                         SliverToBoxAdapter(child: _buildDoctorInfoCard()),
                         SliverToBoxAdapter(child: const SizedBox(height: 28)),
-                        if (_isSearchVisible)
-                          SliverToBoxAdapter(child: _buildSearchField()),
-                        SliverToBoxAdapter(
-                          child: SizedBox(height: _isSearchVisible ? 20 : 0),
-                        ),
                         if (_isLoading)
                           SliverFillRemaining(child: _buildLoadingState())
                         else
@@ -742,7 +958,12 @@ class _OrgDoctorsFilesScreenState extends State<OrgDoctorsFilesScreen>
             onTap: () => Navigator.pop(context),
           ),
           const Spacer(),
-          _buildSortDropdown(), // Replace the sort icon button with dropdown
+          _buildIconButton(
+            icon: Icons.share_rounded,
+            onTap: _shareAllFilesToDoctor,
+          ),
+          const SizedBox(width: 12),
+          _buildFilterButton(),
           const SizedBox(width: 12),
           _buildIconButton(
             icon:
@@ -761,6 +982,88 @@ class _OrgDoctorsFilesScreenState extends State<OrgDoctorsFilesScreen>
           _buildIconButton(icon: Icons.refresh_rounded, onTap: _refreshData),
         ],
       ),
+    );
+  }
+
+  Widget _buildFilterButton() {
+    return PopupMenuButton<String>(
+      initialValue: _selectedFilter,
+      onSelected: (String newValue) {
+        setState(() => _selectedFilter = newValue);
+      },
+      color: Colors.white,
+      elevation: 8,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      offset: const Offset(0, 8),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color:
+              _selectedFilter != 'ALL'
+                  ? _primaryColor.withOpacity(0.15)
+                  : Colors.white.withOpacity(0.95),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color:
+                _selectedFilter != 'ALL'
+                    ? _primaryColor.withOpacity(0.3)
+                    : _primaryColor.withOpacity(0.08),
+            width: 1.5,
+          ),
+        ),
+        child: Icon(
+          Icons.filter_list_rounded,
+          color:
+              _selectedFilter != 'ALL'
+                  ? _primaryColor
+                  : _primaryColor.withOpacity(0.7),
+          size: 20,
+        ),
+      ),
+      itemBuilder:
+          (BuildContext context) =>
+              fileCategories.entries.map((entry) {
+                final isSelected = _selectedFilter == entry.key;
+                return PopupMenuItem(
+                  value: entry.key,
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color:
+                              isSelected
+                                  ? _primaryColor.withOpacity(0.1)
+                                  : Colors.grey.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Icon(
+                          _getCategoryIcon(entry.key),
+                          color: isSelected ? _primaryColor : Colors.grey[600],
+                          size: 18,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          entry.value,
+                          style: TextStyle(
+                            fontWeight:
+                                isSelected ? FontWeight.w700 : FontWeight.w600,
+                            fontSize: 14,
+                          ),
+                        ),
+                      ),
+                      if (isSelected)
+                        Icon(
+                          Icons.check_rounded,
+                          color: _primaryColor,
+                          size: 20,
+                        ),
+                    ],
+                  ),
+                );
+              }).toList(),
     );
   }
 
@@ -787,104 +1090,6 @@ class _OrgDoctorsFilesScreenState extends State<OrgDoctorsFilesScreen>
           ),
           child: Icon(icon, color: _primaryColor, size: 20),
         ),
-      ),
-    );
-  }
-
-  Widget _buildSortDropdown() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 4),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.95),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: _primaryColor.withOpacity(0.08), width: 1.5),
-      ),
-      child: DropdownButton<String>(
-        value: _sortOrder,
-        underline: const SizedBox(),
-        icon: Icon(
-          Icons.arrow_drop_down_rounded,
-          color: _primaryColor,
-          size: 24,
-        ),
-        borderRadius: BorderRadius.circular(16),
-        dropdownColor: Colors.white,
-        elevation: 8,
-        style: TextStyle(
-          color: _textPrimary,
-          fontSize: 14,
-          fontWeight: FontWeight.w700,
-        ),
-        onChanged: (String? newValue) {
-          if (newValue != null) {
-            setState(() => _sortOrder = newValue);
-          }
-        },
-        items: [
-          DropdownMenuItem(
-            value: 'all',
-            child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(6),
-                  decoration: BoxDecoration(
-                    color: _primaryColor.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Icon(
-                    Icons.people_rounded,
-                    color: _primaryColor,
-                    size: 16,
-                  ),
-                ),
-                const SizedBox(width: 10),
-                const Text('All Files'),
-              ],
-            ),
-          ),
-          DropdownMenuItem(
-            value: 'patient',
-            child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(6),
-                  decoration: BoxDecoration(
-                    color: Colors.blue.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: const Icon(
-                    Icons.person_rounded,
-                    color: Colors.blue,
-                    size: 16,
-                  ),
-                ),
-                const SizedBox(width: 10),
-                const Text('Patient'),
-              ],
-            ),
-          ),
-          DropdownMenuItem(
-            value: 'doctor',
-            child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(6),
-                  decoration: BoxDecoration(
-                    color: Colors.green.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: const Icon(
-                    Icons.local_hospital_rounded,
-                    color: Colors.green,
-                    size: 16,
-                  ),
-                ),
-                const SizedBox(width: 10),
-                const Text('Doctor'),
-              ],
-            ),
-          ),
-        ],
       ),
     );
   }
@@ -1012,7 +1217,7 @@ class _OrgDoctorsFilesScreenState extends State<OrgDoctorsFilesScreen>
                     Icon(Icons.folder_rounded, color: _primaryColor, size: 20),
                     const SizedBox(width: 10),
                     Text(
-                      '${_sharedFiles.length}',
+                      '${_filteredFiles.length}',
                       style: TextStyle(
                         color: _textPrimary,
                         fontSize: 18,
@@ -1287,11 +1492,14 @@ class _OrgDoctorsFilesScreenState extends State<OrgDoctorsFilesScreen>
       return SliverFillRemaining(
         child: _buildEmptyState(
           icon: Icons.folder_open_rounded,
-          title: _searchQuery.isEmpty ? 'No Records Yet' : 'No Files Found',
+          title:
+              _searchQuery.isEmpty && _selectedFilter == 'ALL'
+                  ? 'No Records Yet'
+                  : 'No Files Found',
           subtitle:
-              _searchQuery.isEmpty
+              _searchQuery.isEmpty && _selectedFilter == 'ALL'
                   ? 'Shared medical records will appear here'
-                  : 'Try adjusting your search',
+                  : 'Try adjusting your search or filter',
         ),
       );
     }
@@ -1302,7 +1510,6 @@ class _OrgDoctorsFilesScreenState extends State<OrgDoctorsFilesScreen>
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Section Title
             Row(
               children: [
                 Container(
@@ -1354,7 +1561,6 @@ class _OrgDoctorsFilesScreenState extends State<OrgDoctorsFilesScreen>
               ],
             ),
             const SizedBox(height: 20),
-            // Files List
             ListView.builder(
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),

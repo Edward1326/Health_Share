@@ -1,5 +1,5 @@
+import 'package:health_share/services/files_services/files_service.dart';
 import 'package:health_share/services/files_services/file_share_to_group.dart';
-import 'package:health_share/services/files_services/files_share_to_org.dart';
 import 'package:health_share/services/files_services/fullscreen_file_preview.dart';
 
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -92,13 +92,8 @@ class _FilesScreenState extends State<FilesScreen>
         return;
       }
 
-      // Fetch only non-deleted files
-      final fileData = await supabase
-          .from('Files')
-          .select('*')
-          .eq('uploaded_by', user.id)
-          .isFilter('deleted_at', null)
-          .order('uploaded_at', ascending: false);
+      // Use service instead of inline code
+      final fileData = await FilesService.fetchUserFiles(user.id);
 
       final loadedItems =
           fileData.map((file) {
@@ -122,9 +117,7 @@ class _FilesScreenState extends State<FilesScreen>
       });
     } catch (e) {
       setState(() => _isLoading = false);
-      if (mounted) {
-        _showError('Error loading files: $e');
-      }
+      _showError('Error loading files: $e');
     }
   }
 
@@ -223,16 +216,6 @@ class _FilesScreenState extends State<FilesScreen>
     }
   }
 
-  Future<List<Map<String, dynamic>>> _fetchAssignedDoctors() async {
-    try {
-      final user = Supabase.instance.client.auth.currentUser;
-      if (user == null) throw Exception('User not logged in');
-      return await FileShareToOrgService.fetchAssignedDoctors(user.id);
-    } catch (e) {
-      return [];
-    }
-  }
-
   Future<List<Map<String, dynamic>>> _fetchUserGroups(String userId) async {
     return await FileShareToGroupService.fetchUserGroups(userId);
   }
@@ -247,18 +230,10 @@ class _FilesScreenState extends State<FilesScreen>
         return;
       }
 
-      final results = await Future.wait([
-        _fetchUserGroups(user.id),
-        _fetchAssignedDoctors(),
-      ]);
+      final userGroups = await _fetchUserGroups(user.id);
 
-      final userGroups = results[0];
-      final assignedDoctors = results[1];
-
-      if (userGroups.isEmpty && assignedDoctors.isEmpty) {
-        _showError(
-          'You are not a member of any groups or assigned to any doctors',
-        );
+      if (userGroups.isEmpty) {
+        _showError('You are not a member of any groups');
         return;
       }
 
@@ -268,15 +243,14 @@ class _FilesScreenState extends State<FilesScreen>
             builder: (BuildContext context) {
               return _ShareDialog(
                 groups: userGroups,
-                doctors: assignedDoctors,
                 filesToShare: filesToShare,
               );
             },
           );
 
       if (selectedTargets != null &&
-          (selectedTargets['groups']!.isNotEmpty ||
-              selectedTargets['doctors']!.isNotEmpty)) {
+          selectedTargets['groups'] != null &&
+          selectedTargets['groups']!.isNotEmpty) {
         await _shareFilesToTargets(filesToShare, selectedTargets);
       }
     } catch (e) {
@@ -298,7 +272,6 @@ class _FilesScreenState extends State<FilesScreen>
       }
 
       final selectedGroups = selectedTargets['groups']!;
-      final selectedDoctors = selectedTargets['doctors']!;
 
       showDialog(
         context: context,
@@ -420,18 +393,6 @@ class _FilesScreenState extends State<FilesScreen>
         );
       }
 
-      if (selectedDoctors.isNotEmpty) {
-        final doctorIds =
-            selectedDoctors
-                .map((doctor) => doctor['doctor_id'] as String)
-                .toList();
-        await FileShareToOrgService.shareFilesToDoctors(
-          fileIds,
-          doctorIds,
-          user.id,
-        );
-      }
-
       Navigator.of(context).pop();
 
       setState(() {
@@ -439,7 +400,7 @@ class _FilesScreenState extends State<FilesScreen>
         _selectedFiles.clear();
       });
 
-      final totalTargets = selectedGroups.length + selectedDoctors.length;
+      final totalTargets = selectedGroups.length;
       _showSuccess(
         'Successfully shared ${filesToShare.length} file(s) to $totalTargets recipient(s)',
       );
@@ -2630,54 +2591,16 @@ class FileItem {
 
 class _ShareDialog extends StatefulWidget {
   final List<Map<String, dynamic>> groups;
-  final List<Map<String, dynamic>> doctors;
   final List<FileItem> filesToShare;
 
-  const _ShareDialog({
-    required this.groups,
-    required this.doctors,
-    required this.filesToShare,
-  });
+  const _ShareDialog({required this.groups, required this.filesToShare});
 
   @override
   State<_ShareDialog> createState() => _ShareDialogState();
 }
 
-class _ShareDialogState extends State<_ShareDialog>
-    with SingleTickerProviderStateMixin {
-  late TabController _tabController;
+class _ShareDialogState extends State<_ShareDialog> {
   final Set<String> _selectedGroupIds = {};
-  final Set<String> _selectedDoctorIds = {};
-
-  @override
-  void initState() {
-    super.initState();
-    _tabController = TabController(length: 2, vsync: this);
-  }
-
-  @override
-  void dispose() {
-    _tabController.dispose();
-    super.dispose();
-  }
-
-  String _formatFullName(Map<String, dynamic> user) {
-    final person = user['Person'];
-    if (person == null) return user['email'] ?? 'Unknown User';
-
-    final firstName = person['first_name']?.toString().trim() ?? '';
-    final middleName = person['middle_name']?.toString().trim() ?? '';
-    final lastName = person['last_name']?.toString().trim() ?? '';
-
-    List<String> nameParts = [];
-    if (firstName.isNotEmpty) nameParts.add(firstName);
-    if (middleName.isNotEmpty) nameParts.add(middleName);
-    if (lastName.isNotEmpty) nameParts.add(lastName);
-
-    return nameParts.isEmpty
-        ? (user['email'] ?? 'Unknown User')
-        : nameParts.join(' ');
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -2688,6 +2611,7 @@ class _ShareDialogState extends State<_ShareDialog>
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            // Header
             Container(
               padding: const EdgeInsets.all(20),
               decoration: const BoxDecoration(
@@ -2736,23 +2660,30 @@ class _ShareDialogState extends State<_ShareDialog>
                 ],
               ),
             ),
-            TabBar(
-              controller: _tabController,
-              labelColor: const Color(0xFF416240),
-              unselectedLabelColor: Colors.grey,
-              indicatorColor: const Color(0xFF416240),
-              labelStyle: const TextStyle(fontWeight: FontWeight.w700),
-              tabs: [
-                Tab(text: 'Groups (${widget.groups.length})'),
-                Tab(text: 'Doctors (${widget.doctors.length})'),
-              ],
-            ),
-            Expanded(
-              child: TabBarView(
-                controller: _tabController,
-                children: [_buildGroupsTab(), _buildDoctorsTab()],
+
+            // Groups section header
+            Container(
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              decoration: BoxDecoration(
+                border: Border(
+                  bottom: BorderSide(color: Colors.grey[200]!, width: 1),
+                ),
+              ),
+              child: Text(
+                'Select Groups (${widget.groups.length})',
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF416240),
+                ),
+                textAlign: TextAlign.center,
               ),
             ),
+
+            // THIS IS THE MISSING PART - Groups list
+            Flexible(child: _buildGroupsList()),
+
+            // Footer with buttons
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
@@ -2784,8 +2715,7 @@ class _ShareDialogState extends State<_ShareDialog>
                     flex: 2,
                     child: ElevatedButton(
                       onPressed:
-                          (_selectedGroupIds.isEmpty &&
-                                  _selectedDoctorIds.isEmpty)
+                          (_selectedGroupIds.isEmpty)
                               ? null
                               : () {
                                 final selectedGroups =
@@ -2796,17 +2726,8 @@ class _ShareDialogState extends State<_ShareDialog>
                                           ),
                                         )
                                         .toList();
-                                final selectedDoctors =
-                                    widget.doctors
-                                        .where(
-                                          (d) => _selectedDoctorIds.contains(
-                                            d['doctor_id'],
-                                          ),
-                                        )
-                                        .toList();
                                 Navigator.pop(context, {
                                   'groups': selectedGroups,
-                                  'doctors': selectedDoctors,
                                 });
                               },
                       style: ElevatedButton.styleFrom(
@@ -2817,9 +2738,12 @@ class _ShareDialogState extends State<_ShareDialog>
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
                         ),
+                        disabledBackgroundColor: const Color(
+                          0xFF416240,
+                        ).withOpacity(0.3),
                       ),
                       child: Text(
-                        'Share (${_selectedGroupIds.length + _selectedDoctorIds.length})',
+                        'Share (${_selectedGroupIds.length})',
                         style: const TextStyle(fontWeight: FontWeight.w700),
                       ),
                     ),
@@ -2833,19 +2757,31 @@ class _ShareDialogState extends State<_ShareDialog>
     );
   }
 
-  Widget _buildGroupsTab() {
+  Widget _buildGroupsList() {
     if (widget.groups.isEmpty) {
       return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.group_off_rounded, size: 48, color: Colors.grey[300]),
-            const SizedBox(height: 16),
-            Text(
-              'No groups available',
-              style: TextStyle(color: Colors.grey[600]),
-            ),
-          ],
+        child: Padding(
+          padding: const EdgeInsets.all(32.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.group_off_rounded, size: 64, color: Colors.grey[300]),
+              const SizedBox(height: 16),
+              Text(
+                'No groups available',
+                style: TextStyle(
+                  color: Colors.grey[600],
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Join a group to share files',
+                style: TextStyle(color: Colors.grey[500], fontSize: 14),
+              ),
+            ],
+          ),
         ),
       );
     }
@@ -2856,103 +2792,89 @@ class _ShareDialogState extends State<_ShareDialog>
       itemBuilder: (context, index) {
         final group = widget.groups[index];
         final groupId = group['id'] as String;
+        final groupName = group['name'] as String;
         final isSelected = _selectedGroupIds.contains(groupId);
 
-        return Container(
-          margin: const EdgeInsets.only(bottom: 8),
-          decoration: BoxDecoration(
-            border: Border.all(
-              color: isSelected ? const Color(0xFF416240) : Colors.grey[300]!,
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(12),
+              onTap: () {
+                setState(() {
+                  if (isSelected) {
+                    _selectedGroupIds.remove(groupId);
+                  } else {
+                    _selectedGroupIds.add(groupId);
+                  }
+                });
+              },
+              child: Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color:
+                      isSelected
+                          ? const Color(0xFF416240).withOpacity(0.1)
+                          : Colors.white,
+                  border: Border.all(
+                    color:
+                        isSelected
+                            ? const Color(0xFF416240)
+                            : Colors.grey[300]!,
+                    width: isSelected ? 2 : 1.5,
+                  ),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 40,
+                      height: 40,
+                      decoration: BoxDecoration(
+                        color:
+                            isSelected
+                                ? const Color(0xFF416240).withOpacity(0.2)
+                                : Colors.grey[100],
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Icon(
+                        Icons.group_rounded,
+                        color:
+                            isSelected
+                                ? const Color(0xFF416240)
+                                : Colors.grey[600],
+                        size: 22,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        groupName,
+                        style: TextStyle(
+                          fontWeight:
+                              isSelected ? FontWeight.w800 : FontWeight.w600,
+                          fontSize: 15,
+                          color:
+                              isSelected
+                                  ? const Color(0xFF416240)
+                                  : const Color(0xFF1A1A2E),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Icon(
+                      isSelected ? Icons.check_circle : Icons.circle_outlined,
+                      color:
+                          isSelected
+                              ? const Color(0xFF416240)
+                              : Colors.grey[400],
+                      size: 24,
+                    ),
+                  ],
+                ),
+              ),
             ),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: CheckboxListTile(
-            value: isSelected,
-            onChanged: (value) {
-              setState(() {
-                if (value == true) {
-                  _selectedGroupIds.add(groupId);
-                } else {
-                  _selectedGroupIds.remove(groupId);
-                }
-              });
-            },
-            title: Text(
-              group['name'] as String,
-              style: const TextStyle(fontWeight: FontWeight.w600),
-            ),
-            secondary: const Icon(
-              Icons.group_rounded,
-              color: Color(0xFF416240),
-            ),
-            activeColor: const Color(0xFF416240),
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildDoctorsTab() {
-    if (widget.doctors.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.medical_services_outlined,
-              size: 48,
-              color: Colors.grey[300],
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'No doctors available',
-              style: TextStyle(color: Colors.grey[600]),
-            ),
-          ],
-        ),
-      );
-    }
-
-    return ListView.builder(
-      padding: const EdgeInsets.all(16),
-      itemCount: widget.doctors.length,
-      itemBuilder: (context, index) {
-        final doctor = widget.doctors[index];
-        final doctorId = doctor['doctor_id'] as String;
-        final isSelected = _selectedDoctorIds.contains(doctorId);
-
-        return Container(
-          margin: const EdgeInsets.only(bottom: 8),
-          decoration: BoxDecoration(
-            border: Border.all(
-              color: isSelected ? const Color(0xFF416240) : Colors.grey[300]!,
-            ),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: CheckboxListTile(
-            value: isSelected,
-            onChanged: (value) {
-              setState(() {
-                if (value == true) {
-                  _selectedDoctorIds.add(doctorId);
-                } else {
-                  _selectedDoctorIds.remove(doctorId);
-                }
-              });
-            },
-            title: Text(
-              'Dr. ${_formatFullName(doctor['user'])}',
-              style: const TextStyle(fontWeight: FontWeight.w600),
-            ),
-            subtitle: Text(
-              doctor['organization_name'] ?? 'Unknown Organization',
-              style: const TextStyle(fontSize: 13),
-            ),
-            secondary: const Icon(
-              Icons.medical_services_rounded,
-              color: Color(0xFF416240),
-            ),
-            activeColor: const Color(0xFF416240),
           ),
         );
       },

@@ -695,4 +695,132 @@ class FileShareToOrgService {
       return false;
     }
   }
+
+  // Add this method to your FileShareToOrgService class:
+
+  /// Share all files owned by the user with a specific doctor
+  static Future<void> shareAllOwnedFilesToDoctor({
+    required String userId,
+    required String doctorId,
+  }) async {
+    try {
+      print('=== SHARE ALL OWNED FILES DEBUG ===');
+      print('User ID: $userId');
+      print('Doctor ID: $doctorId');
+
+      // STEP 1: Validate user exists and has RSA key
+      print('\n--- Step 1: Fetching user RSA key ---');
+      final userData =
+          await _supabase
+              .from('User')
+              .select('rsa_private_key, email')
+              .eq('id', userId)
+              .maybeSingle();
+
+      if (userData == null) {
+        throw Exception('User not found with ID: $userId');
+      }
+
+      final userRsaPrivateKeyPem = userData['rsa_private_key'] as String?;
+      if (userRsaPrivateKeyPem == null || userRsaPrivateKeyPem.isEmpty) {
+        throw Exception(
+          'User RSA private key is missing for user: ${userData['email']}',
+        );
+      }
+
+      print('✓ User found: ${userData['email']}');
+
+      // STEP 2: Fetch all files owned by the user
+      print('\n--- Step 2: Fetching owned files ---');
+      final ownedFilesResponse = await _supabase
+          .from('Files')
+          .select('id')
+          .eq('owned_by', userId);
+
+      final ownedFileIds =
+          ownedFilesResponse
+              .map<String>((file) => file['id'] as String)
+              .toList();
+
+      if (ownedFileIds.isEmpty) {
+        print('⚠️  User has no files to share');
+        throw Exception('You don\'t have any files to share');
+      }
+
+      print('✓ Found ${ownedFileIds.length} owned files');
+
+      // STEP 3: Validate doctor exists
+      print('\n--- Step 3: Validating doctor ---');
+      final doctorCheck =
+          await _supabase
+              .from('Organization_User')
+              .select('id, position, User!user_id(id, email, rsa_public_key)')
+              .eq('id', doctorId)
+              .eq('position', 'Doctor')
+              .maybeSingle();
+
+      if (doctorCheck == null) {
+        throw Exception('Doctor not found with ID: $doctorId');
+      }
+
+      final doctorUser = doctorCheck['User'];
+      if (doctorUser == null) {
+        throw Exception('Doctor user data not found for ID: $doctorId');
+      }
+
+      final publicKey = doctorUser['rsa_public_key'] as String?;
+      if (publicKey == null || publicKey.isEmpty) {
+        throw Exception(
+          'Doctor RSA public key missing for: ${doctorUser['email']}',
+        );
+      }
+
+      print('✓ Doctor validated: ${doctorUser['email']}');
+
+      // STEP 4: Get existing shares to avoid duplicates
+      print('\n--- Step 4: Checking existing shares ---');
+      final doctorUserId = doctorUser['id'] as String;
+
+      final existingSharesResponse = await _supabase
+          .from('File_Shares')
+          .select('file_id')
+          .inFilter('file_id', ownedFileIds)
+          .eq('shared_with_doctor', doctorUserId)
+          .isFilter('revoked_at', null);
+
+      final alreadySharedFileIds =
+          existingSharesResponse
+              .map<String>((share) => share['file_id'] as String)
+              .toSet();
+
+      // Filter out already shared files
+      final filesToShare =
+          ownedFileIds
+              .where((fileId) => !alreadySharedFileIds.contains(fileId))
+              .toList();
+
+      if (filesToShare.isEmpty) {
+        print('✓ All files are already shared with this doctor');
+        throw Exception('All your files are already shared with this doctor');
+      }
+
+      print('✓ ${filesToShare.length} files need to be shared');
+      print('✓ ${alreadySharedFileIds.length} files already shared');
+
+      // STEP 5: Share the files
+      print('\n--- Step 5: Sharing files ---');
+      await _shareFilesToSingleDoctor(
+        filesToShare,
+        doctorId,
+        userRsaPrivateKeyPem,
+        userId,
+      );
+
+      print('\n✓ Successfully shared ${filesToShare.length} files with doctor');
+    } catch (e, stackTrace) {
+      print('❌ CRITICAL ERROR in shareAllOwnedFilesToDoctor: $e');
+      print('Stack trace: $stackTrace');
+      rethrow;
+    }
+  }
 }

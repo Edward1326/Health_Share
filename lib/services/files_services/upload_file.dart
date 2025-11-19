@@ -156,6 +156,7 @@ class UploadFileService {
                 'file_size': fileBytes.length,
                 'ipfs_cid': ipfsCid,
                 'uploaded_by': user.id,
+                'owned_by': user.id,
               })
               .select()
               .single();
